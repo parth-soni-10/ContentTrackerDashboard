@@ -137,9 +137,14 @@ function renderReadme() {
   // Recent watches — last 6 titles with a valid watch date, sorted newest first
   const fmtShortDate = s => {
     if (!s) return '';
-    // "01 Jun 2026" → "01 Jun"
-    var m = String(s).match(/^(\d{1,2}\s+[A-Za-z]{3})/);
-    return m ? m[1] : String(s);
+    // Pre-formatted "01 Jun 2026" → strip year
+    var clean = String(s).trim();
+    var pre = clean.match(/^(\d{1,2}\s+[A-Za-z]{3})\s+\d{4}$/);
+    if (pre) return pre[1];
+    // Full GMT string → parse correctly, display in local timezone
+    var dt = new Date(clean);
+    if (!isNaN(dt.getTime())) return dt.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' });
+    return '';
   };
   const recent = rawData
     .filter(r => r.watchDate)
@@ -571,8 +576,8 @@ function renderData() {
 
 function updateDataTable() {
   const d = filterData(rawData, datFilters).sort((a, b) => {
-    const da = parseLocalDate(a.watchDate);
-    const db = parseLocalDate(b.watchDate);
+    const da = a.watchDate ? new Date(a.watchDate) : null;
+    const db = b.watchDate ? new Date(b.watchDate) : null;
     if (!da && !db) return 0;
     if (!da) return 1;
     if (!db) return -1;
@@ -603,7 +608,14 @@ function updateDataTable() {
   }
 
   const fmtDate = function(s) {
-    return s || '—';
+    if (!s) return '—';
+    var clean = String(s).trim();
+    // Pre-formatted "01 Jun 2026" → return as-is
+    if (/^\d{1,2}\s+[A-Za-z]{3}\s+\d{4}$/.test(clean)) return clean;
+    // Full GMT string → parse, display in local timezone (correct for IST users)
+    var dt = new Date(clean);
+    if (!isNaN(dt.getTime())) return dt.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+    return clean;
   };
 
   // Build each row with pure string concatenation — no template literals
