@@ -90,34 +90,16 @@ function destroyCharts() {
   charts = {};
 }
 
-// ── DATE PARSER — handles any format without UTC timezone shift ───────────
+// ── DATE DISPLAY — Apps Script sends pre-formatted "01 Jun 2026" strings ─
 function parseLocalDate(s) {
   if (!s) return null;
+  // Only used for sorting — parse what we can, fallback gracefully
   var str = String(s).trim();
-  var MO  = {jan:0,feb:1,mar:2,apr:3,may:4,jun:5,jul:6,aug:7,sep:8,oct:9,nov:10,dec:11};
-
-  // yyyy-MM-dd → construct local date directly, no UTC
-  var m1 = str.match(/^(\d{4})-(\d{2})-(\d{2})/);
-  if (m1) return new Date(+m1[1], +m1[2]-1, +m1[3]);
-
-  // DD-Mon-YY or DD-Mon-YYYY  e.g. 01-Jun-26
-  var m2 = str.match(/^(\d{1,2})[\/\-]([A-Za-z]{3})[\/\-](\d{2,4})/);
-  if (m2) {
-    var yr2 = +m2[3] < 100 ? 2000 + +m2[3] : +m2[3];
-    var mo2 = MO[m2[2].toLowerCase()];
-    if (mo2 !== undefined) return new Date(yr2, mo2, +m2[1]);
-  }
-
-  // DD/MM/YYYY
-  var m3 = str.match(/^(\d{1,2})\/(\d{2})\/(\d{4})/);
-  if (m3) return new Date(+m3[3], +m3[2]-1, +m3[1]);
-
-  // Full string with timezone e.g. "Sun May 31 2026 19:30:00 GMT+0100 (British Summer Time)"
-  // new Date() correctly parses the embedded offset → local display gives the right date
-  var dt = new Date(str);
-  if (!isNaN(dt.getTime())) return dt;
-
-  return null;
+  var MO  = {Jan:0,Feb:1,Mar:2,Apr:3,May:4,Jun:5,Jul:6,Aug:7,Sep:8,Oct:9,Nov:10,Dec:11};
+  // "01 Jun 2026"
+  var m = str.match(/^(\d{1,2})\s+([A-Za-z]{3})\s+(\d{4})/);
+  if (m) { var mo = MO[m[2]]; if (mo !== undefined) return new Date(+m[3], mo, +m[1]); }
+  return new Date(str);
 }
 function navigateTo(page) {
   destroyCharts();
@@ -155,8 +137,9 @@ function renderReadme() {
   // Recent watches — last 6 titles with a valid watch date, sorted newest first
   const fmtShortDate = s => {
     if (!s) return '';
-    const d = parseLocalDate(s);
-    return d ? d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' }) : '';
+    // "01 Jun 2026" → "01 Jun"
+    var m = String(s).match(/^(\d{1,2}\s+[A-Za-z]{3})/);
+    return m ? m[1] : String(s);
   };
   const recent = rawData
     .filter(r => r.watchDate)
@@ -620,9 +603,7 @@ function updateDataTable() {
   }
 
   const fmtDate = function(s) {
-    if (!s) return '—';
-    const dt = parseLocalDate(s);
-    return dt ? dt.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : s;
+    return s || '—';
   };
 
   // Build each row with pure string concatenation — no template literals
