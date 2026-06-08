@@ -94,23 +94,29 @@ function destroyCharts() {
 function parseLocalDate(s) {
   if (!s) return null;
   var str = String(s).trim();
-  // yyyy-MM-dd
+  var MO  = {jan:0,feb:1,mar:2,apr:3,may:4,jun:5,jul:6,aug:7,sep:8,oct:9,nov:10,dec:11};
+
+  // yyyy-MM-dd → construct local date directly, no UTC
   var m1 = str.match(/^(\d{4})-(\d{2})-(\d{2})/);
   if (m1) return new Date(+m1[1], +m1[2]-1, +m1[3]);
+
   // DD-Mon-YY or DD-Mon-YYYY  e.g. 01-Jun-26
-  var MO = {jan:0,feb:1,mar:2,apr:3,may:4,jun:5,jul:6,aug:7,sep:8,oct:9,nov:10,dec:11};
   var m2 = str.match(/^(\d{1,2})[\/\-]([A-Za-z]{3})[\/\-](\d{2,4})/);
   if (m2) {
-    var yr = +m2[3] < 100 ? 2000 + +m2[3] : +m2[3];
-    var mo = MO[m2[2].toLowerCase()];
-    if (mo !== undefined) return new Date(yr, mo, +m2[1]);
+    var yr2 = +m2[3] < 100 ? 2000 + +m2[3] : +m2[3];
+    var mo2 = MO[m2[2].toLowerCase()];
+    if (mo2 !== undefined) return new Date(yr2, mo2, +m2[1]);
   }
+
   // DD/MM/YYYY
   var m3 = str.match(/^(\d{1,2})\/(\d{2})\/(\d{4})/);
   if (m3) return new Date(+m3[3], +m3[2]-1, +m3[1]);
-  // Mon DD YYYY  e.g. Jun 01 2026
-  var m4 = str.match(/^([A-Za-z]{3})\s+(\d{1,2})\s+(\d{4})/);
-  if (m4) { var mo4 = MO[m4[1].toLowerCase()]; if (mo4 !== undefined) return new Date(+m4[3], mo4, +m4[2]); }
+
+  // Full string with timezone e.g. "Sun May 31 2026 19:30:00 GMT+0100 (British Summer Time)"
+  // new Date() correctly parses the embedded offset → local display gives the right date
+  var dt = new Date(str);
+  if (!isNaN(dt.getTime())) return dt;
+
   return null;
 }
 function navigateTo(page) {
