@@ -137,13 +137,14 @@ function renderReadme() {
   // Recent watches — last 6 titles with a valid watch date, sorted newest first
   const fmtShortDate = s => {
     if (!s) return '';
-    // Pre-formatted "01 Jun 2026" → strip year
     var clean = String(s).trim();
     var pre = clean.match(/^(\d{1,2}\s+[A-Za-z]{3})\s+\d{4}$/);
     if (pre) return pre[1];
-    // Full GMT string → parse correctly, display in local timezone
     var dt = new Date(clean);
-    if (!isNaN(dt.getTime())) return dt.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' });
+    if (!isNaN(dt.getTime())) {
+      dt.setDate(dt.getDate() + 1);
+      return dt.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' });
+    }
     return '';
   };
   const recent = rawData
@@ -610,11 +611,12 @@ function updateDataTable() {
   const fmtDate = function(s) {
     if (!s) return '—';
     var clean = String(s).trim();
-    // Pre-formatted "01 Jun 2026" → return as-is
     if (/^\d{1,2}\s+[A-Za-z]{3}\s+\d{4}$/.test(clean)) return clean;
-    // Full GMT string → parse, display in local timezone (correct for IST users)
     var dt = new Date(clean);
-    if (!isNaN(dt.getTime())) return dt.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+    if (!isNaN(dt.getTime())) {
+      dt.setDate(dt.getDate() + 1);
+      return dt.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+    }
     return clean;
   };
 
