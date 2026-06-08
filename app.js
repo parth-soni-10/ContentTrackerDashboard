@@ -126,8 +126,13 @@ function renderReadme() {
 
   // Recent watches — last 6 titles with a valid watch date, sorted newest first
   const fmtShortDate = s => {
-    try { const d = new Date(s); return isNaN(d) ? '' : d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', timeZone: 'UTC' }); }
-    catch { return ''; }
+    if (!s) return '';
+    try {
+      // yyyy-MM-dd → local date, no UTC shift
+      const m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+      const d = m ? new Date(+m[1], +m[2]-1, +m[3]) : new Date(s);
+      return isNaN(d) ? '' : d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' });
+    } catch { return ''; }
   };
   const recent = rawData
     .filter(r => r.watchDate)
@@ -591,8 +596,10 @@ function updateDataTable() {
   const fmtDate = function(s) {
     if (!s) return '—';
     try {
-      var dt = new Date(s);
-      return isNaN(dt.getTime()) ? s : dt.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'UTC' });
+      // yyyy-MM-dd → local date, no UTC shift
+      var m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+      var dt = m ? new Date(+m[1], +m[2]-1, +m[3]) : new Date(s);
+      return isNaN(dt.getTime()) ? s : dt.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
     } catch(e) { return s; }
   };
 
