@@ -126,7 +126,8 @@ function renderReadme() {
   const topPlat  = countBy(rawData, 'platform')[0];
   const topGenre = countBy(rawData, 'genre')[0];
   const bestMo   = Object.entries(countByMonth(rawData)).sort((a, b) => b[1] - a[1])[0];
-  const avgMo    = (total / 12).toFixed(1);
+  const distinctMonths = new Set(rawData.map(r => r.year + '-' + r.month)).size;
+  const avgMo    = distinctMonths ? (total / distinctMonths).toFixed(1) : '—';
   const today    = new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
 
   // Pre-compute dynamic classes — avoids single quotes inside template literals
@@ -455,7 +456,8 @@ function updateAllTime() {
   const topGenre   = genCounts[0]  || ['—', 0];
   const bestMo     = Object.entries(countByMonth(d)).sort((a, b) => b[1] - a[1])[0] || ['—', 0];
   const yearsSet   = [...new Set(d.map(r => r.year))].filter(Boolean);
-  const avgMo      = yearsSet.length ? (d.length / (yearsSet.length * 12)).toFixed(1) : '—';
+  const distinctMonthsAt = new Set(d.filter(r => r.month).map(r => r.year + '-' + r.month)).size;
+  const avgMo      = distinctMonthsAt ? (d.length / distinctMonthsAt).toFixed(1) : '—';
 
   // ── Pre-compute ALL dynamic values before template literals ───────────
   const showsPct  = d.length ? (shows / d.length * 100).toFixed(1) : 0;
