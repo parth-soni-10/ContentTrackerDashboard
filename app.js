@@ -203,7 +203,7 @@ function renderReadme() {
         </div>
         <div class="readme-stat">
           <div class="rs-label">Top Platform</div>
-          <div class="rs-val" style="font-size:20px;letter-spacing:-.3px">${topPlat ? pe(topPlat[0]) : ''}${topPlat ? topPlat[0] : '—'}</div>
+          <div class="rs-val">${topPlat ? pe(topPlat[0]) : ''}${topPlat ? topPlat[0] : '—'}</div>
           <div class="rs-sub">${topPlat ? topPlat[1] + ' titles all time' : ''}</div>
         </div>
       </div>
@@ -293,11 +293,11 @@ function renderCurrentYear() {
       <div class="ph-left"><h1>Current Year Numbers</h1><p>${cy} · All months so far</p></div>
       <div class="ph-right">
         <div class="ph-filter">
-          <span style="font-size:10px;text-transform:uppercase;letter-spacing:.8px;color:rgba(255,255,255,.5);margin-right:4px">Platform</span>
+          <span style="font-size:12px;line-height:16px;text-transform:uppercase;letter-spacing:.8px;color:rgba(255,255,255,.5);margin-right:6px;font-weight:500">Platform</span>
           <select id="cf-plat" onchange="curFilters.platform=this.value;updateCurrentYear()">${platOptions}</select>
         </div>
         <div class="ph-filter">
-          <span style="font-size:10px;text-transform:uppercase;letter-spacing:.8px;color:rgba(255,255,255,.5);margin-right:4px">Genre</span>
+          <span style="font-size:12px;line-height:16px;text-transform:uppercase;letter-spacing:.8px;color:rgba(255,255,255,.5);margin-right:6px;font-weight:500">Genre</span>
           <select id="cf-genre" onchange="curFilters.genre=this.value;updateCurrentYear()">${genreOptions}</select>
         </div>
       </div>
@@ -383,7 +383,7 @@ function updateCurrentYear() {
       </div>
       <div class="stat-sidebar">
         <div class="stat-card a1">
-          <div class="stat-info"><div class="stat-label">Top Platform</div><div class="stat-val" style="font-size:17px">${topPlatEmoji} ${topPlatName}</div></div>
+          <div class="stat-info"><div class="stat-label">Top Platform</div><div class="stat-val">${topPlatEmoji} ${topPlatName}</div></div>
           <span class="stat-badge2">${topPlatCount}</span>
         </div>
         <div class="stat-card a2">
@@ -424,15 +424,15 @@ function renderAllTime() {
       <div class="ph-left"><h1>All Time Numbers</h1><p>Complete viewing history · all years</p></div>
       <div class="ph-right">
         <div class="ph-filter">
-          <span style="font-size:10px;text-transform:uppercase;letter-spacing:.8px;color:rgba(255,255,255,.5);margin-right:4px">Year</span>
+          <span style="font-size:12px;line-height:16px;text-transform:uppercase;letter-spacing:.8px;color:rgba(255,255,255,.5);margin-right:6px;font-weight:500">Year</span>
           <select id="af-year" onchange="allFilters.year=this.value;updateAllTime()">${yearOptions}</select>
         </div>
         <div class="ph-filter">
-          <span style="font-size:10px;text-transform:uppercase;letter-spacing:.8px;color:rgba(255,255,255,.5);margin-right:4px">Platform</span>
+          <span style="font-size:12px;line-height:16px;text-transform:uppercase;letter-spacing:.8px;color:rgba(255,255,255,.5);margin-right:6px;font-weight:500">Platform</span>
           <select id="af-plat" onchange="allFilters.platform=this.value;updateAllTime()">${platOptions}</select>
         </div>
         <div class="ph-filter">
-          <span style="font-size:10px;text-transform:uppercase;letter-spacing:.8px;color:rgba(255,255,255,.5);margin-right:4px">Genre</span>
+          <span style="font-size:12px;line-height:16px;text-transform:uppercase;letter-spacing:.8px;color:rgba(255,255,255,.5);margin-right:6px;font-weight:500">Genre</span>
           <select id="af-genre" onchange="allFilters.genre=this.value;updateAllTime()">${genreOptions}</select>
         </div>
       </div>
@@ -508,7 +508,7 @@ function updateAllTime() {
       </div>
       <div class="stat-sidebar">
         <div class="stat-card a1">
-          <div class="stat-info"><div class="stat-label">Top Platform</div><div class="stat-val" style="font-size:17px">${pe(topPlat[0])} ${topPlat[0]}</div></div>
+          <div class="stat-info"><div class="stat-label">Top Platform</div><div class="stat-val">${pe(topPlat[0])} ${topPlat[0]}</div></div>
           <span class="stat-badge2">${topPlat[1]} titles</span>
         </div>
         <div class="stat-card a2">
@@ -550,9 +550,9 @@ function renderData() {
     <div class="page-header">
       <div class="ph-left"><h1>All Shows &amp; Movies</h1><p>Your complete watchlist · sorted by watch date</p></div>
       <div class="ph-right">
-        <div style="background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.18);border-radius:8px;padding:6px 14px;font-size:12px;color:rgba(255,255,255,.7)">📺 <strong id="dh-shows" style="color:#fff">—</strong> shows</div>
-        <div style="background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.18);border-radius:8px;padding:6px 14px;font-size:12px;color:rgba(255,255,255,.7)">🎬 <strong id="dh-movies" style="color:#fff">—</strong> movies</div>
-        <div style="background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.18);border-radius:8px;padding:6px 14px;font-size:12px;color:rgba(255,255,255,.7)">Total <strong id="dh-total" style="color:#fff">—</strong></div>
+        <div style="background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.18);border-radius:6px;padding:6px 14px;font-size:12px;color:rgba(255,255,255,.7)">📺 <strong id="dh-shows" style="color:#fff">—</strong> shows</div>
+        <div style="background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.18);border-radius:6px;padding:6px 14px;font-size:12px;color:rgba(255,255,255,.7)">🎬 <strong id="dh-movies" style="color:#fff">—</strong> movies</div>
+        <div style="background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.18);border-radius:6px;padding:6px 14px;font-size:12px;color:rgba(255,255,255,.7)">Total <strong id="dh-total" style="color:#fff">—</strong></div>
       </div>
     </div>
     <div class="data-filters">
@@ -848,8 +848,8 @@ function initLineChart(canvasId, labels, data) {
         }
       },
       scales: {
-        x: { grid: { display: false }, ticks: { font: { family: 'DM Sans', size: 13 }, color: '#7a9e8a' } },
-        y: { grid: { color: '#e0ede6', lineWidth: .8 }, ticks: { font: { family: 'DM Sans', size: 13 }, color: '#7a9e8a' }, beginAtZero: true }
+        x: { grid: { display: false }, ticks: { font: { family: 'Inter', size: 13 }, color: '#7a9e8a' } },
+        y: { grid: { color: '#e0ede6', lineWidth: .8 }, ticks: { font: { family: 'Inter', size: 13 }, color: '#7a9e8a' }, beginAtZero: true }
       }
     }
   });

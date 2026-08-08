@@ -67,7 +67,7 @@ content-tracker/
 - Pure vanilla JS — no React, no Vue, no build step
 - Single-page app with hash-free routing via a `navigateTo()` function
 - Chart.js 4.4.1 (loaded from CDN) for line charts
-- Google Fonts (Fraunces + DM Sans) for typography
+- Google Fonts (Inter) for typography
 - No local storage, no cookies, no tracking
 
 ---
@@ -100,7 +100,7 @@ Any unlisted platform falls back to 📺. To add more, edit the `PEMOJI` object 
 | [Google Sheets](https://sheets.google.com) | Data storage |
 | [Google Apps Script](https://script.google.com) | JSON API |
 | [Netlify](https://netlify.com) | Hosting |
-| [Google Fonts](https://fonts.google.com) | Fraunces + DM Sans |
+| [Google Fonts](https://fonts.google.com) | Inter |
 
 ---
 
