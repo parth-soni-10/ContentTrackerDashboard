@@ -151,7 +151,7 @@ nav { background: rgba(255,255,255,.88); border-bottom: 1px solid rgba(217,232,2
 .rs-accent { color: var(--gold); font-weight: 600; }
 
 /* ── README BODY ── */
-.readme-main { max-width: 1440px; width: 100%; margin: 0 auto; padding: 30px 40px 48px; display: grid; grid-template-columns: 1fr 320px; gap: 28px; }
+.readme-main { max-width: 1720px; width: 100%; margin: 0 auto; padding: 30px 40px 48px; display: grid; grid-template-columns: minmax(0,1fr) 340px; gap: 28px; }
 .cards-label { font-size: 11px; line-height: 16px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: var(--text-soft); margin-bottom: 14px; }
 .cards-grid  { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .info-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r); padding: 18px; display: flex; align-items: flex-start; gap: 14px; box-shadow: var(--shadow-sm); transition: box-shadow .2s, transform .2s, border-color .2s; cursor: pointer; animation: fadeUp .5s ease both; }
@@ -181,6 +181,19 @@ nav { background: rgba(255,255,255,.88); border-bottom: 1px solid rgba(217,232,2
 .note-icon  { font-size: 18px; flex-shrink: 0; margin-top: 1px; }
 .note-body  { font-size: 14px; color: #7a4e1e; line-height: 1.6; font-weight: 400; }
 .note-body strong { display: block; color: #5a3510; font-weight: 600; margin-bottom: 3px; font-size: 13px; }
+
+/* ── README ADDED WIDGETS ── */
+.rm-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r); padding: 18px; box-shadow: var(--shadow-sm); animation: fadeUp .5s ease both; }
+.rm-trend { margin-bottom: 14px; }
+.mt-bars { display: flex; align-items: flex-end; gap: 5px; height: 130px; margin-top: 4px; }
+.mt-col { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 100%; }
+.mt-tip { font-size: 11px; color: var(--text-soft); margin-bottom: 4px; height: 15px; font-weight: 500; }
+.mt-bar { width: 100%; max-width: 26px; border-radius: 4px 4px 0 0; }
+.mt-bar.mt-active { background: linear-gradient(180deg, var(--green-mid), var(--green)); }
+.mt-bar.mt-idle { background: var(--border-mid); }
+.mt-mo { font-size: 10px; color: var(--text-soft); margin-top: 6px; text-transform: uppercase; letter-spacing: .3px; height: 12px; }
+.fact-bars { display: flex; flex-direction: column; gap: 9px; }
+@media (max-width: 600px) { .mt-bars { height: 100px; } }
 
 /* ── DATA TAB ── */
 .data-filters { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; padding: 18px 40px; background: var(--surface); border-bottom: 1px solid var(--border); }

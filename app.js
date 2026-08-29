@@ -477,6 +477,22 @@ function renderReadme() {
   const bestMo   = Object.entries(countByMonth(rawData)).sort((a, b) => b[1] - a[1])[0];
   const distinctMonths = new Set(rawData.map(r => r.year + '-' + r.month)).size;
   const avgMo    = distinctMonths ? (total / distinctMonths).toFixed(1) : '—';
+
+  // Viewing trend for the current year — a small CSS bar chart of titles/month.
+  const monthCount = countByMonth(cyrData);
+  const maxMonth  = Math.max(1, ...MONTHS.map(m => monthCount[m] || 0));
+  const trendHTML = MONTHS.map((m, i) => {
+    const v = monthCount[m] || 0;
+    const active = v > 0 ? 'mt-active' : 'mt-idle';
+    const hPct = v > 0 ? Math.max(6, (v / maxMonth) * 100) : 0;
+    const style = v > 0 ? ('height:' + hPct + '%') : 'height:4px';
+    return '<div class="mt-col">' +
+      '<div class="mt-tip">' + v + '</div>' +
+      '<div class="mt-bar ' + active + '" style="' + style + '"></div>' +
+      (i % 3 === 0 ? '<div class="mt-mo">' + m.slice(0, 3) + '</div>' : '<div class="mt-mo"></div>') +
+    '</div>';
+  }).join('');
+  const topPlatformsHTML = buildPlatBars(countBy(rawData, 'platform').slice(0, 6));
   const today    = new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
 
   // Pre-compute dynamic classes — avoids single quotes inside template literals
@@ -566,6 +582,10 @@ function renderReadme() {
           <div class="info-card" onclick="navigateTo('data')"><div class="ic-icon">🗂️</div><div class="ic-body"><h3>Data</h3><p>Full list of every title logged. Search by name, filter by type, genre, platform or month.</p></div></div>
           <div class="info-card" onclick="navigateTo('suggestions')"><div class="ic-icon gold">🎲</div><div class="ic-body"><h3>Suggestion Generator</h3><p>Can't decide what to watch? Spin for a random pick filtered by genre or type.</p></div></div>
         </div>
+        <div class="rm-card rm-trend">
+          <div class="cards-label">Viewing Trend — ${cy}</div>
+          <div class="mt-bars">${trendHTML}</div>
+        </div>
         <div class="rw-section">
           <div class="cards-label">Recently Watched</div>
           <div class="rw-strip">${recentHTML}</div>
@@ -579,6 +599,10 @@ function renderReadme() {
           <div class="fact-row"><div class="fact-l"><span>📊</span> Avg / Month</div><div class="fact-r">${avgMo} titles</div></div>
           <div class="fact-row"><div class="fact-l"><span>📺</span> Shows</div><div class="fact-r">${total ? (shows / total * 100).toFixed(1) : 0}%</div></div>
           <div class="fact-row"><div class="fact-l"><span>🎬</span> Movies</div><div class="fact-r">${total ? (movies / total * 100).toFixed(1) : 0}%</div></div>
+        </div>
+        <div class="fact-card">
+          <div class="fact-title">Top Platforms</div>
+          <div class="fact-bars">${topPlatformsHTML}</div>
         </div>
         <div class="yoy-card">
           <div class="yoy-title">Year on Year</div>
