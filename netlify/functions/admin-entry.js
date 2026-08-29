@@ -46,7 +46,7 @@ exports.handler = async event => {
   if (!entry.Name || !['Movie', 'Series/Show'].includes(entry.Type)) return json(400, { error: 'Name and a valid type are required' });
 
   const scriptUrl = process.env.SCRIPT_URL;
-  const scriptSecret = process.env.SCRIPT_WRITE_SECRET;
+  const scriptSecret = String(process.env.SCRIPT_WRITE_SECRET || '').trim();
   if (!scriptUrl || !scriptSecret) return json(500, { error: 'Admin service is not configured' });
 
   let upstream;

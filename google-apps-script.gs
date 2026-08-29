@@ -69,10 +69,10 @@ function doPost(e) {
 }
 
 function handleAdminEntry(payload) {
-  const expectedSecret = PropertiesService
+  const expectedSecret = String(PropertiesService
     .getScriptProperties()
-    .getProperty(WRITE_SECRET_PROPERTY);
-  const suppliedSecret = payload.writeSecret || payload.scriptWriteSecret;
+    .getProperty(WRITE_SECRET_PROPERTY) || '').trim();
+  const suppliedSecret = String(payload.writeSecret || payload.scriptWriteSecret || '').trim();
 
   if (!expectedSecret || !constantTimeEqual(suppliedSecret, expectedSecret)) {
     return {
