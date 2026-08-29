@@ -244,7 +244,7 @@ async function autofillAdminEntry() {
     result.textContent = 'Details filled from TMDB. Review them before saving.';
   } catch (error) {
     result.className = 'admin-name-result found';
-    result.textContent = error.message;
+    result.textContent = error.message || 'Autofill could not find this title. Please try again.';
   } finally {
     button.disabled = false;
     button.classList.remove('autofilling');

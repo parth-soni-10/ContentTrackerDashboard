@@ -62,7 +62,6 @@ exports.handler = async event => {
     const omdbGenre = omdb?.Genre && omdb.Genre !== 'N/A' ? omdb.Genre : '';
     const omdbRuntime = parseInt(String(omdb?.Runtime || '').replace(/[^0-9]/g, ''), 10) || 0;
     const mergedGenre = genre !== 'Uncategorized' ? genre : omdbGenre || genre;
-    const mergedRuntime = runtime || omdbRuntime;
 
     let seasonDetails = null;
     if (!isMovie && season && /^\d{1,2}$/.test(season)) {
@@ -74,7 +73,11 @@ exports.handler = async event => {
 
     const runtime = isMovie
       ? details.runtime
-      : seasonDetails?.episodes?.reduce((total, episode) => total + (episode.runtime || details.episode_run_time?.[0] || 0), 0);
+      : seasonDetails?.episodes?.reduce((total, episode) => total + (episode.runtime || details.episode_run_time?.[0] || 0), 0) || 0;
+    const mergedRuntime = runtime || omdbRuntime;
+    const episodeCount = isMovie
+      ? 0
+      : seasonDetails?.episodes?.length || details.number_of_episodes || parseInt(omdb?.totalSeasons, 10) || 1;
 
     return json(200, {
       name: isMovie ? details.title : details.name,
@@ -82,11 +85,12 @@ exports.handler = async event => {
       genre: mergedGenre,
       platform,
       season: isMovie ? '' : season,
-      episodes: isMovie ? 0 : seasonDetails?.episodes?.length || details.number_of_episodes || parseInt(omdb?.totalSeasons, 10) || 1,
-      screentime: mergedRuntime || (isMovie ? details.runtime : (details.episode_run_time?.[0] || omdbRuntime || 0) * (seasonDetails?.episodes?.length || details.number_of_episodes || 1)),
+      episodes: episodeCount,
+      screentime: mergedRuntime || (isMovie ? details.runtime || 0 : (details.episode_run_time?.[0] || omdbRuntime || 0) * episodeCount),
       source: 'TMDB'
     });
-  } catch {
-    return json(502, { error: 'Unable to reach TMDB' });
+  } catch (error) {
+    console.error('Autofill lookup failed:', error);
+    return json(502, { error: 'Unable to reach the autofill service. Please try again.' });
   }
 };
