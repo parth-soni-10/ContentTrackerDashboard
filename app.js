@@ -24,9 +24,27 @@ let dataPageNum = 1;
 const PER_PAGE = 25;
 let suggLastPick = null;
 let adminAuthenticated = false;
+let adminEditRow = null;
 
 function escapeHTML(value) {
   return String(value ?? '').replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
+}
+
+// Converts a sheet display date like "29-Aug-26" into the yyyy-mm-dd format
+// expected by <input type="date">.
+function toISOFromDisplay(value) {
+  const text = String(value || '').trim();
+  if (!text) return '';
+  const match = text.match(/^(\d{1,2})[-/ ]([A-Za-z]{3})[a-z]*[-/ ](\d{2,4})$/);
+  if (match) {
+    const day = String(Number(match[1])).padStart(2, '0');
+    const month = { Jan: '01', Feb: '02', Mar: '03', Apr: '04', May: '05', Jun: '06', Jul: '07', Aug: '08', Sep: '09', Oct: '10', Nov: '11', Dec: '12' }[match[2].slice(0, 3)];
+    let year = match[3];
+    if (year.length === 2) year = (Number(year) > 50 ? '19' : '20') + year;
+    return month && year.length === 4 ? `${year}-${month}-${day}` : '';
+  }
+  const date = new Date(text);
+  return isNaN(date.getTime()) ? '' : date.toISOString().slice(0, 10);
 }
 
 function bindNavigation() {
@@ -57,6 +75,7 @@ async function loadData() {
       screentime: parseFloat(r.Screentime || r.screentime || 0) || 0,
       watchDate:  r['Watch Date'] || r.watchDate || '',
       month:      r.Month      || r.month      || '',
+      row:        Number(r._row || r.row || 0),
       year:       parseInt(r.Year || r.year || 0) || 0
     })).filter(r => r.name && r.year > 0);
   } catch (e) {
@@ -167,15 +186,22 @@ function renderAdminForm() {
   document.getElementById('app').innerHTML = `
     <div class="page-header"><div class="ph-left"><h1>Admin</h1><p>Add a title directly to the live watchlist</p></div></div>
     <div class="submit-page"><div class="submit-left"><div class="submit-form-card">
-      <h2 class="submit-heading">New Watchlist Entry</h2><p class="submit-sub">Saved through the protected admin service.</p>
+      <h2 class="submit-heading" id="admin-form-heading">New Watchlist Entry</h2><p class="submit-sub" id="admin-form-sub">Saved through the protected admin service.</p>
       <form id="admin-entry-form">
         <div class="sf-field"><label class="sf-lbl" for="admin-name">Name <span class="sf-req">*</span></label><div class="admin-name-row"><input id="admin-name" name="name" class="sf-input" maxlength="160" required><button id="admin-check-name" class="try-btn admin-check-btn" type="button">Check sheet</button><button id="admin-autofill" class="try-btn admin-autofill-btn" type="button">Autofill</button></div><div id="admin-name-result" class="admin-name-result" aria-live="polite"></div></div>
         <div class="sf-row"><div class="sf-field"><label class="sf-lbl" for="admin-type">Type <span class="sf-req">*</span></label><select id="admin-type" name="type" class="sf-input"><option>Movie</option><option>Series/Show</option></select></div><div class="sf-field"><label class="sf-lbl" for="admin-season">Season</label><input id="admin-season" name="season" class="sf-input" maxlength="20"></div></div>
         <div class="sf-row"><div class="sf-field"><label class="sf-lbl" for="admin-genre">Genre</label><select id="admin-genre" name="genre" class="sf-input"><option value="">Select genre</option>${genreOpts}<option value="Other">Other</option></select><input id="admin-genre-custom" class="sf-input sf-custom-value" type="text" maxlength="80" placeholder="Enter a genre" aria-label="Custom genre" hidden></div><div class="sf-field"><label class="sf-lbl" for="admin-platform">Platform</label><select id="admin-platform" name="platform" class="sf-input"><option value="">Select platform</option>${platOpts}<option value="Other">Other</option></select><input id="admin-platform-custom" class="sf-input sf-custom-value" type="text" maxlength="160" placeholder="Enter a platform" aria-label="Custom platform" hidden></div></div>
         <div class="sf-row"><div class="sf-field"><label class="sf-lbl" for="admin-episodes">Episodes</label><input id="admin-episodes" name="episodes" class="sf-input" type="number" min="0" max="9999" inputmode="numeric"></div><div class="sf-field"><label class="sf-lbl" for="admin-screentime">Screentime (mins)</label><input id="admin-screentime" name="screentime" class="sf-input" type="number" min="0" max="100000" inputmode="numeric"></div></div>
         <div class="sf-field"><label class="sf-lbl" for="admin-date">Watch Date</label><input id="admin-date" name="watchDate" class="sf-input" type="date"></div>
-        <div id="admin-entry-msg" aria-live="polite"></div><button class="sf-submit-btn" type="submit">Add to Watchlist</button>
+        <div id="admin-edit-bar" class="admin-edit-bar" hidden><span>Editing row <strong id="admin-edit-row"></strong></span><button class="try-btn admin-edit-cancel" id="admin-cancel-edit" type="button">Cancel edit</button></div>
+        <div id="admin-entry-msg" aria-live="polite"></div><button class="sf-submit-btn" type="submit" id="admin-submit-btn">Add to Watchlist</button>
       </form>
+    </div>
+    <div class="submit-form-card">
+      <h2 class="submit-heading">Edit Existing Entry</h2>
+      <p class="submit-sub">Search the tracker, then click <strong>Edit</strong> to load a title into the form above.</p>
+      <input id="admin-edit-search" class="sf-input" type="text" placeholder="Search by title…" autocomplete="off">
+      <div id="admin-edit-results" class="admin-edit-results" aria-live="polite"></div>
     </div></div><div class="submit-right"><div class="note-card"><div class="note-icon" aria-hidden="true">💡</div><div class="note-body"><strong>Protected entry</strong>The password is checked server-side and is never sent to Google Sheets.</div></div><button class="try-btn" id="admin-lock" type="button">Lock Admin</button></div></div>`;
   document.getElementById('admin-entry-form').addEventListener('submit', submitAdminEntry);
   ['genre', 'platform'].forEach(key => {
@@ -189,6 +215,78 @@ function renderAdminForm() {
   document.getElementById('admin-check-name').addEventListener('click', checkAdminName);
   document.getElementById('admin-autofill').addEventListener('click', autofillAdminEntry);
   document.getElementById('admin-lock').addEventListener('click', () => { adminAuthenticated = false; renderAdmin(); });
+  document.getElementById('admin-edit-search').addEventListener('input', event => renderAdminEditResults(event.target.value));
+  document.getElementById('admin-edit-results').addEventListener('click', event => {
+    const button = event.target.closest('.admin-edit-btn');
+    if (button) startAdminEdit(Number(button.dataset.row));
+  });
+  document.getElementById('admin-cancel-edit').addEventListener('click', cancelAdminEdit);
+}
+
+function renderAdminEditResults(query) {
+  const container = document.getElementById('admin-edit-results');
+  const q = (query || '').trim().toLowerCase();
+  if (!q) {
+    container.innerHTML = '<div class="admin-edit-empty">Type to search your tracker…</div>';
+    return;
+  }
+  const matches = rawData
+    .filter(item => item.name.toLowerCase().includes(q))
+    .slice(0, 10);
+  if (!matches.length) {
+    container.innerHTML = '<div class="admin-edit-empty">No titles match "' + escapeHTML(query.trim()) + '".</div>';
+    return;
+  }
+  container.innerHTML = matches.map(item => {
+    const meta = [item.type, item.season ? 'S' + escapeHTML(item.season) : '', item.year].filter(Boolean).join(' · ');
+    return '<div class="admin-edit-item">' +
+      '<div class="admin-edit-info"><div class="admin-edit-name">' + escapeHTML(item.name) + '</div>' +
+      (meta ? '<div class="admin-edit-meta">' + meta + '</div>' : '') + '</div>' +
+      '<button class="try-btn admin-edit-btn" type="button" data-row="' + item.row + '">Edit</button>' +
+    '</div>';
+  }).join('');
+}
+
+function startAdminEdit(rowNumber) {
+  const item = rawData.find(item => item.row === rowNumber);
+  if (!item) return;
+  adminEditRow = rowNumber;
+
+  const setSelect = (selectId, value) => {
+    const select = document.getElementById(selectId);
+    if (!value) { select.value = ''; return; }
+    if (!Array.from(select.options).some(option => option.value === String(value))) {
+      select.add(new Option(String(value), String(value)));
+    }
+    select.value = String(value);
+  };
+
+  document.getElementById('admin-name').value = item.name;
+  setSelect('admin-type', item.type);
+  document.getElementById('admin-season').value = item.season || '';
+  setSelect('admin-genre', item.genre);
+  setSelect('admin-platform', item.platform);
+  document.getElementById('admin-episodes').value = item.episodes || 0;
+  document.getElementById('admin-screentime').value = item.screentime || 0;
+  document.getElementById('admin-date').value = toISOFromDisplay(item.watchDate);
+
+  document.getElementById('admin-form-heading').textContent = 'Edit Entry';
+  document.getElementById('admin-form-sub').textContent = 'Update row ' + rowNumber + ' — changes are saved to the Google Sheet.';
+  document.getElementById('admin-edit-row').textContent = rowNumber;
+  document.getElementById('admin-edit-bar').hidden = false;
+  document.getElementById('admin-submit-btn').textContent = 'Update Entry';
+  document.getElementById('admin-entry-msg').textContent = '';
+  document.getElementById('admin-entry-form').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function cancelAdminEdit() {
+  adminEditRow = null;
+  document.getElementById('admin-entry-form').reset();
+  document.getElementById('admin-form-heading').textContent = 'New Watchlist Entry';
+  document.getElementById('admin-form-sub').textContent = 'Saved through the protected admin service.';
+  document.getElementById('admin-edit-bar').hidden = true;
+  document.getElementById('admin-submit-btn').textContent = 'Add to Watchlist';
+  document.getElementById('admin-entry-msg').textContent = '';
 }
 
 async function checkAdminName() {
@@ -272,12 +370,17 @@ async function submitAdminEntry(event) {
   const form = event.currentTarget;
   const msg = document.getElementById('admin-entry-msg');
   const button = form.querySelector('button[type="submit"]');
+  const isUpdate = adminEditRow !== null;
   const payload = Object.fromEntries(new FormData(form));
   ['genre', 'platform'].forEach(key => {
     const select = document.getElementById('admin-' + key);
     const custom = document.getElementById('admin-' + key + '-custom');
     if (select.value === 'Other' && custom.value.trim()) payload[key] = custom.value.trim();
   });
+  if (isUpdate) {
+    payload.action = 'update';
+    payload.row = adminEditRow;
+  }
   button.disabled = true; button.textContent = 'Saving…'; msg.textContent = '';
   try {
     const controller = new AbortController();
@@ -294,11 +397,12 @@ async function submitAdminEntry(event) {
     const savedLocation = result.sheetName && result.rowNumber
       ? ` Saved to ${escapeHTML(result.sheetName)}, row ${escapeHTML(result.rowNumber)}.`
       : '';
-    msg.innerHTML = `<div class="sf-success">Entry added successfully.${savedLocation} Reloading tracker data…</div>`;
+    msg.innerHTML = `<div class="sf-success">Entry ${isUpdate ? 'updated' : 'added'} successfully.${savedLocation} Reloading tracker data…</div>`;
+    if (isUpdate) adminEditRow = null;
     await loadData();
   } catch (error) {
     msg.innerHTML = `<div class="sf-error">${escapeHTML(error.message)}</div>`;
-  } finally { button.disabled = false; button.textContent = 'Add to Watchlist'; }
+  } finally { button.disabled = false; button.textContent = isUpdate ? 'Update Entry' : 'Add to Watchlist'; }
 }
 
 // ── README ────────────────────────────────────────────────────────────────

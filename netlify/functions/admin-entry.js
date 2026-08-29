@@ -32,6 +32,12 @@ exports.handler = async event => {
   let body;
   try { body = JSON.parse(event.body || '{}'); } catch { return json(400, { error: 'Invalid request body' }); }
 
+  // The same endpoint serves both creating and updating entries; the Apps
+  // Script dispatches on the action and the row number when updating.
+  const isUpdate = body.action === 'update';
+  const rowNumber = Number(body.row);
+  if (isUpdate && !Number.isInteger(rowNumber)) return json(400, { error: 'A valid row number is required' });
+
   const entry = {
     Name: clean(body.name, 160),
     Season: clean(body.season, 20),
@@ -40,7 +46,8 @@ exports.handler = async event => {
     Platform: clean(body.platform, 80),
     Episodes: Number.isFinite(Number(body.episodes)) ? Math.max(0, Math.min(9999, Number(body.episodes))) : 0,
     Screentime: Number.isFinite(Number(body.screentime)) ? Math.max(0, Math.min(100000, Number(body.screentime))) : 0,
-    WatchDate: clean(body.watchDate, 40)
+    WatchDate: clean(body.watchDate, 40),
+    ...(isUpdate ? { Row: String(rowNumber) } : {})
   };
 
   if (!entry.Name || !['Movie', 'Series/Show'].includes(entry.Type)) return json(400, { error: 'Name and a valid type are required' });
@@ -55,7 +62,7 @@ exports.handler = async event => {
       method: 'POST',
       redirect: 'follow',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'admin-entry', writeSecret: scriptSecret, scriptWriteSecret: scriptSecret, ...entry })
+      body: JSON.stringify({ action: isUpdate ? 'admin-update' : 'admin-entry', writeSecret: scriptSecret, scriptWriteSecret: scriptSecret, ...entry })
     });
   } catch (error) {
     console.error('Sheet service request failed:', error);
@@ -74,5 +81,5 @@ exports.handler = async event => {
     console.error('Sheet service rejected entry:', { httpStatus: upstream.status, result });
     return json(502, { error: result.message || 'The sheet service could not save the entry', code: result.message && result.message.startsWith('Unauthorized:') ? 'SHEET_UNAUTHORIZED' : 'SHEET_REJECTED', diagnostics: { httpStatus: upstream.status, upstreamStatus: result.status || null, upstreamMessage: result.message || null } });
   }
-  return json(200, { ok: true, saved: true, entry: { name: entry.Name, type: entry.Type, season: entry.Season } });
+  return json(200, { ok: true, saved: true, sheetName: result.sheetName || null, rowNumber: result.rowNumber || null, entry: { name: entry.Name, type: entry.Type, season: entry.Season } });
 };

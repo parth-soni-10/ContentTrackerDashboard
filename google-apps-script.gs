@@ -57,6 +57,8 @@ function doPost(e) {
 
   if (payload.action === 'admin-entry') {
     result = handleAdminEntry(payload);
+  } else if (payload.action === 'admin-update') {
+    result = handleAdminUpdate(payload);
   } else if (payload.action === 'suggest') {
     result = handleSuggestion(payload);
   } else {
@@ -69,7 +71,7 @@ function doPost(e) {
   return response(JSON.stringify(result));
 }
 
-function handleAdminEntry(payload) {
+function authorizeWrite(payload) {
   const properties = PropertiesService.getScriptProperties();
   const expectedSecret = String(
     properties.getProperty(WRITE_SECRET_PROPERTY) || WRITE_SECRET_FALLBACK
@@ -83,7 +85,7 @@ function handleAdminEntry(payload) {
   ).trim();
 
   if (!expectedSecret) {
-    console.error('Admin entry rejected: missing SCRIPT_WRITE_SECRET script property');
+    console.error('Admin write rejected: missing SCRIPT_WRITE_SECRET script property');
     return {
       status: 'error',
       message: 'Unauthorized: SCRIPT_WRITE_SECRET is not configured'
@@ -91,7 +93,7 @@ function handleAdminEntry(payload) {
   }
 
   if (!suppliedSecret || !constantTimeEqual(suppliedSecret, expectedSecret)) {
-    console.error('Admin entry rejected: write secret mismatch', {
+    console.error('Admin write rejected: write secret mismatch', {
       supplied: Boolean(suppliedSecret),
       suppliedLength: suppliedSecret.length,
       expectedLength: expectedSecret.length
@@ -102,31 +104,21 @@ function handleAdminEntry(payload) {
     };
   }
 
-  const name = clean(payload.Name || payload.name, 160);
-  const type = clean(payload.Type || payload.type, 30);
+  return null;
+}
 
-  if (!name || !['Movie', 'Series/Show'].includes(type)) {
-    return {
-      status: 'error',
-      message: 'Name and valid type are required'
-    };
-  }
+function getDataSheet() {
+  return SpreadsheetApp.getActiveSpreadsheet().getSheetByName(DATA_SHEET);
+}
 
-  const sheet = SpreadsheetApp
-    .getActiveSpreadsheet()
-    .getSheetByName(DATA_SHEET);
-
-  if (!sheet) {
-    return {
-      status: 'error',
-      message: 'Data sheet not found'
-    };
-  }
-
+// Builds a row aligned to the Data sheet's actual header row — located the
+// same way readSheet() finds it, so a title block above the headers is fine.
+function buildEntryRow(sheet, payload, name, type) {
   const watchDateText = clean(payload.WatchDate || payload.watchDate, 40);
   const parsedDate = parseDate(watchDateText);
 
-  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getDisplayValues()[0].map(function(header) {
+  const headerRowNumber = findHeaderRow(sheet);
+  const headers = sheet.getRange(headerRowNumber, 1, 1, sheet.getLastColumn()).getDisplayValues()[0].map(function(header) {
     return String(header).trim().toLowerCase();
   });
   const valuesByHeader = {
@@ -144,10 +136,34 @@ function handleAdminEntry(payload) {
     month: parsedDate ? monthName(parsedDate) : '',
     year: parsedDate ? parsedDate.getFullYear() : ''
   };
-  const row = headers.map(function(header) {
+  return headers.map(function(header) {
     return Object.prototype.hasOwnProperty.call(valuesByHeader, header) ? valuesByHeader[header] : '';
   });
+}
 
+function handleAdminEntry(payload) {
+  const unauthorized = authorizeWrite(payload);
+  if (unauthorized) return unauthorized;
+
+  const name = clean(payload.Name || payload.name, 160);
+  const type = clean(payload.Type || payload.type, 30);
+
+  if (!name || !['Movie', 'Series/Show'].includes(type)) {
+    return {
+      status: 'error',
+      message: 'Name and valid type are required'
+    };
+  }
+
+  const sheet = getDataSheet();
+  if (!sheet) {
+    return {
+      status: 'error',
+      message: 'Data sheet not found'
+    };
+  }
+
+  const row = buildEntryRow(sheet, payload, name, type);
   const targetRow = sheet.getLastRow() + 1;
   sheet.getRange(targetRow, 1, 1, row.length).setValues([row]);
   SpreadsheetApp.flush();
@@ -160,6 +176,59 @@ function handleAdminEntry(payload) {
     spreadsheetId: SpreadsheetApp.getActiveSpreadsheet().getId(),
     sheetName: sheet.getName(),
     rowNumber: targetRow,
+    name: name
+  };
+}
+
+function handleAdminUpdate(payload) {
+  const unauthorized = authorizeWrite(payload);
+  if (unauthorized) return unauthorized;
+
+  const name = clean(payload.Name || payload.name, 160);
+  const type = clean(payload.Type || payload.type, 30);
+
+  if (!name || !['Movie', 'Series/Show'].includes(type)) {
+    return {
+      status: 'error',
+      message: 'Name and valid type are required'
+    };
+  }
+
+  const rowNumber = Number(payload.Row || payload.row);
+  if (!Number.isInteger(rowNumber)) {
+    return {
+      status: 'error',
+      message: 'A valid row number is required'
+    };
+  }
+
+  const sheet = getDataSheet();
+  if (!sheet) {
+    return {
+      status: 'error',
+      message: 'Data sheet not found'
+    };
+  }
+
+  if (rowNumber <= findHeaderRow(sheet) || rowNumber > sheet.getLastRow()) {
+    return {
+      status: 'error',
+      message: 'Row ' + rowNumber + ' is not a data row'
+    };
+  }
+
+  const row = buildEntryRow(sheet, payload, name, type);
+  sheet.getRange(rowNumber, 1, 1, row.length).setValues([row]);
+  SpreadsheetApp.flush();
+
+  clearSheetCache();
+
+  return {
+    status: 'ok',
+    saved: true,
+    spreadsheetId: SpreadsheetApp.getActiveSpreadsheet().getId(),
+    sheetName: sheet.getName(),
+    rowNumber: rowNumber,
     name: name
   };
 }
@@ -199,6 +268,23 @@ function handleSuggestion(payload) {
   return { status: 'ok' };
 }
 
+// Returns the 1-based row number of the Data sheet's header row (the first row
+// containing a cell with the value 'name'), falling back to row 1.
+function findHeaderRow(sheet) {
+  const lastRow = sheet.getLastRow();
+  const lastColumn = sheet.getLastColumn();
+  if (!lastRow || !lastColumn) return 1;
+
+  const values = sheet.getRange(1, 1, lastRow, lastColumn).getDisplayValues();
+  const index = values.findIndex(function(row) {
+    return row.some(function(cell) {
+      return String(cell).trim().toLowerCase() === 'name';
+    });
+  });
+
+  return index < 0 ? 1 : index + 1;
+}
+
 function readSheet(sheet, isDataSheet) {
   const lastRow = sheet.getLastRow();
   const lastColumn = sheet.getLastColumn();
@@ -212,11 +298,7 @@ function readSheet(sheet, isDataSheet) {
   let headerOffset = 0;
 
   if (isDataSheet) {
-    headerOffset = values.findIndex(function(row) {
-      return row.some(function(cell) {
-        return String(cell).trim().toLowerCase() === 'name';
-      });
-    });
+    headerOffset = findHeaderRow(sheet) - 1;
   }
 
   if (headerOffset < 0 || values.length <= headerOffset + 1) {
@@ -230,14 +312,18 @@ function readSheet(sheet, isDataSheet) {
 
   return values
     .slice(headerOffset + 1)
-    .filter(function(row) {
-      return String(row[0] || '').trim() !== '';
+    .map(function(row, index) {
+      // Track the physical sheet row so the admin dashboard can edit entries.
+      return { row: row, sheetRow: headerOffset + index + 2 };
     })
-    .map(function(row) {
-      const item = {};
+    .filter(function(entry) {
+      return String(entry.row[0] || '').trim() !== '';
+    })
+    .map(function(entry) {
+      const item = { _row: entry.sheetRow };
 
       headers.forEach(function(header, index) {
-        item[header] = String(row[index] || '').trim();
+        item[header] = String(entry.row[index] || '').trim();
       });
 
       return item;
