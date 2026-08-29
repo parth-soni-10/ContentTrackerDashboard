@@ -238,7 +238,7 @@ async function autofillAdminEntry() {
     const response = await fetch('/.netlify/functions/tmdb-search?' + query.toString(), { credentials: 'same-origin' });
     const data = await response.json();
     if (!response.ok) throw new Error(data.error || 'Could not find this title');
-    const fields = { 'admin-name': data.name, 'admin-type': data.type, 'admin-season': data.season, 'admin-genre': data.genre, 'admin-platform': data.platform, 'admin-episodes': data.episodes || '', 'admin-screentime': data.screentime || '' };
+    const fields = { 'admin-name': data.name || name, 'admin-type': data.type || 'Movie', 'admin-season': data.season || (data.type === 'Movie' ? '' : season || '1'), 'admin-genre': data.genre || 'Uncategorized', 'admin-platform': data.platform || 'Unknown platform', 'admin-episodes': data.episodes || (data.type === 'Movie' ? 0 : 1), 'admin-screentime': data.screentime || 0 };
     Object.entries(fields).forEach(([id, value]) => { const field = document.getElementById(id); if (field && value !== undefined) field.value = value; });
     result.className = 'admin-name-result available';
     result.textContent = 'Details filled from TMDB. Review them before saving.';
