@@ -72,7 +72,13 @@ function handleAdminEntry(payload) {
   const expectedSecret = String(PropertiesService
     .getScriptProperties()
     .getProperty(WRITE_SECRET_PROPERTY) || '').trim();
-  const suppliedSecret = String(payload.writeSecret || payload.scriptWriteSecret || '').trim();
+  const suppliedSecret = String(
+    payload.writeSecret ||
+    payload.scriptWriteSecret ||
+    payload.SCRIPT_WRITE_SECRET ||
+    payload.script_write_secret ||
+    ''
+  ).trim();
 
   if (!expectedSecret || !constantTimeEqual(suppliedSecret, expectedSecret)) {
     return {

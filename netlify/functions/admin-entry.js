@@ -45,7 +45,7 @@ exports.handler = async event => {
 
   if (!entry.Name || !['Movie', 'Series/Show'].includes(entry.Type)) return json(400, { error: 'Name and a valid type are required' });
 
-  const scriptUrl = process.env.SCRIPT_URL;
+  const scriptUrl = String(process.env.SCRIPT_URL || '').trim();
   const scriptSecret = String(process.env.SCRIPT_WRITE_SECRET || '').trim();
   if (!scriptUrl || !scriptSecret) return json(500, { error: 'Admin service is not configured' });
 
@@ -55,7 +55,7 @@ exports.handler = async event => {
       method: 'POST',
       redirect: 'follow',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'admin-entry', writeSecret: scriptSecret, ...entry })
+      body: JSON.stringify({ action: 'admin-entry', writeSecret: scriptSecret, scriptWriteSecret: scriptSecret, ...entry })
     });
   } catch (error) {
     console.error('Sheet service request failed:', error);
