@@ -72,7 +72,7 @@ exports.handler = async event => {
   }
   if (!upstream.ok || result.status !== 'ok') {
     console.error('Sheet service rejected entry:', { httpStatus: upstream.status, result });
-    return json(502, { error: result.message || 'The sheet service could not save the entry', code: result.message === 'Unauthorized' ? 'SHEET_UNAUTHORIZED' : 'SHEET_REJECTED', diagnostics: { httpStatus: upstream.status, upstreamStatus: result.status || null, upstreamMessage: result.message || null } });
+    return json(502, { error: result.message || 'The sheet service could not save the entry', code: result.message && result.message.startsWith('Unauthorized:') ? 'SHEET_UNAUTHORIZED' : 'SHEET_REJECTED', diagnostics: { httpStatus: upstream.status, upstreamStatus: result.status || null, upstreamMessage: result.message || null } });
   }
   return json(200, { ok: true });
 };

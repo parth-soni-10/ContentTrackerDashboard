@@ -287,7 +287,7 @@ async function submitAdminEntry(event) {
     const result = await response.json().catch(() => ({}));
     if (!response.ok) {
       const detail = result.diagnostics
-        ? ` [${result.code || 'ERROR'}${result.diagnostics.httpStatus ? ` · HTTP ${result.diagnostics.httpStatus}` : ''}]`
+        ? ` [${result.code || 'ERROR'}${result.diagnostics.httpStatus ? ` · HTTP ${result.diagnostics.httpStatus}` : ''}${result.diagnostics.upstreamMessage ? ` · ${result.diagnostics.upstreamMessage}` : ''}]`
         : '';
       throw new Error((result.error || 'Unable to save entry') + detail);
     }

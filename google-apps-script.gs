@@ -69,9 +69,8 @@ function doPost(e) {
 }
 
 function handleAdminEntry(payload) {
-  const expectedSecret = String(PropertiesService
-    .getScriptProperties()
-    .getProperty(WRITE_SECRET_PROPERTY) || '').trim();
+  const properties = PropertiesService.getScriptProperties();
+  const expectedSecret = String(properties.getProperty(WRITE_SECRET_PROPERTY) || '').trim();
   const suppliedSecret = String(
     payload.writeSecret ||
     payload.scriptWriteSecret ||
@@ -80,10 +79,23 @@ function handleAdminEntry(payload) {
     ''
   ).trim();
 
-  if (!expectedSecret || !constantTimeEqual(suppliedSecret, expectedSecret)) {
+  if (!expectedSecret) {
+    console.error('Admin entry rejected: missing SCRIPT_WRITE_SECRET script property');
     return {
       status: 'error',
-      message: 'Unauthorized'
+      message: 'Unauthorized: SCRIPT_WRITE_SECRET is not configured'
+    };
+  }
+
+  if (!suppliedSecret || !constantTimeEqual(suppliedSecret, expectedSecret)) {
+    console.error('Admin entry rejected: write secret mismatch', {
+      supplied: Boolean(suppliedSecret),
+      suppliedLength: suppliedSecret.length,
+      expectedLength: expectedSecret.length
+    });
+    return {
+      status: 'error',
+      message: 'Unauthorized: write secret mismatch'
     };
   }
 
