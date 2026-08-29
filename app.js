@@ -23,7 +23,7 @@ let datFilters = { year: 'all', platform: 'all', type: 'all', genre: 'all', mont
 let dataPageNum = 1;
 const PER_PAGE = 25;
 let suggLastPick = null;
-let adminAuthenticated = sessionStorage.getItem('content-tracker-admin') === '1';
+let adminAuthenticated = false;
 
 function escapeHTML(value) {
   return String(value ?? '').replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
@@ -129,20 +129,34 @@ function renderAdmin() {
           <button class="sf-submit-btn" type="submit">Unlock Admin</button>
         </form>
       </div></div>`;
-    document.getElementById('admin-login-form').addEventListener('submit', event => {
+    document.getElementById('admin-login-form').addEventListener('submit', async event => {
       event.preventDefault();
       const password = document.getElementById('admin-password').value;
+      const message = document.getElementById('admin-login-msg');
+      const button = event.currentTarget.querySelector('button[type="submit"]');
       if (!password) return;
-      adminAuthenticated = password;
-      sessionStorage.setItem('content-tracker-admin', '1');
-      renderAdminForm(password);
+      button.disabled = true;
+      button.textContent = 'Unlocking…';
+      message.textContent = '';
+      try {
+        const response = await fetch('/.netlify/functions/admin-login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ password }) });
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error || 'Unable to sign in');
+        adminAuthenticated = true;
+        renderAdminForm();
+      } catch (error) {
+        message.innerHTML = `<div class="sf-error">${escapeHTML(error.message)}</div>`;
+      } finally {
+        button.disabled = false;
+        button.textContent = 'Unlock Admin';
+      }
     });
     return;
   }
-  renderAdminForm(adminAuthenticated === true ? '' : adminAuthenticated);
+  renderAdminForm();
 }
 
-function renderAdminForm(password) {
+function renderAdminForm() {
   document.getElementById('app').innerHTML = `
     <div class="page-header"><div class="ph-left"><h1>Admin</h1><p>Add a title directly to the live watchlist</p></div></div>
     <div class="submit-page"><div class="submit-left"><div class="submit-form-card">
@@ -156,11 +170,11 @@ function renderAdminForm(password) {
         <div id="admin-entry-msg" aria-live="polite"></div><button class="sf-submit-btn" type="submit">Add to Watchlist</button>
       </form>
     </div></div><div class="submit-right"><div class="note-card"><div class="note-icon" aria-hidden="true">💡</div><div class="note-body"><strong>Protected entry</strong>The password is checked server-side and is never sent to Google Sheets.</div></div><button class="try-btn" id="admin-lock" type="button">Lock Admin</button></div></div>`;
-  document.getElementById('admin-entry-form').addEventListener('submit', event => submitAdminEntry(event, password));
-  document.getElementById('admin-lock').addEventListener('click', () => { adminAuthenticated = false; sessionStorage.removeItem('content-tracker-admin'); renderAdmin(); });
+  document.getElementById('admin-entry-form').addEventListener('submit', submitAdminEntry);
+  document.getElementById('admin-lock').addEventListener('click', () => { adminAuthenticated = false; renderAdmin(); });
 }
 
-async function submitAdminEntry(event, password) {
+async function submitAdminEntry(event) {
   event.preventDefault();
   const form = event.currentTarget;
   const msg = document.getElementById('admin-entry-msg');
@@ -168,7 +182,7 @@ async function submitAdminEntry(event, password) {
   const payload = Object.fromEntries(new FormData(form));
   button.disabled = true; button.textContent = 'Saving…'; msg.textContent = '';
   try {
-    const response = await fetch('/.netlify/functions/admin-entry', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ password, ...payload }) });
+    const response = await fetch('/.netlify/functions/admin-entry', { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin', body: JSON.stringify(payload) });
     const result = await response.json();
     if (!response.ok) throw new Error(result.error || 'Unable to save entry');
     msg.innerHTML = '<div class="sf-success">Entry added successfully. Reloading tracker data…</div>';
