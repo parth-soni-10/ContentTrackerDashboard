@@ -105,19 +105,27 @@ function handleAdminEntry(payload) {
   const watchDateText = clean(payload.WatchDate || payload.watchDate, 40);
   const parsedDate = parseDate(watchDateText);
 
-  const row = [
-    name,
-    clean(payload.Season || payload.season, 20),
-    type,
-    clean(payload.Genre || payload.genre || payload['Details/Genre'], 80),
-    clean(payload.Platform || payload.platform, 80),
-    toNumber(payload.Episodes || payload.episodes, 9999),
-    '',
-    toNumber(payload.Screentime || payload.screentime, 100000),
-    parsedDate || '',
-    parsedDate ? monthName(parsedDate) : '',
-    parsedDate ? parsedDate.getFullYear() : ''
-  ];
+  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getDisplayValues()[0].map(function(header) {
+    return String(header).trim().toLowerCase();
+  });
+  const valuesByHeader = {
+    name: name,
+    season: clean(payload.Season || payload.season, 20),
+    type: type,
+    'details/genre': clean(payload.Genre || payload.genre || payload['Details/Genre'], 80),
+    genre: clean(payload.Genre || payload.genre || payload['Details/Genre'], 80),
+    platform: clean(payload.Platform || payload.platform, 80),
+    'episode count': toNumber(payload.Episodes || payload.episodes, 9999),
+    'per epsiode': '',
+    'per episode': '',
+    screentime: toNumber(payload.Screentime || payload.screentime, 100000),
+    'watch date': parsedDate || '',
+    month: parsedDate ? monthName(parsedDate) : '',
+    year: parsedDate ? parsedDate.getFullYear() : ''
+  };
+  const row = headers.map(function(header) {
+    return Object.prototype.hasOwnProperty.call(valuesByHeader, header) ? valuesByHeader[header] : '';
+  });
 
   sheet.getRange(sheet.getLastRow() + 1, 1, 1, row.length).setValues([row]);
 

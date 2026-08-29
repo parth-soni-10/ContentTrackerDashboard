@@ -70,6 +70,7 @@ exports.handler = async event => {
     return json(502, { error: 'The sheet service returned an invalid response' });
   }
   if (!upstream.ok || result.status !== 'ok') {
+    console.error('Sheet service rejected entry:', result);
     return json(502, { error: result.message || 'The sheet service could not save the entry' });
   }
   return json(200, { ok: true });
