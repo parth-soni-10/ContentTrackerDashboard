@@ -1,5 +1,5 @@
 // ── CONFIG ────────────────────────────────────────────────────────────────
-const SCRIPT_URL = '/.netlify/functions/watchlist';
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbx2u09rWIwdLgK6_P1A3n5aeNs_WHqTlmaRSa7wXsMc_nmU856hqKRB7xq_rCb0lyytCw/exec';
 const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 const PEMOJI = {
   'Netflix': '🔴',
