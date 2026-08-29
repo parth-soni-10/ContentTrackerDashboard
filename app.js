@@ -1,5 +1,5 @@
 // ── CONFIG ────────────────────────────────────────────────────────────────
-const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbx2u09rWIwdLgK6_P1A3n5aeNs_WHqTlmaRSa7wXsMc_nmU856hqKRB7xq_rCb0lyytCw/exec';
+const SCRIPT_URL = '/.netlify/functions/watchlist';
 const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 const PEMOJI = {
   'Netflix': '🔴',
@@ -23,6 +23,20 @@ let datFilters = { year: 'all', platform: 'all', type: 'all', genre: 'all', mont
 let dataPageNum = 1;
 const PER_PAGE = 25;
 let suggLastPick = null;
+let adminAuthenticated = sessionStorage.getItem('content-tracker-admin') === '1';
+
+function escapeHTML(value) {
+  return String(value ?? '').replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
+}
+
+function bindNavigation() {
+  document.querySelectorAll('.nav-tab, .nav-brand').forEach(link => {
+    link.addEventListener('click', event => {
+      event.preventDefault();
+      navigateTo(link.dataset.page || 'readme');
+    });
+  });
+}
 
 // ── DATA LOADING ──────────────────────────────────────────────────────────
 async function loadData() {
@@ -47,7 +61,7 @@ async function loadData() {
   }
   setTimeout(() => {
     document.getElementById('loading').classList.add('hide');
-    navigateTo('readme');
+    navigateTo(window.location.hash.slice(1) || 'readme', false);
   }, 200);
 }
 
@@ -90,24 +104,78 @@ function destroyCharts() {
   charts = {};
 }
 
-// ── DATE DISPLAY — Apps Script sends pre-formatted "01 Jun 2026" strings ─
-function parseLocalDate(s) {
-  if (!s) return null;
-  // Only used for sorting — parse what we can, fallback gracefully
-  var str = String(s).trim();
-  var MO  = {Jan:0,Feb:1,Mar:2,Apr:3,May:4,Jun:5,Jul:6,Aug:7,Sep:8,Oct:9,Nov:10,Dec:11};
-  // "01 Jun 2026"
-  var m = str.match(/^(\d{1,2})\s+([A-Za-z]{3})\s+(\d{4})/);
-  if (m) { var mo = MO[m[2]]; if (mo !== undefined) return new Date(+m[3], mo, +m[1]); }
-  return new Date(str);
-}
-function navigateTo(page) {
+function navigateTo(page, updateHash = true) {
   destroyCharts();
   document.querySelectorAll('.nav-tab').forEach(t => t.classList.toggle('active', t.dataset.page === page));
   document.getElementById('app').innerHTML = '';
-  const pages = { readme: renderReadme, current: renderCurrentYear, alltime: renderAllTime, data: renderData, suggestions: renderSuggestions, submit: renderSubmit };
+  if (updateHash && window.location.hash.slice(1) !== page) window.location.hash = page;
+  const pages = { readme: renderReadme, current: renderCurrentYear, alltime: renderAllTime, data: renderData, suggestions: renderSuggestions, submit: renderSubmit, admin: renderAdmin };
   (pages[page] || renderReadme)();
+  document.getElementById('app').focus({ preventScroll: true });
   window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+// ── ADMIN ─────────────────────────────────────────────────────────────────
+function renderAdmin() {
+  if (!adminAuthenticated) {
+    document.getElementById('app').innerHTML = `
+      <div class="page-header"><div class="ph-left"><h1>Admin</h1><p>Sign in to add a title directly to the tracker</p></div></div>
+      <div class="admin-page"><div class="admin-card">
+        <div class="admin-icon" aria-hidden="true">🔒</div>
+        <h2>Admin access</h2><p class="submit-sub">Enter the admin password to continue.</p>
+        <form id="admin-login-form">
+          <div class="sf-field"><label class="sf-lbl" for="admin-password">Password</label><input id="admin-password" name="password" class="sf-input" type="password" autocomplete="current-password" required></div>
+          <div id="admin-login-msg" aria-live="polite"></div>
+          <button class="sf-submit-btn" type="submit">Unlock Admin</button>
+        </form>
+      </div></div>`;
+    document.getElementById('admin-login-form').addEventListener('submit', event => {
+      event.preventDefault();
+      const password = document.getElementById('admin-password').value;
+      if (!password) return;
+      adminAuthenticated = password;
+      sessionStorage.setItem('content-tracker-admin', '1');
+      renderAdminForm(password);
+    });
+    return;
+  }
+  renderAdminForm(adminAuthenticated === true ? '' : adminAuthenticated);
+}
+
+function renderAdminForm(password) {
+  document.getElementById('app').innerHTML = `
+    <div class="page-header"><div class="ph-left"><h1>Admin</h1><p>Add a title directly to the live watchlist</p></div></div>
+    <div class="submit-page"><div class="submit-left"><div class="submit-form-card">
+      <h2 class="submit-heading">New Watchlist Entry</h2><p class="submit-sub">Saved through the protected admin service.</p>
+      <form id="admin-entry-form">
+        <div class="sf-field"><label class="sf-lbl" for="admin-name">Name <span class="sf-req">*</span></label><input id="admin-name" name="name" class="sf-input" maxlength="160" required></div>
+        <div class="sf-row"><div class="sf-field"><label class="sf-lbl" for="admin-type">Type <span class="sf-req">*</span></label><select id="admin-type" name="type" class="sf-input"><option>Show</option><option>Movie</option><option>Series</option></select></div><div class="sf-field"><label class="sf-lbl" for="admin-season">Season</label><input id="admin-season" name="season" class="sf-input" maxlength="20"></div></div>
+        <div class="sf-row"><div class="sf-field"><label class="sf-lbl" for="admin-genre">Genre</label><input id="admin-genre" name="genre" class="sf-input" maxlength="80"></div><div class="sf-field"><label class="sf-lbl" for="admin-platform">Platform</label><input id="admin-platform" name="platform" class="sf-input" maxlength="80"></div></div>
+        <div class="sf-row"><div class="sf-field"><label class="sf-lbl" for="admin-episodes">Episodes</label><input id="admin-episodes" name="episodes" class="sf-input" type="number" min="0" max="9999" inputmode="numeric"></div><div class="sf-field"><label class="sf-lbl" for="admin-screentime">Screentime (mins)</label><input id="admin-screentime" name="screentime" class="sf-input" type="number" min="0" max="100000" inputmode="numeric"></div></div>
+        <div class="sf-field"><label class="sf-lbl" for="admin-date">Watch Date</label><input id="admin-date" name="watchDate" class="sf-input" type="date"></div>
+        <div id="admin-entry-msg" aria-live="polite"></div><button class="sf-submit-btn" type="submit">Add to Watchlist</button>
+      </form>
+    </div></div><div class="submit-right"><div class="note-card"><div class="note-icon" aria-hidden="true">💡</div><div class="note-body"><strong>Protected entry</strong>The password is checked server-side and is never sent to Google Sheets.</div></div><button class="try-btn" id="admin-lock" type="button">Lock Admin</button></div></div>`;
+  document.getElementById('admin-entry-form').addEventListener('submit', event => submitAdminEntry(event, password));
+  document.getElementById('admin-lock').addEventListener('click', () => { adminAuthenticated = false; sessionStorage.removeItem('content-tracker-admin'); renderAdmin(); });
+}
+
+async function submitAdminEntry(event, password) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const msg = document.getElementById('admin-entry-msg');
+  const button = form.querySelector('button[type="submit"]');
+  const payload = Object.fromEntries(new FormData(form));
+  button.disabled = true; button.textContent = 'Saving…'; msg.textContent = '';
+  try {
+    const response = await fetch('/.netlify/functions/admin-entry', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ password, ...payload }) });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || 'Unable to save entry');
+    msg.innerHTML = '<div class="sf-success">Entry added successfully. Reloading tracker data…</div>';
+    await loadData();
+  } catch (error) {
+    msg.innerHTML = `<div class="sf-error">${escapeHTML(error.message)}</div>`;
+  } finally { button.disabled = false; button.textContent = 'Add to Watchlist'; }
 }
 
 // ── README ────────────────────────────────────────────────────────────────
@@ -157,20 +225,20 @@ function renderReadme() {
     const typeClass  = r.type.toLowerCase() === 'movie' ? 'rw-pill movie' : 'rw-pill show';
     const typeLabel  = r.type.toLowerCase() === 'movie' ? 'Movie' : 'Show';
     const icon       = RW_ICONS[i % RW_ICONS.length];
-    const genre      = r.genre ? '<span class="rw-genre">' + r.genre + '</span>' : '';
+    const genre      = r.genre ? '<span class="rw-genre">' + escapeHTML(r.genre) + '</span>' : '';
     const seasonStr  = r.type && r.type.toLowerCase() !== 'movie'
       ? ' S' + (r.season || '1')
       : '';
-    const epsBadge   = r.episodes ? '<span class="rw-genre">' + r.episodes + ' eps</span>' : '';
+    const epsBadge   = r.episodes ? '<span class="rw-genre">' + escapeHTML(r.episodes + ' eps') + '</span>' : '';
     return '<div class="rw-card">' +
       '<div class="rw-emoji">' + icon + '</div>' +
       '<div class="rw-info">' +
-        '<div class="rw-name">' + r.name + seasonStr + '</div>' +
+        '<div class="rw-name">' + escapeHTML(r.name) + escapeHTML(seasonStr) + '</div>' +
         '<div class="rw-meta">' +
           '<span class="' + typeClass + '">' + typeLabel + '</span>' +
           genre +
           epsBadge +
-          '<span class="rw-date">' + fmtShortDate(r.watchDate) + '</span>' +
+          '<span class="rw-date">' + escapeHTML(fmtShortDate(r.watchDate)) + '</span>' +
         '</div>' +
       '</div>' +
     '</div>';
@@ -203,7 +271,7 @@ function renderReadme() {
         </div>
         <div class="readme-stat">
           <div class="rs-label">Top Platform</div>
-          <div class="rs-val">${topPlat ? pe(topPlat[0]) : ''}${topPlat ? topPlat[0] : '—'}</div>
+          <div class="rs-val">${topPlat ? pe(topPlat[0]) : ''}${topPlat ? escapeHTML(topPlat[0]) : '—'}</div>
           <div class="rs-sub">${topPlat ? topPlat[1] + ' titles all time' : ''}</div>
         </div>
       </div>
@@ -225,7 +293,7 @@ function renderReadme() {
       <div class="readme-sidebar">
         <div class="fact-card">
           <div class="fact-title">Quick Facts</div>
-          <div class="fact-row"><div class="fact-l"><span>🎭</span> Top Genre</div><div class="fact-r">${topGenre ? topGenre[0] : '—'}</div></div>
+          <div class="fact-row"><div class="fact-l"><span>🎭</span> Top Genre</div><div class="fact-r">${topGenre ? escapeHTML(topGenre[0]) : '—'}</div></div>
           <div class="fact-row"><div class="fact-l"><span>📆</span> Best Month</div><div class="fact-r">${bestMo ? bestMo[0] : '—'}</div></div>
           <div class="fact-row"><div class="fact-l"><span>📊</span> Avg / Month</div><div class="fact-r">${avgMo} titles</div></div>
           <div class="fact-row"><div class="fact-l"><span>📺</span> Shows</div><div class="fact-r">${total ? (shows / total * 100).toFixed(1) : 0}%</div></div>
@@ -253,6 +321,7 @@ function renderReadme() {
 function buildPlatBars(platCounts) {
   const maxVal = platCounts[0] ? platCounts[0][1] : 1;
   return platCounts.map((p, i) => {
+    p = [escapeHTML(p[0]), p[1]];
     // Pre-compute class — no ternary with quotes inside template literal
     const fillClass = i === 0 ? 'plat-fill top' : 'plat-fill';
     const pct = (p[1] / maxVal * 100).toFixed(0);
@@ -273,8 +342,8 @@ function buildTreemap(genCounts, totalGen) {
     const blockClass = `tm-block ${cols[i]}`;
     const pct = totalGen && g[1] ? (g[1] / totalGen * 100).toFixed(1) + '%' : '';
     return `<div class="${blockClass}">
-      <div class="tm-name">${g[0]}</div>
-      <div class="tm-pct">${pct}</div>
+      <div class="tm-name">${escapeHTML(g[0])}</div>
+      <div class="tm-pct">${escapeHTML(pct)}</div>
     </div>`;
   }).join('');
 }
@@ -285,8 +354,8 @@ function renderCurrentYear() {
   const platforms = ['all', ...uniqueVals('platform')];
   const genres    = ['all', ...uniqueVals('genre')];
 
-  const platOptions  = platforms.map(p => `<option value="${p}">${p === 'all' ? 'All' : p}</option>`).join('');
-  const genreOptions = genres.map(g => `<option value="${g}">${g === 'all' ? 'All' : g}</option>`).join('');
+  const platOptions  = platforms.map(p => `<option value="${escapeHTML(p)}">${p === 'all' ? 'All' : escapeHTML(p)}</option>`).join('');
+  const genreOptions = genres.map(g => `<option value="${escapeHTML(g)}">${g === 'all' ? 'All' : escapeHTML(g)}</option>`).join('');
 
   document.getElementById('app').innerHTML = `
     <div class="page-header">
@@ -415,9 +484,9 @@ function renderAllTime() {
   const platforms = ['all', ...uniqueVals('platform')];
   const genres    = ['all', ...uniqueVals('genre')];
 
-  const yearOptions  = years.map(y => `<option value="${y}">${y === 'all' ? 'All Years' : y}</option>`).join('');
-  const platOptions  = platforms.map(p => `<option value="${p}">${p === 'all' ? 'All' : p}</option>`).join('');
-  const genreOptions = genres.map(g => `<option value="${g}">${g === 'all' ? 'All' : g}</option>`).join('');
+  const yearOptions  = years.map(y => `<option value="${escapeHTML(y)}">${y === 'all' ? 'All Years' : escapeHTML(y)}</option>`).join('');
+  const platOptions  = platforms.map(p => `<option value="${escapeHTML(p)}">${p === 'all' ? 'All' : escapeHTML(p)}</option>`).join('');
+  const genreOptions = genres.map(g => `<option value="${escapeHTML(g)}">${g === 'all' ? 'All' : escapeHTML(g)}</option>`).join('');
 
   document.getElementById('app').innerHTML = `
     <div class="page-header">
@@ -540,11 +609,11 @@ function renderData() {
   const types     = ['all', ...uniqueVals('type')];
   const months    = ['all', ...MONTHS.filter(m => rawData.some(r => r.month === m))];
 
-  const yearOpts  = years.map(y    => `<option value="${y}">${y === 'all' ? 'All Years' : y}</option>`).join('');
-  const platOpts  = platforms.map(p => `<option value="${p}">${p === 'all' ? 'All Platforms' : p}</option>`).join('');
-  const typeOpts  = types.map(t    => `<option value="${t}">${t === 'all' ? 'All Types' : t}</option>`).join('');
-  const genreOpts = genres.map(g   => `<option value="${g}">${g === 'all' ? 'All Genres' : g}</option>`).join('');
-  const monthOpts = months.map(m   => `<option value="${m}">${m === 'all' ? 'All Months' : m}</option>`).join('');
+  const yearOpts  = years.map(y    => `<option value="${escapeHTML(y)}">${y === 'all' ? 'All Years' : escapeHTML(y)}</option>`).join('');
+  const platOpts  = platforms.map(p => `<option value="${escapeHTML(p)}">${p === 'all' ? 'All Platforms' : escapeHTML(p)}</option>`).join('');
+  const typeOpts  = types.map(t    => `<option value="${escapeHTML(t)}">${t === 'all' ? 'All Types' : escapeHTML(t)}</option>`).join('');
+  const genreOpts = genres.map(g   => `<option value="${escapeHTML(g)}">${g === 'all' ? 'All Genres' : escapeHTML(g)}</option>`).join('');
+  const monthOpts = months.map(m   => `<option value="${escapeHTML(m)}">${m === 'all' ? 'All Months' : escapeHTML(m)}</option>`).join('');
 
   document.getElementById('app').innerHTML = `
     <div class="page-header">
@@ -627,24 +696,24 @@ function updateDataTable() {
   for (var i = 0; i < page.length; i++) {
     var r = page[i];
     var pillClass  = (r.type && r.type.toLowerCase() === 'movie') ? 'type-pill movie' : 'type-pill show';
-    var typeLabel  = r.type || '—';
-    var genre      = r.genre || '—';
+    var typeLabel  = escapeHTML(r.type || '—');
+    var genre      = escapeHTML(r.genre || '—');
     var platEmoji  = pe(r.platform || '');
-    var platName   = r.platform || '—';
+    var platName   = escapeHTML(r.platform || '—');
     var name       = r.name || '—';
     var isMovie   = r.type && r.type.toLowerCase() === 'movie';
     var seasonStr = isMovie ? '' : ' S' + (r.season || '1');
     var epsStr     = r.episodes ? r.episodes + ' eps' : '—';
-    name = name.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    name = escapeHTML(name);
     rowsHTML += '<tr>';
     rowsHTML += '<td class="row-num">' + (start + i + 1) + '</td>';
     rowsHTML += '<td style="font-weight:500">' + name + '<span style="color:var(--text-soft);font-weight:400">' + seasonStr + '</span></td>';
     rowsHTML += '<td><span class="' + pillClass + '">' + typeLabel + '</span></td>';
     rowsHTML += '<td>' + genre + '</td>';
     rowsHTML += '<td>' + platEmoji + ' ' + platName + '</td>';
-    rowsHTML += '<td style="color:var(--text-mid)">' + epsStr + '</td>';
-    rowsHTML += '<td style="color:var(--text-mid)">' + (r.screentime ? r.screentime + ' mins' : '—') + '</td>';
-    rowsHTML += '<td style="color:var(--text-soft)">' + fmtDate(r.watchDate) + '</td>';
+    rowsHTML += '<td style="color:var(--text-mid)">' + escapeHTML(epsStr) + '</td>';
+    rowsHTML += '<td style="color:var(--text-mid)">' + escapeHTML(r.screentime ? r.screentime + ' mins' : '—') + '</td>';
+    rowsHTML += '<td style="color:var(--text-soft)">' + escapeHTML(fmtDate(r.watchDate)) + '</td>';
     rowsHTML += '</tr>';
   }
 
@@ -670,8 +739,8 @@ function renderSuggestions() {
   const genres = [...new Set(rawData.map(r => r.genre).filter(Boolean))].sort();
   const types  = [...new Set(rawData.map(r => r.type).filter(Boolean))].sort();
 
-  const genreOptions = genres.map(g => `<option value="${g}">${g}</option>`).join('');
-  const typeOptions  = types.map(t  => `<option value="${t}">${t}</option>`).join('');
+  const genreOptions = genres.map(g => `<option value="${escapeHTML(g)}">${escapeHTML(g)}</option>`).join('');
+  const typeOptions  = types.map(t  => `<option value="${escapeHTML(t)}">${escapeHTML(t)}</option>`).join('');
 
   document.getElementById('app').innerHTML = `
     <div class="page-header"><div class="ph-left"><h1>Suggestion Generator</h1><p>Spin for a random pick from your watchlist</p></div></div>
@@ -765,7 +834,7 @@ function showSuggResult(item, animate = true) {
   if (!ne || !me) return;
   if (!item) {
     ne.className = 'result-name empty';
-    ne.innerHTML = '<span>😕</span>No matches — try different filters';
+    ne.innerHTML = '<span aria-hidden="true">😕</span>No matches. Try different filters';
     me.innerHTML = '';
     return;
   }
@@ -874,8 +943,8 @@ function renderSubmit() {
   const genres    = [...new Set(rawData.map(r => r.genre).filter(Boolean))].sort();
   const platforms = [...new Set(rawData.map(r => r.platform).filter(Boolean))].sort();
 
-  const genreOpts = genres.map(g => '<option value="' + g + '">' + g + '</option>').join('');
-  const platOpts  = platforms.map(p => '<option value="' + p + '">' + p + '</option>').join('');
+  const genreOpts = genres.map(g => '<option value="' + escapeHTML(g) + '">' + escapeHTML(g) + '</option>').join('');
+  const platOpts  = platforms.map(p => '<option value="' + escapeHTML(p) + '">' + escapeHTML(p) + '</option>').join('');
 
   document.getElementById('app').innerHTML = `
     <div class="page-header">
@@ -965,10 +1034,10 @@ function renderSubmitSidebar() {
   const recent = suggData.slice(-5).reverse();
   const ICONS  = ['🎬','📺','🍿','🎭','📽️'];
   const recentRows = recent.length ? recent.map((r, i) => {
-    const meta = [r.Type, r.Genre, r.Platform].filter(Boolean).join(' · ');
+    const meta = [r.Type, r.Genre, r.Platform].filter(Boolean).map(escapeHTML).join(' · ');
     return '<div class="sr-item">' +
       '<div class="sr-icon">' + ICONS[i % ICONS.length] + '</div>' +
-      '<div><div class="sr-name">' + (r.Title || '—') + '</div><div class="sr-meta">' + (meta || '—') + '</div></div>' +
+      '<div><div class="sr-name">' + escapeHTML(r.Title || '—') + '</div><div class="sr-meta">' + (meta || '—') + '</div></div>' +
     '</div>';
   }).join('') : '<div class="sr-empty">😶 Apparently nobody wants me to watch anything. Rude.</div>';
 
@@ -1002,7 +1071,7 @@ async function submitSuggestion() {
   const btn = document.querySelector('.sf-submit-btn');
   btn.disabled = true;
   btn.innerHTML = '<span>⏳</span> Submitting…';
-  msg.innerHTML = '';
+  msg.textContent = '';
 
   const today = new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
   const params = new URLSearchParams({
@@ -1016,7 +1085,7 @@ async function submitSuggestion() {
   });
 
   try {
-    const res  = await fetch(SCRIPT_URL + '?' + params.toString(), { redirect: 'follow', mode: 'cors' });
+    const res  = await fetch('/.netlify/functions/suggestions', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(Object.fromEntries(params)) });
     const json = await res.json();
 
     // If Apps Script isn't updated, it returns the main watchlist not {status:'ok'}
@@ -1044,4 +1113,7 @@ async function submitSuggestion() {
 }
 
 // ── INIT ──────────────────────────────────────────────────────────────────
+
+bindNavigation();
+window.addEventListener('hashchange', () => navigateTo(window.location.hash.slice(1) || 'readme', false));
 loadData();
