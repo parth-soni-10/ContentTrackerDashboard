@@ -239,7 +239,14 @@ async function autofillAdminEntry() {
     const data = await response.json();
     if (!response.ok) throw new Error(data.error || 'Could not find this title');
     const fields = { 'admin-name': data.name || name, 'admin-type': data.type || 'Movie', 'admin-season': data.season || (data.type === 'Movie' ? '' : season || '1'), 'admin-genre': data.genre || 'Uncategorized', 'admin-platform': data.platform || 'Unknown platform', 'admin-episodes': data.episodes || (data.type === 'Movie' ? 0 : 1), 'admin-screentime': data.screentime || 0 };
-    Object.entries(fields).forEach(([id, value]) => { const field = document.getElementById(id); if (field && value !== undefined) field.value = value; });
+    Object.entries(fields).forEach(([id, value]) => {
+      const field = document.getElementById(id);
+      if (!field || value === undefined) return;
+      if (field.tagName === 'SELECT' && value && !Array.from(field.options).some(option => option.value === String(value))) {
+        field.add(new Option(String(value), String(value)));
+      }
+      field.value = value;
+    });
     result.className = 'admin-name-result available';
     result.textContent = 'Details filled from TMDB. Review them before saving.';
   } catch (error) {

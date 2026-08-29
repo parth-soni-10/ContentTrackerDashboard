@@ -50,11 +50,8 @@ exports.handler = async event => {
     const providersResponse = await fetch(providersUrl);
     if (providersResponse.ok) providers = await providersResponse.json();
     const regions = Object.values(providers?.results || {});
-    const availableProviders = regions.flatMap(region => [
-      ...(region.flatrate || []),
-      ...(region.free || []),
-      ...(region.ads || [])
-    ]);
+    const providerGroups = ['flatrate', 'free', 'ads', 'rent', 'buy'];
+    const availableProviders = regions.flatMap(region => providerGroups.flatMap(group => region[group] || []));
     const uniqueProviders = [...new Map(availableProviders.map(provider => [provider.provider_id, provider])).values()];
     const platform = uniqueProviders.map(provider => provider.provider_name).join(', ') || details.networks?.map(network => network.name).join(', ') || 'Unknown platform';
     const genre = details.genres?.map(item => item.name).filter(Boolean).join(', ') || 'Uncategorized';
