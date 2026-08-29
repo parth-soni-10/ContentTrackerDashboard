@@ -291,7 +291,10 @@ async function submitAdminEntry(event) {
         : '';
       throw new Error((result.error || 'Unable to save entry') + detail);
     }
-    msg.innerHTML = '<div class="sf-success">Entry added successfully. Reloading tracker data…</div>';
+    const savedLocation = result.sheetName && result.rowNumber
+      ? ` Saved to ${escapeHTML(result.sheetName)}, row ${escapeHTML(result.rowNumber)}.`
+      : '';
+    msg.innerHTML = `<div class="sf-success">Entry added successfully.${savedLocation} Reloading tracker data…</div>`;
     await loadData();
   } catch (error) {
     msg.innerHTML = `<div class="sf-error">${escapeHTML(error.message)}</div>`;

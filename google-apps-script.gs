@@ -1,6 +1,7 @@
 const DATA_SHEET = 'Data';
 const SUGGESTIONS_SHEET = 'Suggestions';
 const WRITE_SECRET_PROPERTY = 'SCRIPT_WRITE_SECRET';
+const WRITE_SECRET_FALLBACK = ''; // Optional: set the same secret here only if Script Properties are unavailable.
 const DATA_CACHE_SECONDS = 600;
 
 function doGet(e) {
@@ -70,7 +71,9 @@ function doPost(e) {
 
 function handleAdminEntry(payload) {
   const properties = PropertiesService.getScriptProperties();
-  const expectedSecret = String(properties.getProperty(WRITE_SECRET_PROPERTY) || '').trim();
+  const expectedSecret = String(
+    properties.getProperty(WRITE_SECRET_PROPERTY) || WRITE_SECRET_FALLBACK
+  ).trim();
   const suppliedSecret = String(
     payload.writeSecret ||
     payload.scriptWriteSecret ||
@@ -145,11 +148,20 @@ function handleAdminEntry(payload) {
     return Object.prototype.hasOwnProperty.call(valuesByHeader, header) ? valuesByHeader[header] : '';
   });
 
-  sheet.getRange(sheet.getLastRow() + 1, 1, 1, row.length).setValues([row]);
+  const targetRow = sheet.getLastRow() + 1;
+  sheet.getRange(targetRow, 1, 1, row.length).setValues([row]);
+  SpreadsheetApp.flush();
 
   clearSheetCache();
 
-  return { status: 'ok' };
+  return {
+    status: 'ok',
+    saved: true,
+    spreadsheetId: SpreadsheetApp.getActiveSpreadsheet().getId(),
+    sheetName: sheet.getName(),
+    rowNumber: targetRow,
+    name: name
+  };
 }
 
 function handleSuggestion(payload) {
