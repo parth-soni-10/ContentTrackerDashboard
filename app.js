@@ -139,7 +139,7 @@ function renderAdmin() {
       button.textContent = 'Unlocking…';
       message.textContent = '';
       try {
-        const response = await fetch('/.netlify/functions/admin-login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ password }) });
+        const response = await fetch('/.netlify/functions/admin-login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin', body: JSON.stringify({ password }) });
         const result = await response.json();
         if (!response.ok) throw new Error(result.error || 'Unable to sign in');
         adminAuthenticated = true;
@@ -162,8 +162,8 @@ function renderAdminForm() {
     <div class="submit-page"><div class="submit-left"><div class="submit-form-card">
       <h2 class="submit-heading">New Watchlist Entry</h2><p class="submit-sub">Saved through the protected admin service.</p>
       <form id="admin-entry-form">
-        <div class="sf-field"><label class="sf-lbl" for="admin-name">Name <span class="sf-req">*</span></label><input id="admin-name" name="name" class="sf-input" maxlength="160" required></div>
-        <div class="sf-row"><div class="sf-field"><label class="sf-lbl" for="admin-type">Type <span class="sf-req">*</span></label><select id="admin-type" name="type" class="sf-input"><option>Show</option><option>Movie</option><option>Series</option></select></div><div class="sf-field"><label class="sf-lbl" for="admin-season">Season</label><input id="admin-season" name="season" class="sf-input" maxlength="20"></div></div>
+        <div class="sf-field"><label class="sf-lbl" for="admin-name">Name <span class="sf-req">*</span></label><div class="admin-name-row"><input id="admin-name" name="name" class="sf-input" maxlength="160" required><button id="admin-check-name" class="try-btn admin-check-btn" type="button">Check sheet</button></div><div id="admin-name-result" class="admin-name-result" aria-live="polite"></div></div>
+        <div class="sf-row"><div class="sf-field"><label class="sf-lbl" for="admin-type">Type <span class="sf-req">*</span></label><select id="admin-type" name="type" class="sf-input"><option>Movie</option><option>Series/Show</option></select></div><div class="sf-field"><label class="sf-lbl" for="admin-season">Season</label><input id="admin-season" name="season" class="sf-input" maxlength="20"></div></div>
         <div class="sf-row"><div class="sf-field"><label class="sf-lbl" for="admin-genre">Genre</label><input id="admin-genre" name="genre" class="sf-input" maxlength="80"></div><div class="sf-field"><label class="sf-lbl" for="admin-platform">Platform</label><input id="admin-platform" name="platform" class="sf-input" maxlength="80"></div></div>
         <div class="sf-row"><div class="sf-field"><label class="sf-lbl" for="admin-episodes">Episodes</label><input id="admin-episodes" name="episodes" class="sf-input" type="number" min="0" max="9999" inputmode="numeric"></div><div class="sf-field"><label class="sf-lbl" for="admin-screentime">Screentime (mins)</label><input id="admin-screentime" name="screentime" class="sf-input" type="number" min="0" max="100000" inputmode="numeric"></div></div>
         <div class="sf-field"><label class="sf-lbl" for="admin-date">Watch Date</label><input id="admin-date" name="watchDate" class="sf-input" type="date"></div>
@@ -171,7 +171,36 @@ function renderAdminForm() {
       </form>
     </div></div><div class="submit-right"><div class="note-card"><div class="note-icon" aria-hidden="true">💡</div><div class="note-body"><strong>Protected entry</strong>The password is checked server-side and is never sent to Google Sheets.</div></div><button class="try-btn" id="admin-lock" type="button">Lock Admin</button></div></div>`;
   document.getElementById('admin-entry-form').addEventListener('submit', submitAdminEntry);
+  document.getElementById('admin-check-name').addEventListener('click', checkAdminName);
   document.getElementById('admin-lock').addEventListener('click', () => { adminAuthenticated = false; renderAdmin(); });
+}
+
+async function checkAdminName() {
+  const input = document.getElementById('admin-name');
+  const result = document.getElementById('admin-name-result');
+  const button = document.getElementById('admin-check-name');
+  const name = input.value.trim();
+  if (!name) { result.textContent = 'Enter a title name first.'; input.focus(); return; }
+  button.disabled = true;
+  button.textContent = 'Checking…';
+  result.textContent = '';
+  try {
+    if (!rawData.length) await loadData();
+    const matches = rawData.filter(item => item.name.toLowerCase() === name.toLowerCase());
+    if (!matches.length) {
+      result.className = 'admin-name-result available';
+      result.textContent = 'No exact match found. This title can be added.';
+    } else {
+      result.className = 'admin-name-result found';
+      result.textContent = `Found ${matches.length} existing entr${matches.length === 1 ? 'y' : 'ies'} in the sheet.`;
+    }
+  } catch {
+    result.className = 'admin-name-result found';
+    result.textContent = 'Could not check the sheet. Try again.';
+  } finally {
+    button.disabled = false;
+    button.textContent = 'Check sheet';
+  }
 }
 
 async function submitAdminEntry(event) {
@@ -651,12 +680,19 @@ function renderData() {
       </div>
     </div>
     <div class="data-main">
-      <div class="data-header-row"><div class="data-count" id="dat-count"></div></div>
+      <div class="data-header-row"><div class="data-count" id="dat-count"></div><button class="data-reset" id="data-reset" type="button">Reset filters</button></div>
       <div id="dat-table"></div>
       <div class="pagination" id="dat-pag"></div>
     </div>
     <div class="footer" id="dat-footer"></div>`;
 
+  document.getElementById('data-reset').addEventListener('click', () => {
+    datFilters = { year: 'all', platform: 'all', type: 'all', genre: 'all', month: 'all', search: '' };
+    dataPageNum = 1;
+    ['df-year', 'df-plat', 'df-type', 'df-genre', 'df-month'].forEach(id => { document.getElementById(id).value = 'all'; });
+    document.getElementById('df-search').value = '';
+    updateDataTable();
+  });
   updateDataTable();
 }
 

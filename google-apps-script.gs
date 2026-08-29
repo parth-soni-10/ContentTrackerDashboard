@@ -41,7 +41,7 @@ function handleAdminEntry(payload) {
   const type = clean(payload.Type, 30);
   const name = clean(payload.Name, 160);
 
-  if (!name || !['Movie', 'Show', 'Series'].includes(type)) {
+  if (!name || !['Movie', 'Series/Show'].includes(type)) {
     return response({ status: 'error', message: 'Name and valid type are required' });
   }
 
@@ -91,11 +91,15 @@ function readSheet(sheet) {
   const values = sheet.getDataRange().getDisplayValues();
   if (values.length < 2) return [];
 
-  const headers = values[0].map(function(header) {
-    return String(header).trim();
+  const firstRow = values[0];
+  const headerOffset = firstRow.some(function(header) { return String(header).trim() === 'Name'; }) ? 0 : 1;
+  if (values.length <= headerOffset) return [];
+  const headers = values[headerOffset].map(function(header, index) {
+    const name = String(header).trim();
+    return name || 'Column ' + (index + 1);
   });
 
-  return values.slice(1).map(function(row) {
+  return values.slice(headerOffset + 1).map(function(row) {
     const item = {};
     headers.forEach(function(header, index) {
       item[header] = row[index] || '';

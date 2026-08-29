@@ -43,7 +43,7 @@ exports.handler = async event => {
     WatchDate: clean(body.watchDate, 40)
   };
 
-  if (!entry.Name || !['Movie', 'Show', 'Series'].includes(entry.Type)) return json(400, { error: 'Name and a valid type are required' });
+  if (!entry.Name || !['Movie', 'Series/Show'].includes(entry.Type)) return json(400, { error: 'Name and a valid type are required' });
 
   const scriptUrl = process.env.SCRIPT_URL;
   const scriptSecret = process.env.SCRIPT_WRITE_SECRET;
