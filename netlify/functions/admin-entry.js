@@ -32,29 +32,42 @@ exports.handler = async event => {
   let body;
   try { body = JSON.parse(event.body || '{}'); } catch { return json(400, { error: 'Invalid request body' }); }
 
-  // The same endpoint serves both creating and updating entries; the Apps
-  // Script dispatches on the action and the row number when updating.
-  const isUpdate = body.action === 'update';
+  // The same endpoint serves creating, updating and deleting entries; the Apps
+  // Script dispatches on the action, and update/delete also carry a row number.
+  const action = body.action === 'delete' ? 'delete' : (body.action === 'update' ? 'update' : 'create');
   const rowNumber = Number(body.row);
-  if (isUpdate && !Number.isInteger(rowNumber)) return json(400, { error: 'A valid row number is required' });
-
-  const entry = {
-    Name: clean(body.name, 160),
-    Season: clean(body.season, 20),
-    Type: clean(body.type, 30),
-    Genre: clean(body.genre, 80),
-    Platform: clean(body.platform, 80),
-    Episodes: Number.isFinite(Number(body.episodes)) ? Math.max(0, Math.min(9999, Number(body.episodes))) : 0,
-    Screentime: Number.isFinite(Number(body.screentime)) ? Math.max(0, Math.min(100000, Number(body.screentime))) : 0,
-    WatchDate: clean(body.watchDate, 40),
-    ...(isUpdate ? { Row: String(rowNumber) } : {})
-  };
-
-  if (!entry.Name || !['Movie', 'Series/Show'].includes(entry.Type)) return json(400, { error: 'Name and a valid type are required' });
 
   const scriptUrl = String(process.env.SCRIPT_URL || '').trim();
   const scriptSecret = String(process.env.SCRIPT_WRITE_SECRET || '').trim();
   if (!scriptUrl || !scriptSecret) return json(500, { error: 'Admin service is not configured', code: 'CONFIG_MISSING', diagnostics: { scriptUrlConfigured: Boolean(scriptUrl), writeSecretConfigured: Boolean(scriptSecret) } });
+
+  let scriptAction;
+  let forward = { writeSecret: scriptSecret, scriptWriteSecret: scriptSecret };
+  let entryMeta = null;
+
+  if (action === 'delete') {
+    if (!Number.isInteger(rowNumber)) return json(400, { error: 'A valid row number is required' });
+    scriptAction = 'admin-delete';
+    forward.Row = String(rowNumber);
+  } else {
+    const isUpdate = action === 'update';
+    if (isUpdate && !Number.isInteger(rowNumber)) return json(400, { error: 'A valid row number is required' });
+    const entry = {
+      Name: clean(body.name, 160),
+      Season: clean(body.season, 20),
+      Type: clean(body.type, 30),
+      Genre: clean(body.genre, 80),
+      Platform: clean(body.platform, 80),
+      Episodes: Number.isFinite(Number(body.episodes)) ? Math.max(0, Math.min(9999, Number(body.episodes))) : 0,
+      Screentime: Number.isFinite(Number(body.screentime)) ? Math.max(0, Math.min(100000, Number(body.screentime))) : 0,
+      WatchDate: clean(body.watchDate, 40),
+      ...(isUpdate ? { Row: String(rowNumber) } : {})
+    };
+    if (!entry.Name || !['Movie', 'Series/Show'].includes(entry.Type)) return json(400, { error: 'Name and a valid type are required' });
+    scriptAction = isUpdate ? 'admin-update' : 'admin-entry';
+    entryMeta = { name: entry.Name, type: entry.Type, season: entry.Season };
+    Object.assign(forward, entry);
+  }
 
   let upstream;
   try {
@@ -62,7 +75,7 @@ exports.handler = async event => {
       method: 'POST',
       redirect: 'follow',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: isUpdate ? 'admin-update' : 'admin-entry', writeSecret: scriptSecret, scriptWriteSecret: scriptSecret, ...entry })
+      body: JSON.stringify({ action: scriptAction, ...forward })
     });
   } catch (error) {
     console.error('Sheet service request failed:', error);
@@ -81,5 +94,5 @@ exports.handler = async event => {
     console.error('Sheet service rejected entry:', { httpStatus: upstream.status, result });
     return json(502, { error: result.message || 'The sheet service could not save the entry', code: result.message && result.message.startsWith('Unauthorized:') ? 'SHEET_UNAUTHORIZED' : 'SHEET_REJECTED', diagnostics: { httpStatus: upstream.status, upstreamStatus: result.status || null, upstreamMessage: result.message || null } });
   }
-  return json(200, { ok: true, saved: true, sheetName: result.sheetName || null, rowNumber: result.rowNumber || null, entry: { name: entry.Name, type: entry.Type, season: entry.Season } });
+  return json(200, { ok: true, saved: action !== 'delete', deleted: action === 'delete', sheetName: result.sheetName || null, rowNumber: result.rowNumber || null, entry: entryMeta });
 };

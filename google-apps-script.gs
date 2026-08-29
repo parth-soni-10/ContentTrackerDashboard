@@ -59,6 +59,8 @@ function doPost(e) {
     result = handleAdminEntry(payload);
   } else if (payload.action === 'admin-update') {
     result = handleAdminUpdate(payload);
+  } else if (payload.action === 'admin-delete') {
+    result = handleAdminDelete(payload);
   } else if (payload.action === 'suggest') {
     result = handleSuggestion(payload);
   } else {
@@ -230,6 +232,48 @@ function handleAdminUpdate(payload) {
     sheetName: sheet.getName(),
     rowNumber: rowNumber,
     name: name
+  };
+}
+
+function handleAdminDelete(payload) {
+  const unauthorized = authorizeWrite(payload);
+  if (unauthorized) return unauthorized;
+
+  const rowNumber = Number(payload.Row || payload.row);
+  if (!Number.isInteger(rowNumber)) {
+    return {
+      status: 'error',
+      message: 'A valid row number is required'
+    };
+  }
+
+  const sheet = getDataSheet();
+  if (!sheet) {
+    return {
+      status: 'error',
+      message: 'Data sheet not found'
+    };
+  }
+
+  const headerRow = findHeaderRow(sheet);
+  if (rowNumber <= headerRow || rowNumber > sheet.getLastRow()) {
+    return {
+      status: 'error',
+      message: 'Row ' + rowNumber + ' is not a data row'
+    };
+  }
+
+  sheet.deleteRow(rowNumber);
+  SpreadsheetApp.flush();
+
+  clearSheetCache();
+
+  return {
+    status: 'ok',
+    deleted: true,
+    spreadsheetId: SpreadsheetApp.getActiveSpreadsheet().getId(),
+    sheetName: sheet.getName(),
+    rowNumber: rowNumber
   };
 }
 

@@ -57,7 +57,11 @@ function bindNavigation() {
 }
 
 // ── DATA LOADING ──────────────────────────────────────────────────────────
-async function loadData() {
+// loadData(skipRerender): normally it re-renders the current page after a
+// data refresh. Pass true when you're on a stateful page (the admin form)
+// and want to refresh rawData WITHOUT tearing down the DOM and losing form
+// state / messages.
+async function loadData(skipRerender) {
   try {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 8000);
@@ -83,7 +87,7 @@ async function loadData() {
     rawData = [];
   }
   document.getElementById('loading').classList.add('hide');
-  navigateTo(window.location.hash.slice(1) || 'readme', false);
+  if (!skipRerender) navigateTo(window.location.hash.slice(1) || 'readme', false);
 }
 
 // ── UTILS ─────────────────────────────────────────────────────────────────
@@ -217,6 +221,8 @@ function renderAdminForm() {
   document.getElementById('admin-lock').addEventListener('click', () => { adminAuthenticated = false; renderAdmin(); });
   document.getElementById('admin-edit-search').addEventListener('input', event => renderAdminEditResults(event.target.value));
   document.getElementById('admin-edit-results').addEventListener('click', event => {
+    const del = event.target.closest('.admin-del-btn');
+    if (del) { deleteAdminEntry(Number(del.dataset.row), del); return; }
     const button = event.target.closest('.admin-edit-btn');
     if (button) startAdminEdit(Number(button.dataset.row));
   });
@@ -242,7 +248,10 @@ function renderAdminEditResults(query) {
     return '<div class="admin-edit-item">' +
       '<div class="admin-edit-info"><div class="admin-edit-name">' + escapeHTML(item.name) + '</div>' +
       (meta ? '<div class="admin-edit-meta">' + meta + '</div>' : '') + '</div>' +
-      '<button class="try-btn admin-edit-btn" type="button" data-row="' + item.row + '">Edit</button>' +
+      '<div class="admin-edit-actions">' +
+        '<button class="try-btn admin-edit-btn" type="button" data-row="' + item.row + '">Edit</button>' +
+        '<button class="try-btn admin-del-btn" type="button" data-row="' + item.row + '">Delete</button>' +
+      '</div>' +
     '</div>';
   }).join('');
 }
@@ -289,6 +298,37 @@ function cancelAdminEdit() {
   document.getElementById('admin-entry-msg').textContent = '';
 }
 
+async function deleteAdminEntry(rowNumber, button) {
+  const item = rawData.find(r => r.row === rowNumber);
+  const label = item ? item.name : 'this entry';
+  if (!window.confirm('Delete "' + label + '" from the watchlist? This cannot be undone.')) return;
+  if (button) { button.disabled = true; button.textContent = 'Deleting…'; }
+  const msg = () => document.getElementById('admin-entry-msg');
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 30000);
+    const response = await fetch('/.netlify/functions/admin-entry', { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin', body: JSON.stringify({ action: 'delete', row: rowNumber }), signal: controller.signal });
+    clearTimeout(timeout);
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      const detail = result.diagnostics
+        ? ` [${result.code || 'ERROR'}${result.diagnostics.httpStatus ? ` · HTTP ${result.diagnostics.httpStatus}` : ''}${result.diagnostics.upstreamMessage ? ` · ${result.diagnostics.upstreamMessage}` : ''}]`
+        : '';
+      throw new Error((result.error || 'Unable to delete entry') + detail);
+    }
+    // Proper full refresh (also resets the form), then show feedback + refresh results.
+    await loadData();
+    msg().innerHTML = `<div class="sf-success">Entry deleted${result.rowNumber ? ' (row ' + escapeHTML(result.rowNumber) + ')' : ''}. Tracker reloaded.</div>`;
+    const input = document.getElementById('admin-edit-search');
+    if (input) renderAdminEditResults(input.value);
+    msg().scrollIntoView({ behavior: 'smooth', block: 'center' });
+  } catch (error) {
+    msg().innerHTML = `<div class="sf-error">${escapeHTML(error.message)}</div>`;
+  } finally {
+    if (button) { button.disabled = false; button.textContent = 'Delete'; }
+  }
+}
+
 async function checkAdminName() {
   const input = document.getElementById('admin-name');
   const result = document.getElementById('admin-name-result');
@@ -299,7 +339,7 @@ async function checkAdminName() {
   button.textContent = 'Checking…';
   result.textContent = '';
   try {
-    if (!rawData.length) await loadData();
+    if (!rawData.length) await loadData(true);
     const query = name.toLowerCase();
     const matches = rawData.filter(item => item.name.toLowerCase().includes(query));
     if (!matches.length) {
@@ -397,12 +437,15 @@ async function submitAdminEntry(event) {
     const savedLocation = result.sheetName && result.rowNumber
       ? ` Saved to ${escapeHTML(result.sheetName)}, row ${escapeHTML(result.rowNumber)}.`
       : '';
-    msg.innerHTML = `<div class="sf-success">Entry ${isUpdate ? 'updated' : 'added'} successfully.${savedLocation} Reloading tracker data…</div>`;
-    if (isUpdate) adminEditRow = null;
+    // Leave edit mode, then do a proper full refresh of the page data.
+    // loadData() re-renders the current page, which also resets the form — so
+    // apply the success message to the freshly-rendered DOM afterwards.
+    adminEditRow = null;
     await loadData();
+    document.getElementById('admin-entry-msg').innerHTML = `<div class="sf-success">Entry ${isUpdate ? 'updated' : 'added'} successfully.${savedLocation} Tracker reloaded.</div>`;
   } catch (error) {
     msg.innerHTML = `<div class="sf-error">${escapeHTML(error.message)}</div>`;
-  } finally { button.disabled = false; button.textContent = isUpdate ? 'Update Entry' : 'Add to Watchlist'; }
+  } finally { button.disabled = false; button.textContent = adminEditRow !== null ? 'Update Entry' : 'Add to Watchlist'; }
 }
 
 // ── README ────────────────────────────────────────────────────────────────
