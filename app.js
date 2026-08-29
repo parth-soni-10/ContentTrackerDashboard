@@ -1,5 +1,5 @@
 // ── CONFIG ────────────────────────────────────────────────────────────────
-const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbx2u09rWIwdLgK6_P1A3n5aeNs_WHqTlmaRSa7wXsMc_nmU856hqKRB7xq_rCb0lyytCw/exec';
+const SCRIPT_URL = '/.netlify/functions/watchlist';
 const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 const PEMOJI = {
   'Netflix': '🔴',
@@ -49,7 +49,7 @@ async function loadData() {
       type:       r.Type       || r.type       || '',
       genre:      r['Details/Genre'] || r.Genre || r.genre || '',
       platform:   r.Platform   || r.platform   || '',
-      episodes:   parseInt(r['Episode Count'] || r.episodes || 0) || 0,
+      episodes:   parseInt(r['Episode Count'] || r['Episode Count '] || r.episodes || 0) || 0,
       screentime: parseFloat(r.Screentime || r.screentime || 0) || 0,
       watchDate:  r['Watch Date'] || r.watchDate || '',
       month:      r.Month      || r.month      || '',
