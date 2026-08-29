@@ -26,6 +26,23 @@ exports.handler = async event => {
   const season = clean(event.queryStringParameters?.season, 10);
   if (!title) return json(400, { error: 'Title is required' });
 
+  // Lightweight poster lookup — one TMDB search, no details/OMDB/providers.
+  if (event.queryStringParameters?.light === '1') {
+    try {
+      const searchUrl = new URL('https://api.themoviedb.org/3/search/multi');
+      searchUrl.search = new URLSearchParams({ api_key: process.env.TMDB_API_KEY, query: title, include_adult: 'false', page: '1' });
+      const searchResponse = await fetch(searchUrl);
+      if (!searchResponse.ok) return json(502, { error: 'TMDB search failed' });
+      const search = await searchResponse.json();
+      const match = (search.results || [])
+        .filter(item => item.media_type === 'movie' || item.media_type === 'tv')
+        .sort((a, b) => (b.popularity || 0) - (a.popularity || 0))[0];
+      return json(200, { poster: match && match.poster_path ? 'https://image.tmdb.org/t/p/w185' + match.poster_path : null });
+    } catch (error) {
+      return json(502, { error: 'Unable to reach the autofill service. Please try again.' });
+    }
+  }
+
   try {
     const searchUrl = new URL('https://api.themoviedb.org/3/search/multi');
     searchUrl.search = new URLSearchParams({ api_key: process.env.TMDB_API_KEY, query: title, include_adult: 'false', page: '1' });

@@ -8,6 +8,7 @@
   <meta name="google-site-verification" content="rMJwu8nMy93VQ4XmpsnjZ4ssIM8n52YLyu6-655mA6s" />
   <title>Content Tracker</title>
   <link rel="stylesheet" href="styles.css">
+  <script>try{if(localStorage.getItem('ct-theme')==='dark'){document.documentElement.classList.add('dark')}}catch(e){}</script>
 </head>
 <body>
 <a class="skip-link" href="#app">Skip to content</a>
@@ -37,6 +38,10 @@
       <svg width="13" height="13" viewBox="0 0 16 16" fill="none" opacity=".6"><path d="M2 4h12M2 8h9M2 12h6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
       Data
     </a>
+    <a class="nav-tab" href="#timeline" data-page="timeline">
+      <svg width="13" height="13" viewBox="0 0 16 16" fill="none" opacity=".6"><path d="M2 3h12M2 8h9M2 13h6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+      Timeline
+    </a>
     <a class="nav-tab" href="#suggestions" data-page="suggestions">
       <svg width="13" height="13" viewBox="0 0 16 16" fill="none" opacity=".6"><path d="M8 1.5l1.8 3.7 4 .6-2.9 2.8.7 4L8 10.4l-3.6 1.9.7-4L2.2 5.8l4-.6z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg>
       Suggestions
@@ -46,6 +51,7 @@
       Submit
     </a>
   </div>
+  <button class="theme-toggle" id="theme-toggle" type="button" aria-label="Toggle dark mode" title="Toggle dark mode">🌙</button>
 </nav>
 
 <main id="app" tabindex="-1"></main>

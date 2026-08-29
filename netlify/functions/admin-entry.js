@@ -34,7 +34,7 @@ exports.handler = async event => {
 
   // The same endpoint serves creating, updating and deleting entries; the Apps
   // Script dispatches on the action, and update/delete also carry a row number.
-  const action = body.action === 'delete' ? 'delete' : (body.action === 'update' ? 'update' : 'create');
+  const action = body.action === 'delete' ? 'delete' : (body.action === 'update' ? 'update' : (body.action === 'rate' ? 'rate' : 'create'));
   const rowNumber = Number(body.row);
 
   const scriptUrl = String(process.env.SCRIPT_URL || '').trim();
@@ -49,6 +49,13 @@ exports.handler = async event => {
     if (!Number.isInteger(rowNumber)) return json(400, { error: 'A valid row number is required' });
     scriptAction = 'admin-delete';
     forward.Row = String(rowNumber);
+  } else if (action === 'rate') {
+    if (!Number.isInteger(rowNumber)) return json(400, { error: 'A valid row number is required' });
+    const rating = Math.round(Number(body.rating));
+    if (![1, 2, 3, 4, 5].includes(rating)) return json(400, { error: 'A valid rating (1-5) is required' });
+    scriptAction = 'admin-rate';
+    forward.Row = String(rowNumber);
+    forward.Rating = String(rating);
   } else {
     const isUpdate = action === 'update';
     if (isUpdate && !Number.isInteger(rowNumber)) return json(400, { error: 'A valid row number is required' });
@@ -61,6 +68,7 @@ exports.handler = async event => {
       Episodes: Number.isFinite(Number(body.episodes)) ? Math.max(0, Math.min(9999, Number(body.episodes))) : 0,
       Screentime: Number.isFinite(Number(body.screentime)) ? Math.max(0, Math.min(100000, Number(body.screentime))) : 0,
       WatchDate: clean(body.watchDate, 40),
+      Rating: clean(body.rating, 10),
       ...(isUpdate ? { Row: String(rowNumber) } : {})
     };
     if (!entry.Name || !['Movie', 'Series/Show'].includes(entry.Type)) return json(400, { error: 'Name and a valid type are required' });
