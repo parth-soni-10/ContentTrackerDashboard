@@ -1,55 +1,108 @@
 const DATA_SHEET = 'Data';
 const SUGGESTIONS_SHEET = 'Suggestions';
 const WRITE_SECRET_PROPERTY = 'SCRIPT_WRITE_SECRET';
+const DATA_CACHE_SECONDS = 300;
 
 function doGet(e) {
   const sheetName = e && e.parameter && e.parameter.sheet === SUGGESTIONS_SHEET
     ? SUGGESTIONS_SHEET
     : DATA_SHEET;
 
-  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(sheetName);
+  const cache = CacheService.getScriptCache();
+  const cacheKey = 'sheet-json-' + sheetName;
+  const cached = cache.get(cacheKey);
 
-  if (!sheet) {
-    return response({ status: 'error', message: 'Sheet not found: ' + sheetName });
+  if (cached) {
+    return response(cached);
   }
 
-  return response(readSheet(sheet));
+  const sheet = SpreadsheetApp
+    .getActiveSpreadsheet()
+    .getSheetByName(sheetName);
+
+  if (!sheet) {
+    return response(JSON.stringify({
+      status: 'error',
+      message: 'Sheet not found: ' + sheetName
+    }));
+  }
+
+  const result = JSON.stringify(readSheet(sheet, sheetName === DATA_SHEET));
+
+  if (result.length < 95000) {
+    cache.put(cacheKey, result, DATA_CACHE_SECONDS);
+  }
+
+  return response(result);
 }
 
 function doPost(e) {
   let payload;
 
   try {
-    payload = JSON.parse(e && e.postData && e.postData.contents ? e.postData.contents : '{}');
+    payload = JSON.parse(
+      e && e.postData && e.postData.contents
+        ? e.postData.contents
+        : '{}'
+    );
   } catch (error) {
-    return response({ status: 'error', message: 'Invalid JSON' });
+    return response(JSON.stringify({
+      status: 'error',
+      message: 'Invalid JSON'
+    }));
   }
 
-  if (payload.action === 'admin-entry') return handleAdminEntry(payload);
-  if (payload.action === 'suggest') return handleSuggestion(payload);
+  let result;
 
-  return response({ status: 'error', message: 'Unknown action' });
+  if (payload.action === 'admin-entry') {
+    result = handleAdminEntry(payload);
+  } else if (payload.action === 'suggest') {
+    result = handleSuggestion(payload);
+  } else {
+    result = {
+      status: 'error',
+      message: 'Unknown action'
+    };
+  }
+
+  return response(JSON.stringify(result));
 }
 
 function handleAdminEntry(payload) {
-  const expectedSecret = PropertiesService.getScriptProperties().getProperty(WRITE_SECRET_PROPERTY);
+  const expectedSecret = PropertiesService
+    .getScriptProperties()
+    .getProperty(WRITE_SECRET_PROPERTY);
 
   if (!expectedSecret || !constantTimeEqual(payload.writeSecret, expectedSecret)) {
-    return response({ status: 'error', message: 'Unauthorized' });
+    return {
+      status: 'error',
+      message: 'Unauthorized'
+    };
   }
 
-  const type = clean(payload.Type, 30);
   const name = clean(payload.Name, 160);
+  const type = clean(payload.Type, 30);
 
   if (!name || !['Movie', 'Series/Show'].includes(type)) {
-    return response({ status: 'error', message: 'Name and valid type are required' });
+    return {
+      status: 'error',
+      message: 'Name and valid type are required'
+    };
   }
 
-  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(DATA_SHEET);
-  if (!sheet) return response({ status: 'error', message: 'Data sheet not found' });
+  const sheet = SpreadsheetApp
+    .getActiveSpreadsheet()
+    .getSheetByName(DATA_SHEET);
 
-  const watchDate = clean(payload.WatchDate, 40);
-  const parsedDate = watchDate ? new Date(watchDate + 'T00:00:00') : '';
+  if (!sheet) {
+    return {
+      status: 'error',
+      message: 'Data sheet not found'
+    };
+  }
+
+  const watchDateText = clean(payload.WatchDate, 40);
+  const parsedDate = parseDate(watchDateText);
 
   sheet.appendRow([
     name,
@@ -60,20 +113,36 @@ function handleAdminEntry(payload) {
     toNumber(payload.Episodes, 9999),
     '',
     toNumber(payload.Screentime, 100000),
-    parsedDate,
-    watchDate ? monthName(parsedDate) : '',
-    watchDate ? parsedDate.getFullYear() : ''
+    parsedDate || '',
+    parsedDate ? monthName(parsedDate) : '',
+    parsedDate ? parsedDate.getFullYear() : ''
   ]);
 
-  return response({ status: 'ok' });
+  clearSheetCache();
+
+  return { status: 'ok' };
 }
 
 function handleSuggestion(payload) {
-  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SUGGESTIONS_SHEET);
-  if (!sheet) return response({ status: 'error', message: 'Suggestions sheet not found' });
+  const sheet = SpreadsheetApp
+    .getActiveSpreadsheet()
+    .getSheetByName(SUGGESTIONS_SHEET);
+
+  if (!sheet) {
+    return {
+      status: 'error',
+      message: 'Suggestions sheet not found'
+    };
+  }
 
   const title = clean(payload.Title, 160);
-  if (!title) return response({ status: 'error', message: 'Title is required' });
+
+  if (!title) {
+    return {
+      status: 'error',
+      message: 'Title is required'
+    };
+  }
 
   sheet.appendRow([
     title,
@@ -84,57 +153,112 @@ function handleSuggestion(payload) {
     clean(payload.Date, 40)
   ]);
 
-  return response({ status: 'ok' });
+  clearSheetCache();
+
+  return { status: 'ok' };
 }
 
-function readSheet(sheet) {
-  const values = sheet.getDataRange().getDisplayValues();
-  if (values.length < 2) return [];
+function readSheet(sheet, isDataSheet) {
+  const lastRow = sheet.getLastRow();
+  const lastColumn = sheet.getLastColumn();
+  if (!lastRow || !lastColumn) return [];
+  const values = sheet.getRange(1, 1, lastRow, lastColumn).getDisplayValues();
 
-  const firstRow = values[0];
-  const headerOffset = firstRow.some(function(header) { return String(header).trim() === 'Name'; }) ? 0 : 1;
-  if (values.length <= headerOffset) return [];
+  if (!values.length) {
+    return [];
+  }
+
+  let headerOffset = 0;
+
+  if (isDataSheet) {
+    headerOffset = values.findIndex(function(row) {
+      return row.some(function(cell) {
+        return String(cell).trim().toLowerCase() === 'name';
+      });
+    });
+  }
+
+  if (headerOffset < 0 || values.length <= headerOffset + 1) {
+    return [];
+  }
+
   const headers = values[headerOffset].map(function(header, index) {
     const name = String(header).trim();
     return name || 'Column ' + (index + 1);
   });
 
-  return values.slice(headerOffset + 1).map(function(row) {
-    const item = {};
-    headers.forEach(function(header, index) {
-      item[header] = row[index] || '';
+  return values
+    .slice(headerOffset + 1)
+    .filter(function(row) {
+      return String(row[0] || '').trim() !== '';
+    })
+    .map(function(row) {
+      const item = {};
+
+      headers.forEach(function(header, index) {
+        item[header] = String(row[index] || '').trim();
+      });
+
+      return item;
     });
-    return item;
-  });
+}
+
+function clearSheetCache() {
+  const cache = CacheService.getScriptCache();
+  cache.remove('sheet-json-' + DATA_SHEET);
+  cache.remove('sheet-json-' + SUGGESTIONS_SHEET);
+}
+
+function parseDate(value) {
+  if (!value) {
+    return null;
+  }
+
+  const date = new Date(value + 'T00:00:00');
+
+  return isNaN(date.getTime()) ? null : date;
 }
 
 function clean(value, maxLength) {
-  return String(value || '').trim().slice(0, maxLength);
+  return String(value || '')
+    .trim()
+    .slice(0, maxLength);
 }
 
 function toNumber(value, max) {
   const number = Number(value);
-  return Number.isFinite(number) ? Math.max(0, Math.min(max, number)) : 0;
+  return Number.isFinite(number)
+    ? Math.max(0, Math.min(max, number))
+    : 0;
 }
 
 function monthName(date) {
-  return Utilities.formatDate(date, Session.getScriptTimeZone(), 'MMMM');
+  return Utilities.formatDate(
+    date,
+    Session.getScriptTimeZone(),
+    'MMMM'
+  );
 }
 
 function constantTimeEqual(left, right) {
   left = String(left || '');
   right = String(right || '');
-  if (left.length !== right.length) return false;
+
+  if (left.length !== right.length) {
+    return false;
+  }
 
   let result = 0;
+
   for (let i = 0; i < left.length; i++) {
     result |= left.charCodeAt(i) ^ right.charCodeAt(i);
   }
+
   return result === 0;
 }
 
-function response(data) {
+function response(jsonText) {
   return ContentService
-    .createTextOutput(JSON.stringify(data))
+    .createTextOutput(jsonText)
     .setMimeType(ContentService.MimeType.JSON);
 }

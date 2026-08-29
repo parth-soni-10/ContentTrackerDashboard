@@ -41,7 +41,11 @@ function bindNavigation() {
 // ── DATA LOADING ──────────────────────────────────────────────────────────
 async function loadData() {
   try {
-    const res = await fetch(SCRIPT_URL, { redirect: 'follow', mode: 'cors' });
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 8000);
+    const res = await fetch(SCRIPT_URL, { redirect: 'follow', mode: 'cors', signal: controller.signal, cache: 'no-store' });
+    clearTimeout(timeout);
+    if (!res.ok) throw new Error('Data service returned ' + res.status);
     const json = await res.json();
     rawData = json.map(r => ({
       name:       r.Name       || r.name       || '',
