@@ -166,9 +166,9 @@ function renderAdminForm() {
     <div class="submit-page"><div class="submit-left"><div class="submit-form-card">
       <h2 class="submit-heading">New Watchlist Entry</h2><p class="submit-sub">Saved through the protected admin service.</p>
       <form id="admin-entry-form">
-        <div class="sf-field"><label class="sf-lbl" for="admin-name">Name <span class="sf-req">*</span></label><div class="admin-name-row"><input id="admin-name" name="name" class="sf-input" maxlength="160" required><button id="admin-check-name" class="try-btn admin-check-btn" type="button">Check sheet</button></div><div id="admin-name-result" class="admin-name-result" aria-live="polite"></div></div>
+        <div class="sf-field"><label class="sf-lbl" for="admin-name">Name <span class="sf-req">*</span></label><div class="admin-name-row"><input id="admin-name" name="name" class="sf-input" maxlength="160" required><button id="admin-check-name" class="try-btn admin-check-btn" type="button">Check sheet</button><button id="admin-autofill" class="try-btn admin-autofill-btn" type="button">Autofill</button></div><div id="admin-name-result" class="admin-name-result" aria-live="polite"></div></div>
         <div class="sf-row"><div class="sf-field"><label class="sf-lbl" for="admin-type">Type <span class="sf-req">*</span></label><select id="admin-type" name="type" class="sf-input"><option>Movie</option><option>Series/Show</option></select></div><div class="sf-field"><label class="sf-lbl" for="admin-season">Season</label><input id="admin-season" name="season" class="sf-input" maxlength="20"></div></div>
-        <div class="sf-row"><div class="sf-field"><label class="sf-lbl" for="admin-genre">Genre</label><input id="admin-genre" name="genre" class="sf-input" maxlength="80"></div><div class="sf-field"><label class="sf-lbl" for="admin-platform">Platform</label><input id="admin-platform" name="platform" class="sf-input" maxlength="80"></div></div>
+        <div class="sf-row"><div class="sf-field"><label class="sf-lbl" for="admin-genre">Genre</label><select id="admin-genre" name="genre" class="sf-input"><option value="">Select genre</option>${genreOpts}</select></div><div class="sf-field"><label class="sf-lbl" for="admin-platform">Platform</label><select id="admin-platform" name="platform" class="sf-input"><option value="">Select platform</option>${platOpts}<option value="Other">Other</option></select></div></div>
         <div class="sf-row"><div class="sf-field"><label class="sf-lbl" for="admin-episodes">Episodes</label><input id="admin-episodes" name="episodes" class="sf-input" type="number" min="0" max="9999" inputmode="numeric"></div><div class="sf-field"><label class="sf-lbl" for="admin-screentime">Screentime (mins)</label><input id="admin-screentime" name="screentime" class="sf-input" type="number" min="0" max="100000" inputmode="numeric"></div></div>
         <div class="sf-field"><label class="sf-lbl" for="admin-date">Watch Date</label><input id="admin-date" name="watchDate" class="sf-input" type="date"></div>
         <div id="admin-entry-msg" aria-live="polite"></div><button class="sf-submit-btn" type="submit">Add to Watchlist</button>
@@ -176,6 +176,7 @@ function renderAdminForm() {
     </div></div><div class="submit-right"><div class="note-card"><div class="note-icon" aria-hidden="true">💡</div><div class="note-body"><strong>Protected entry</strong>The password is checked server-side and is never sent to Google Sheets.</div></div><button class="try-btn" id="admin-lock" type="button">Lock Admin</button></div></div>`;
   document.getElementById('admin-entry-form').addEventListener('submit', submitAdminEntry);
   document.getElementById('admin-check-name').addEventListener('click', checkAdminName);
+  document.getElementById('admin-autofill').addEventListener('click', autofillAdminEntry);
   document.getElementById('admin-lock').addEventListener('click', () => { adminAuthenticated = false; renderAdmin(); });
 }
 
@@ -212,6 +213,39 @@ async function checkAdminName() {
   } finally {
     button.disabled = false;
     button.textContent = 'Check sheet';
+  }
+}
+
+async function autofillAdminEntry() {
+  const nameInput = document.getElementById('admin-name');
+  const seasonInput = document.getElementById('admin-season');
+  const result = document.getElementById('admin-name-result');
+  const button = document.getElementById('admin-autofill');
+  const name = nameInput.value.trim();
+  const season = seasonInput.value.trim();
+  if (!name) { result.textContent = 'Enter a title name first.'; nameInput.focus(); return; }
+  button.disabled = true;
+  button.classList.add('autofilling');
+  button.innerHTML = '<span class="autofill-spinner" aria-hidden="true"></span> Searching…';
+  result.className = 'admin-name-result';
+  result.textContent = 'Searching TMDB and preparing details…';
+  try {
+    const query = new URLSearchParams({ title: name });
+    if (season) query.set('season', season);
+    const response = await fetch('/.netlify/functions/tmdb-search?' + query.toString(), { credentials: 'same-origin' });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || 'Could not find this title');
+    const fields = { 'admin-name': data.name, 'admin-type': data.type, 'admin-season': data.season, 'admin-genre': data.genre, 'admin-platform': data.platform, 'admin-episodes': data.episodes || '', 'admin-screentime': data.screentime || '' };
+    Object.entries(fields).forEach(([id, value]) => { const field = document.getElementById(id); if (field && value !== undefined) field.value = value; });
+    result.className = 'admin-name-result available';
+    result.textContent = 'Details filled from TMDB. Review them before saving.';
+  } catch (error) {
+    result.className = 'admin-name-result found';
+    result.textContent = error.message;
+  } finally {
+    button.disabled = false;
+    button.classList.remove('autofilling');
+    button.textContent = 'Autofill';
   }
 }
 

@@ -305,9 +305,13 @@ tbody tr:last-child td { border-bottom: none; }
 .admin-card { width: min(100%, 440px); background: var(--surface); border: 1px solid var(--border); border-radius: var(--r); padding: 28px 20px; box-shadow: var(--shadow-sm); }
 .admin-card h2 { font-size: 20px; margin-bottom: 6px; }
 .admin-icon { font-size: 28px; margin-bottom: 12px; }
-.admin-name-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: stretch; }
+.admin-name-row { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 8px; align-items: stretch; }
 .admin-check-btn { width: auto; min-width: 108px; padding: 0 12px; color: var(--green); background: var(--green-pale); border-color: var(--border-mid); }
-.admin-check-btn:hover:not(:disabled) { color: var(--green); background: #dcefe3; border-color: var(--green-lite); }
+.admin-check-btn:hover:not(:disabled), .admin-autofill-btn:hover:not(:disabled) { color: var(--green); background: #dcefe3; border-color: var(--green-lite); }
+.admin-autofill-btn { color: var(--green); background: #f2f8f4; }
+.autofill-spinner { width: 13px; height: 13px; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: autofillSpin .7s linear infinite; }
+@keyframes autofillSpin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .autofill-spinner { animation: none; border-right-color: currentColor; } }
 .admin-name-result { min-height: 20px; margin-top: 6px; font-size: 12px; color: var(--text-soft); }
 .admin-name-result.available { color: var(--green); }
 .admin-name-result.found { color: var(--gold); }
