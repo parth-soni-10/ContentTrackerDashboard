@@ -1629,8 +1629,8 @@ function renderSubmitSidebar() {
     '<div class="submit-side-card">' +
       '<div class="submit-side-title">Stats</div>' +
       '<div class="sr-stat"><span class="sr-stat-l">Total suggestions</span><span class="sr-stat-r">' + suggData.length + '</span></div>' +
-      '<div class="sr-stat"><span class="sr-stat-l">Top genre</span><span class="sr-stat-r">' + topGenre + '</span></div>' +
-      '<div class="sr-stat"><span class="sr-stat-l">Top platform</span><span class="sr-stat-r">' + topPlat + '</span></div>' +
+      '<div class="sr-stat"><span class="sr-stat-l">Top genre</span><span class="sr-stat-r">' + escapeHTML(topGenre) + '</span></div>' +
+      '<div class="sr-stat"><span class="sr-stat-l">Top platform</span><span class="sr-stat-r">' + escapeHTML(topPlat) + '</span></div>' +
     '</div>';
 }
 

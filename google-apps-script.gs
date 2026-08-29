@@ -1,7 +1,6 @@
 const DATA_SHEET = 'Data';
 const SUGGESTIONS_SHEET = 'Suggestions';
 const WRITE_SECRET_PROPERTY = 'SCRIPT_WRITE_SECRET';
-const WRITE_SECRET_FALLBACK = ''; // Optional: set the same secret here only if Script Properties are unavailable.
 const DATA_CACHE_SECONDS = 600;
 
 function doGet(e) {
@@ -75,9 +74,7 @@ function doPost(e) {
 
 function authorizeWrite(payload) {
   const properties = PropertiesService.getScriptProperties();
-  const expectedSecret = String(
-    properties.getProperty(WRITE_SECRET_PROPERTY) || WRITE_SECRET_FALLBACK
-  ).trim();
+  const expectedSecret = String(properties.getProperty(WRITE_SECRET_PROPERTY) || '').trim();
   const suppliedSecret = String(
     payload.writeSecret ||
     payload.scriptWriteSecret ||
