@@ -49,11 +49,17 @@ exports.handler = async event => {
   const scriptSecret = process.env.SCRIPT_WRITE_SECRET;
   if (!scriptUrl || !scriptSecret) return json(500, { error: 'Admin service is not configured' });
 
-  const upstream = await fetch(scriptUrl, {
+  let upstream;
+  try {
+    upstream = await fetch(scriptUrl, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'X-Content-Tracker-Secret': scriptSecret },
     body: JSON.stringify({ action: 'admin-entry', writeSecret: scriptSecret, ...entry })
-  });
+    });
+  } catch (error) {
+    console.error('Sheet service request failed:', error);
+    return json(502, { error: 'Unable to reach the sheet service' });
+  }
 
   const responseText = await upstream.text();
   let result;

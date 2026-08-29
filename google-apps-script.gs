@@ -81,8 +81,8 @@ function handleAdminEntry(payload) {
     };
   }
 
-  const name = clean(payload.Name, 160);
-  const type = clean(payload.Type, 30);
+  const name = clean(payload.Name || payload.name, 160);
+  const type = clean(payload.Type || payload.type, 30);
 
   if (!name || !['Movie', 'Series/Show'].includes(type)) {
     return {
@@ -102,18 +102,18 @@ function handleAdminEntry(payload) {
     };
   }
 
-  const watchDateText = clean(payload.WatchDate, 40);
+  const watchDateText = clean(payload.WatchDate || payload.watchDate, 40);
   const parsedDate = parseDate(watchDateText);
 
   sheet.appendRow([
     name,
-    clean(payload.Season, 20),
+    clean(payload.Season || payload.season, 20),
     type,
-    clean(payload.Genre || payload['Details/Genre'], 80),
-    clean(payload.Platform, 80),
-    toNumber(payload.Episodes, 9999),
+    clean(payload.Genre || payload.genre || payload['Details/Genre'], 80),
+    clean(payload.Platform || payload.platform, 80),
+    toNumber(payload.Episodes || payload.episodes, 9999),
     '',
-    toNumber(payload.Screentime, 100000),
+    toNumber(payload.Screentime || payload.screentime, 100000),
     parsedDate || '',
     parsedDate ? monthName(parsedDate) : '',
     parsedDate ? parsedDate.getFullYear() : ''
