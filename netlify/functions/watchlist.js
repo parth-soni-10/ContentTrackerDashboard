@@ -1,6 +1,6 @@
 const json = (statusCode, body) => ({
   statusCode,
-  headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' },
+  headers: { 'Content-Type': 'application/json', 'Cache-Control': 'public, max-age=60, stale-while-revalidate=300' },
   body: JSON.stringify(body)
 });
 
@@ -25,7 +25,7 @@ exports.handler = async event => {
     const body = await upstream.text();
     return {
       statusCode: upstream.status,
-      headers: { 'Content-Type': upstream.headers.get('content-type') || 'application/json', 'Cache-Control': 'no-store' },
+      headers: { 'Content-Type': upstream.headers.get('content-type') || 'application/json', 'Cache-Control': 'public, max-age=60, stale-while-revalidate=300' },
       body
     };
   } catch {

@@ -43,7 +43,7 @@ async function loadData() {
   try {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 8000);
-    const res = await fetch(SCRIPT_URL, { redirect: 'follow', mode: 'cors', signal: controller.signal, cache: 'no-store' });
+    const res = await fetch(SCRIPT_URL, { redirect: 'follow', mode: 'cors', signal: controller.signal, cache: 'default' });
     clearTimeout(timeout);
     if (!res.ok) throw new Error('Data service returned ' + res.status);
     const json = await res.json();
@@ -63,10 +63,8 @@ async function loadData() {
     console.warn('Data load failed:', e);
     rawData = [];
   }
-  setTimeout(() => {
-    document.getElementById('loading').classList.add('hide');
-    navigateTo(window.location.hash.slice(1) || 'readme', false);
-  }, 200);
+  document.getElementById('loading').classList.add('hide');
+  navigateTo(window.location.hash.slice(1) || 'readme', false);
 }
 
 // ── UTILS ─────────────────────────────────────────────────────────────────
@@ -161,6 +159,11 @@ function renderAdmin() {
 }
 
 function renderAdminForm() {
+  const genres = [...new Set(rawData.map(row => row.genre).filter(Boolean))].sort();
+  const platforms = [...new Set(rawData.map(row => row.platform).filter(Boolean))].sort();
+  const genreOpts = genres.map(genre => `<option value="${escapeHTML(genre)}">${escapeHTML(genre)}</option>`).join('');
+  const platOpts = platforms.map(platform => `<option value="${escapeHTML(platform)}">${escapeHTML(platform)}</option>`).join('');
+
   document.getElementById('app').innerHTML = `
     <div class="page-header"><div class="ph-left"><h1>Admin</h1><p>Add a title directly to the live watchlist</p></div></div>
     <div class="submit-page"><div class="submit-left"><div class="submit-form-card">

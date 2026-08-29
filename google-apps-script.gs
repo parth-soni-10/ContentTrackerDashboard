@@ -1,7 +1,7 @@
 const DATA_SHEET = 'Data';
 const SUGGESTIONS_SHEET = 'Suggestions';
 const WRITE_SECRET_PROPERTY = 'SCRIPT_WRITE_SECRET';
-const DATA_CACHE_SECONDS = 300;
+const DATA_CACHE_SECONDS = 600;
 
 function doGet(e) {
   const sheetName = e && e.parameter && e.parameter.sheet === SUGGESTIONS_SHEET
