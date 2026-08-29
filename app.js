@@ -87,20 +87,36 @@ function initTheme() {
   apply();
 }
 
-// Poster thumbnails — cache title -> poster URL to avoid hammering TMDB.
-const POSTER_CACHE = (() => { try { return JSON.parse(localStorage.getItem('ct-poster-cache') || '{}'); } catch (e) { return {}; } })();
-function savePosterCache() { try { localStorage.setItem('ct-poster-cache', JSON.stringify(POSTER_CACHE)); } catch (e) {} }
+// Poster + public rating — cached per title to avoid hammering TMDB/OMDB.
+const MEDIA_CACHE = (() => { try { return JSON.parse(localStorage.getItem('ct-media-cache') || '{}'); } catch (e) { return {}; } })();
+function saveMediaCache() { try { localStorage.setItem('ct-media-cache', JSON.stringify(MEDIA_CACHE)); } catch (e) {} }
 function posterFallback(el) { if (el) { el.classList.add('placeholder'); el.textContent = '🎬'; } }
+// Read-only star display for a 0-10 rating (IMDb/TMDB scale), plus the number.
+function ratingStars(value) {
+  const v = Number(value);
+  if (!isFinite(v) || v <= 0) return '<span class="rt-na">—</span>';
+  const filled = Math.max(0, Math.min(5, Math.round(v / 2)));
+  let stars = '';
+  for (let i = 1; i <= 5; i++) stars += '<span class="rt-star' + (i <= filled ? ' on' : '') + '">★</span>';
+  return '<span class="rt-stars">' + stars + '</span><span class="rt-num">' + (Math.round(v * 10) / 10) + '</span>';
+}
+function applyRating(key, rating) {
+  const nodes = document.querySelectorAll('[data-rk="' + key + '"]');
+  for (const el of nodes) el.innerHTML = ratingStars(rating);
+  rawData.forEach(r => { if (String(r.name || '').trim().toLowerCase() === key) r.rating = rating; });
+}
 async function loadPoster(title, imgEl) {
   const key = String(title || '').trim().toLowerCase();
   if (!key || !imgEl) { posterFallback(imgEl); return; }
-  if (key in POSTER_CACHE) { applyPoster(imgEl, POSTER_CACHE[key]); return; }
+  if (MEDIA_CACHE[key]) { applyPoster(imgEl, MEDIA_CACHE[key].poster); applyRating(key, MEDIA_CACHE[key].rating); return; }
   try {
     const res = await fetch('/.netlify/functions/tmdb-search?' + new URLSearchParams({ title, light: '1' }), { credentials: 'same-origin' });
-    const poster = res.ok ? ((await res.json()).poster || null) : null;
-    POSTER_CACHE[key] = poster;
-    savePosterCache();
-    applyPoster(imgEl, poster);
+    const data = res.ok ? (await res.json()) : null;
+    const meta = { poster: data?.poster || null, rating: Number(data?.rating) || null };
+    MEDIA_CACHE[key] = meta;
+    saveMediaCache();
+    applyPoster(imgEl, meta.poster);
+    applyRating(key, meta.rating);
   } catch (e) { posterFallback(imgEl); }
 }
 function applyPoster(el, url) {
@@ -109,7 +125,7 @@ function applyPoster(el, url) {
   if (url) { el.onerror = () => posterFallback(el); el.src = url; }
   else posterFallback(el);
 }
-// Sequential poster loader for the visible data page (gentle on the API).
+// Sequential loader for the visible data page (gentle on the API).
 async function loadVisiblePosters(container) {
   const imgs = container ? Array.from(container.querySelectorAll('img[data-poster]')) : [];
   for (const img of imgs) await loadPoster(img.dataset.poster, img);
@@ -147,7 +163,6 @@ async function loadData(skipRerender) {
       screentime: parseFloat(r.Screentime || r.screentime || 0) || 0,
       // Unify stored date formats into ISO (dd-MMM-yy stays as-is when unparsable).
       watchDate:  toISOFromDisplay(r['Watch Date'] || r.watchDate || '') || (r['Watch Date'] || r.watchDate || ''),
-      rating:     String(r.Rating || r.rating || '').trim(),
       month:      r.Month      || r.month      || '',
       row:        Number(r._row || r.row || 0),
       year:       parseInt(r.Year || r.year || 0) || 0
@@ -267,7 +282,6 @@ function renderAdminForm() {
         <div class="sf-row"><div class="sf-field"><label class="sf-lbl" for="admin-genre">Genre</label><select id="admin-genre" name="genre" class="sf-input"><option value="">Select genre</option>${genreOpts}<option value="Other">Other</option></select><input id="admin-genre-custom" class="sf-input sf-custom-value" type="text" maxlength="80" placeholder="Enter a genre" aria-label="Custom genre" hidden></div><div class="sf-field"><label class="sf-lbl" for="admin-platform">Platform</label><select id="admin-platform" name="platform" class="sf-input"><option value="">Select platform</option>${platOpts}<option value="Other">Other</option></select><input id="admin-platform-custom" class="sf-input sf-custom-value" type="text" maxlength="160" placeholder="Enter a platform" aria-label="Custom platform" hidden></div></div>
         <div class="sf-row"><div class="sf-field"><label class="sf-lbl" for="admin-episodes">Episodes</label><input id="admin-episodes" name="episodes" class="sf-input" type="number" min="0" max="9999" inputmode="numeric"></div><div class="sf-field"><label class="sf-lbl" for="admin-screentime">Screentime (mins)</label><input id="admin-screentime" name="screentime" class="sf-input" type="number" min="0" max="100000" inputmode="numeric"></div></div>
         <div class="sf-field"><label class="sf-lbl" for="admin-date">Watch Date</label><input id="admin-date" name="watchDate" class="sf-input" type="date"></div>
-        <div class="sf-field"><label class="sf-lbl" for="admin-rating">Rating</label><select id="admin-rating" name="rating" class="sf-input"><option value="">Unrated</option><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option></select></div>
         <div id="admin-edit-bar" class="admin-edit-bar" hidden><span>Editing row <strong id="admin-edit-row"></strong></span><button class="try-btn admin-edit-cancel" id="admin-cancel-edit" type="button">Cancel edit</button></div>
         <div id="admin-entry-msg" aria-live="polite"></div><button class="sf-submit-btn" type="submit" id="admin-submit-btn">Add to Watchlist</button>
       </form>
@@ -349,7 +363,6 @@ function startAdminEdit(rowNumber) {
   document.getElementById('admin-episodes').value = item.episodes || 0;
   document.getElementById('admin-screentime').value = item.screentime || 0;
   document.getElementById('admin-date').value = toISOFromDisplay(item.watchDate);
-  setSelect('admin-rating', item.rating);
 
   document.getElementById('admin-form-heading').textContent = 'Edit Entry';
   document.getElementById('admin-form-sub').textContent = 'Update row ' + rowNumber + ' — changes are saved to the Google Sheet.';
@@ -581,12 +594,6 @@ function renderReadme() {
   const cyTopPlat = countBy(cyrData, 'platform')[0] || ['—', 0];
   const cyBestMo = Object.entries(countByMonth(cyrData)).sort((a, b) => b[1] - a[1])[0] || ['—', 0];
 
-  let backlog = []; try { backlog = JSON.parse(localStorage.getItem('ct-backlog') || '[]'); } catch (e) { backlog = []; }
-  if (!Array.isArray(backlog)) backlog = [];
-  const backlogHTML = backlog.length
-    ? backlog.map((b, i) => `<div class="bl-row"><span class="bl-title">${escapeHTML(b)}</span><button class="bl-rm" type="button" data-i="${i}" aria-label="Remove">✕</button></div>`).join('')
-    : '<div class="ins-sub" style="padding:4px 0">Nothing queued yet — add a title to watch later.</div>';
-
   const today    = new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
 
   // Pre-compute dynamic classes — avoids single quotes inside template literals
@@ -730,14 +737,6 @@ function renderReadme() {
           </div>
           <div class="goal-note">${paceDiff >= 0 ? 'On track' : 'Behind'} by ${Math.abs(paceDiff)} hrs · on pace for ${projectedHrs} hrs/yr (last year ${fmtHrs(prevST)}).</div>
         </div>
-        <div class="fact-card">
-          <div class="fact-title">Want to Watch</div>
-          <div class="goal-edit">
-            <input id="bl-input" class="sf-input" type="text" placeholder="Add a title…" maxlength="160">
-            <button class="try-btn" id="bl-add" type="button" style="width:auto;padding:8px 12px;min-height:0">Add</button>
-          </div>
-          <div class="bl-list" id="bl-list">${backlogHTML}</div>
-        </div>
         <div class="note-card">
           <div class="note-icon">💡</div>
           <div class="note-body"><strong>About Difference</strong>All difference figures compare screentime to the same metric from the previous year.</div>
@@ -756,24 +755,6 @@ function renderReadme() {
     });
   }
 
-  const blAdd = document.getElementById('bl-add');
-  if (blAdd) {
-    blAdd.addEventListener('click', () => {
-      const input = document.getElementById('bl-input');
-      const v = (input ? input.value : '').trim();
-      if (!v) return;
-      backlog.push(v);
-      try { localStorage.setItem('ct-backlog', JSON.stringify(backlog)); } catch (e) {}
-      renderReadme();
-    });
-    document.getElementById('bl-list').addEventListener('click', e => {
-      const btn = e.target.closest('.bl-rm');
-      if (!btn) return;
-      backlog.splice(Number(btn.dataset.i), 1);
-      try { localStorage.setItem('ct-backlog', JSON.stringify(backlog)); } catch (e) {}
-      renderReadme();
-    });
-  }
 }
 
 // ── PLATFORM BARS HELPER ──────────────────────────────────────────────────
@@ -1113,8 +1094,6 @@ function renderData() {
   });
   document.getElementById('data-export').addEventListener('click', exportDataCSV);
   document.getElementById('dat-table').addEventListener('click', event => {
-    const star = event.target.closest('.star');
-    if (star) { rateEntry(Number(star.parentElement.dataset.row), Number(star.dataset.n)); return; }
     const th = event.target.closest('th[data-sort]');
     if (!th) return;
     const key = th.dataset.sort;
@@ -1157,31 +1136,6 @@ function dataHeader(key, label) {
   const arrow = active ? (dataSort.dir === 'asc' ? ' ▲' : ' ▼') : '';
   return '<th class="sortable" data-sort="' + key + '">' + label +
     (active ? '<span class="sort-arrow">' + arrow + '</span>' : '') + '</th>';
-}
-function starRow(row, rating) {
-  return '<span class="stars" data-row="' + row + '">' + [1, 2, 3, 4, 5].map(n => '<span class="star' + (Number(rating) >= n ? ' on' : '') + '" data-n="' + n + '">★</span>').join('') + '</span>';
-}
-function flashCount(text) {
-  const c = document.getElementById('dat-count');
-  if (!c) return;
-  const prev = c.innerHTML;
-  c.innerHTML = '<strong style="color:var(--gold);text-transform:none;letter-spacing:0">' + escapeHTML(text) + '</strong>';
-  setTimeout(() => { const n = document.getElementById('dat-count'); if (n) n.innerHTML = prev; }, 1800);
-}
-async function rateEntry(row, rating) {
-  try {
-    const res = await fetch('/.netlify/functions/admin-entry', { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin', body: JSON.stringify({ action: 'rate', row: row, rating: rating }) });
-    const json = await res.json().catch(() => ({}));
-    if (res.ok && json.ok) {
-      const item = rawData.find(r => r.row === row);
-      if (item) item.rating = String(rating);
-      updateDataTable();
-    } else if (res.status === 401) {
-      flashCount('Star ratings need admin sign-in');
-    } else {
-      flashCount('Could not save rating');
-    }
-  } catch (e) { flashCount('Could not save rating'); }
 }
 function buildDataCSV() {
   const rows = dataFiltered.map(r => [r.name, r.type, r.genre, r.platform, r.episodes || '', r.screentime || '', r.month || '', r.year || '', r.watchDate || '', r.rating || '']);
@@ -1271,7 +1225,8 @@ function updateDataTable() {
     var seasonStr    = isMovie ? '' : ' S' + (r.season || '1');
     var epsStr       = r.episodes ? r.episodes + ' eps' : '—';
     name = escapeHTML(name);
-    var posterTitle  = escapeHTML(r.name || '');
+    var    posterTitle  = escapeHTML(r.name || '');
+    var ratingKey   = String(r.name || '').trim().toLowerCase();
     rowsHTML += '<tr>';
     rowsHTML += '<td class="row-num">' + (start + i + 1) + '</td>';
     rowsHTML += '<td style="font-weight:500"><div class="data-name-cell">' +
@@ -1283,7 +1238,7 @@ function updateDataTable() {
     rowsHTML += '<td>' + platEmoji + ' ' + platName + '</td>';
     rowsHTML += '<td style="color:var(--text-mid)">' + escapeHTML(epsStr) + '</td>';
     rowsHTML += '<td style="color:var(--text-mid)">' + escapeHTML(r.screentime ? r.screentime + ' mins' : '—') + '</td>';
-    rowsHTML += '<td class="rating-cell">' + starRow(r.row, r.rating) + '</td>';
+    rowsHTML += '<td class="rating-cell" data-rk="' + ratingKey + '">' + (isFinite(Number(r.rating)) && Number(r.rating) > 0 ? ratingStars(r.rating) : '<span class="rt-na">—</span>') + '</td>';
     rowsHTML += '<td style="color:var(--text-soft)">' + escapeHTML(fmtDate(r.watchDate)) + '</td>';
     rowsHTML += '</tr>';
   }
@@ -1357,16 +1312,11 @@ function renderTimeline() {
 }
 
 // ── SUGGESTIONS ───────────────────────────────────────────────────────────
-// Weighted pick — titles you rated higher (or that are unrated) get more
-// weight than ones you rated low, so suggestions lean toward enjoyment.
-function pickWeighted(pool, excludeName) {
+// Uniform pick excluding the current suggestion so re-spins try someone new.
+function pickFrom(pool, excludeName) {
   const filtered = pool.filter(r => r.name !== excludeName);
   const list = filtered.length ? filtered : pool;
-  const weights = list.map(r => { const s = Number(r.rating) || 0; return 0.5 + s * s; });
-  const total = weights.reduce((a, b) => a + b, 0);
-  let x = Math.random() * total;
-  for (let i = 0; i < list.length; i++) { x -= weights[i]; if (x <= 0) return list[i]; }
-  return list[list.length - 1];
+  return list.length ? list[Math.floor(Math.random() * list.length)] : null;
 }
 
 function renderSuggestions() {
@@ -1440,7 +1390,7 @@ function suggSpin(e) {
     if (me) me.innerHTML = '';
     if (++f >= 7) {
       clearInterval(iv);
-      const pick = pickWeighted(pool, suggLastPick?.name);
+      const pick = pickFrom(pool, suggLastPick?.name);
       suggLastPick = pick;
       showSuggResult(pick);
       btn.disabled = false;
@@ -1453,7 +1403,7 @@ function suggSpin(e) {
 
 function suggTryAgain() {
   const pool  = getSuggFiltered();
-  const pick  = pickWeighted(pool, suggLastPick?.name);
+  const pick  = pickFrom(pool, suggLastPick?.name);
   suggLastPick = pick;
   showSuggResult(pick, true);
 }

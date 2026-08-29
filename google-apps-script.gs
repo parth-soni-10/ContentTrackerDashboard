@@ -61,8 +61,6 @@ function doPost(e) {
     result = handleAdminUpdate(payload);
   } else if (payload.action === 'admin-delete') {
     result = handleAdminDelete(payload);
-  } else if (payload.action === 'admin-rate') {
-    result = handleAdminRate(payload);
   } else if (payload.action === 'suggest') {
     result = handleSuggestion(payload);
   } else {
@@ -138,8 +136,7 @@ function buildEntryRow(sheet, payload, name, type) {
     screentime: toNumber(payload.Screentime || payload.screentime, 100000),
     'watch date': parsedDate || '',
     month: parsedDate ? monthName(parsedDate) : '',
-    year: parsedDate ? parsedDate.getFullYear() : '',
-    rating: clean(payload.Rating || payload.rating, 10)
+    year: parsedDate ? parsedDate.getFullYear() : ''
   };
   return headers.map(function(header) {
     return Object.prototype.hasOwnProperty.call(valuesByHeader, header) ? valuesByHeader[header] : '';
@@ -277,60 +274,6 @@ function handleAdminDelete(payload) {
     spreadsheetId: SpreadsheetApp.getActiveSpreadsheet().getId(),
     sheetName: sheet.getName(),
     rowNumber: rowNumber
-  };
-}
-
-function handleAdminRate(payload) {
-  const unauthorized = authorizeWrite(payload);
-  if (unauthorized) return unauthorized;
-
-  const rowNumber = Number(payload.Row || payload.row);
-  const rating = Number(payload.Rating || payload.rating);
-  if (!Number.isInteger(rowNumber) || ![1, 2, 3, 4, 5].includes(rating)) {
-    return {
-      status: 'error',
-      message: 'A valid row number and rating are required'
-    };
-  }
-
-  const sheet = getDataSheet();
-  if (!sheet) {
-    return {
-      status: 'error',
-      message: 'Data sheet not found'
-    };
-  }
-
-  const headerRow = findHeaderRow(sheet);
-  if (rowNumber <= headerRow || rowNumber > sheet.getLastRow()) {
-    return {
-      status: 'error',
-      message: 'Row ' + rowNumber + ' is not a data row'
-    };
-  }
-
-  // Find the Rating column, creating it on the header row if missing so a
-  // first rating can be set without a manual sheet edit.
-  const headers = sheet.getRange(headerRow, 1, 1, sheet.getLastColumn()).getDisplayValues()[0].map(function(header) {
-    return String(header).trim().toLowerCase();
-  });
-  let column = headers.indexOf('rating');
-  if (column < 0) {
-    column = headers.length;
-    sheet.getRange(headerRow, column + 1).setValue('Rating');
-  }
-
-  sheet.getRange(rowNumber, column + 1).setValue(String(rating));
-  SpreadsheetApp.flush();
-  clearSheetCache();
-
-  return {
-    status: 'ok',
-    saved: true,
-    spreadsheetId: SpreadsheetApp.getActiveSpreadsheet().getId(),
-    sheetName: sheet.getName(),
-    rowNumber: rowNumber,
-    rating: rating
   };
 }
 

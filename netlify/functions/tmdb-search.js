@@ -26,7 +26,7 @@ exports.handler = async event => {
   const season = clean(event.queryStringParameters?.season, 10);
   if (!title) return json(400, { error: 'Title is required' });
 
-  // Lightweight poster lookup — one TMDB search, no details/OMDB/providers.
+  // Lightweight poster + rating lookup — one TMDB search, no details/providers.
   if (event.queryStringParameters?.light === '1') {
     try {
       const searchUrl = new URL('https://api.themoviedb.org/3/search/multi');
@@ -37,7 +37,25 @@ exports.handler = async event => {
       const match = (search.results || [])
         .filter(item => item.media_type === 'movie' || item.media_type === 'tv')
         .sort((a, b) => (b.popularity || 0) - (a.popularity || 0))[0];
-      return json(200, { poster: match && match.poster_path ? 'https://image.tmdb.org/t/p/w185' + match.poster_path : null });
+      // OMDB (IMDb stars) first; fall back to the TMDB score if it's missing.
+      // Both are 0-10, so clamp to that scale so the star display is consistent.
+      let rating = null;
+      if (match) {
+        if (process.env.OMDB_API_KEY) {
+          const omdb = await omdbLookup(match.name || match.title, match.media_type === 'movie' ? 'Movie' : 'Series');
+          const imdb = Number(omdb?.imdbRating);
+          if (Number.isFinite(imdb) && imdb > 0) rating = imdb;
+        }
+        if (rating == null) {
+          const tmdbScore = Number(match.vote_average);
+          if (Number.isFinite(tmdbScore) && tmdbScore > 0) rating = tmdbScore;
+        }
+        if (rating != null) rating = Math.max(0, Math.min(10, rating));
+      }
+      return json(200, {
+        poster: match && match.poster_path ? 'https://image.tmdb.org/t/p/w185' + match.poster_path : null,
+        rating
+      });
     } catch (error) {
       return json(502, { error: 'Unable to reach the autofill service. Please try again.' });
     }

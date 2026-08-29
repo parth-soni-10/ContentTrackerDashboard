@@ -510,32 +510,27 @@ tbody tr:last-child td { border-bottom: none; }
 
 /* ── NEW FEATURES ── */
 
-/* Star ratings in the data table (inline quick-rating) */
-.stars { display: inline-flex; gap: 1px; }
-.star { color: var(--border-mid); font-size: 15px; cursor: pointer; transition: color .12s, transform .12s; user-select: none; }
-.star:hover { transform: scale(1.2); }
-.star.on { color: var(--gold); }
+/* Public rating display in the data table (IMDb/TMDB stars, read-only) */
+.rating-cell { white-space: nowrap; }
+.rt-stars { display: inline-flex; gap: 1px; vertical-align: -2px; }
+.rt-star { color: var(--border-mid); font-size: 14px; }
+.rt-star.on { color: var(--gold); }
+.rt-num { margin-left: 6px; font-size: 13px; font-weight: 600; color: var(--text-mid); font-variant-numeric: tabular-nums; }
+.rt-na { color: var(--text-soft); }
 
 /* Year in Screens recap */
-.recap-card { margin-top: 14px; background: linear-gradient(135deg, #23543e, #2d6a4f); border-radius: var(--r); padding: 20px; color: #fff; box-shadow: var(--shadow-md); animation: fadeUp .55s ease .2s both; }
+.recap-card { margin-top: 14px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--r); padding: 18px; color: var(--text); box-shadow: var(--shadow-sm); animation: fadeUp .55s ease .2s both; }
 .recap-head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 14px; }
-.recap-kicker { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1.2px; color: rgba(255,255,255,.65); }
-.recap-year { font-size: 22px; font-weight: 800; letter-spacing: -.5px; }
+.recap-kicker { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: var(--text-soft); }
+.recap-year { font-size: 22px; font-weight: 800; letter-spacing: -.5px; color: var(--green); }
 .recap-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
-.recap-cell { background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.14); border-radius: 10px; padding: 12px 10px; text-align: center; }
-.recap-val { font-size: 20px; font-weight: 800; letter-spacing: -.3px; line-height: 1.1; }
+.recap-cell { background: var(--surface-soft); border: 1px solid var(--border); border-radius: 10px; padding: 12px 10px; text-align: center; }
+.recap-val { font-size: 20px; font-weight: 800; letter-spacing: -.3px; line-height: 1.1; color: var(--text); }
 .recap-val.recap-name { font-size: 14px; line-height: 1.25; word-break: break-word; }
-.recap-lbl { font-size: 11px; color: rgba(255,255,255,.65); margin-top: 3px; text-transform: uppercase; letter-spacing: .5px; }
-.recap-bar { height: 8px; border-radius: 6px; background: rgba(255,255,255,.16); overflow: hidden; margin-top: 14px; }
-.recap-fill { height: 100%; border-radius: 6px; background: linear-gradient(90deg, var(--gold), #f3c68a); }
-.recap-foot { font-size: 12px; color: rgba(255,255,255,.75); margin-top: 7px; text-align: center; }
-
-/* Want-to-watch backlog */
-.bl-list { margin-top: 8px; display: flex; flex-direction: column; }
-.bl-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--border); font-size: 14px; }
-.bl-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.bl-rm { border: 0; background: transparent; color: var(--text-soft); font-size: 13px; cursor: pointer; padding: 2px 4px; border-radius: 4px; }
-.bl-rm:hover { color: var(--red); background: var(--red-pale); }
+.recap-lbl { font-size: 11px; color: var(--text-soft); margin-top: 3px; text-transform: uppercase; letter-spacing: .5px; }
+.recap-bar { height: 8px; border-radius: 6px; background: var(--border); overflow: hidden; margin-top: 14px; }
+.recap-fill { height: 100%; border-radius: 6px; background: linear-gradient(90deg, var(--green-mid), var(--green)); }
+.recap-foot { font-size: 12px; color: var(--text-mid); margin-top: 7px; text-align: center; }
 
 /* Timeline journal */
 .timeline { max-width: 900px; margin: 0 auto; padding: 28px 28px 48px; }
@@ -584,9 +579,6 @@ html.dark .tool-btn { background: var(--green-pale); }
 .goal-edit { margin-top: 10px; display: flex; gap: 8px; }
 .goal-edit input { flex: 1; min-width: 0; }
 .goal-note { font-size: 12px; color: var(--text-soft); margin-top: 8px; }
-
-/* Rating */
-.rating-cell { font-variant-numeric: tabular-nums; }
 
 /* Poster thumbnails in Data table */
 .data-name-cell { display: flex; align-items: center; gap: 10px; min-width: 0; }
