@@ -284,8 +284,13 @@ async function submitAdminEntry(event) {
     const timeout = setTimeout(() => controller.abort(), 30000);
     const response = await fetch('/.netlify/functions/admin-entry', { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin', body: JSON.stringify(payload), signal: controller.signal });
     clearTimeout(timeout);
-    const result = await response.json();
-    if (!response.ok) throw new Error(result.error || 'Unable to save entry');
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      const detail = result.diagnostics
+        ? ` [${result.code || 'ERROR'}${result.diagnostics.httpStatus ? ` · HTTP ${result.diagnostics.httpStatus}` : ''}]`
+        : '';
+      throw new Error((result.error || 'Unable to save entry') + detail);
+    }
     msg.innerHTML = '<div class="sf-success">Entry added successfully. Reloading tracker data…</div>';
     await loadData();
   } catch (error) {

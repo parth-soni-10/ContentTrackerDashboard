@@ -27,7 +27,7 @@ function validSession(event) {
 
 exports.handler = async event => {
   if (event.httpMethod !== 'POST') return json(405, { error: 'Method not allowed' });
-  if (!validSession(event)) return json(401, { error: 'Admin session required' });
+  if (!validSession(event)) return json(401, { error: 'Admin session required', code: 'SESSION_INVALID' });
 
   let body;
   try { body = JSON.parse(event.body || '{}'); } catch { return json(400, { error: 'Invalid request body' }); }
@@ -47,7 +47,7 @@ exports.handler = async event => {
 
   const scriptUrl = String(process.env.SCRIPT_URL || '').trim();
   const scriptSecret = String(process.env.SCRIPT_WRITE_SECRET || '').trim();
-  if (!scriptUrl || !scriptSecret) return json(500, { error: 'Admin service is not configured' });
+  if (!scriptUrl || !scriptSecret) return json(500, { error: 'Admin service is not configured', code: 'CONFIG_MISSING', diagnostics: { scriptUrlConfigured: Boolean(scriptUrl), writeSecretConfigured: Boolean(scriptSecret) } });
 
   let upstream;
   try {
@@ -59,7 +59,7 @@ exports.handler = async event => {
     });
   } catch (error) {
     console.error('Sheet service request failed:', error);
-    return json(502, { error: 'Unable to reach the sheet service' });
+    return json(502, { error: 'Unable to reach the sheet service', code: 'UPSTREAM_NETWORK_ERROR', diagnostics: { message: error.message } });
   }
 
   const responseText = await upstream.text();
@@ -67,11 +67,12 @@ exports.handler = async event => {
   try {
     result = JSON.parse(responseText);
   } catch {
-    return json(502, { error: 'The sheet service returned an invalid response' });
+    console.error('Sheet service returned non-JSON response:', { status: upstream.status, body: responseText.slice(0, 1000) });
+    return json(502, { error: 'The sheet service returned an invalid response', code: 'UPSTREAM_INVALID_JSON', diagnostics: { httpStatus: upstream.status, responsePreview: responseText.slice(0, 300) } });
   }
   if (!upstream.ok || result.status !== 'ok') {
-    console.error('Sheet service rejected entry:', result);
-    return json(502, { error: result.message || 'The sheet service could not save the entry' });
+    console.error('Sheet service rejected entry:', { httpStatus: upstream.status, result });
+    return json(502, { error: result.message || 'The sheet service could not save the entry', code: result.message === 'Unauthorized' ? 'SHEET_UNAUTHORIZED' : 'SHEET_REJECTED', diagnostics: { httpStatus: upstream.status, upstreamStatus: result.status || null, upstreamMessage: result.message || null } });
   }
   return json(200, { ok: true });
 };
