@@ -30,6 +30,20 @@ exports.handler = async event => {
     const detailsResponse = await fetch(detailsUrl);
     if (!detailsResponse.ok) return json(502, { error: 'TMDB details lookup failed' });
     const details = await detailsResponse.json();
+    let providers = null;
+
+    const providersUrl = new URL(`https://api.themoviedb.org/3/${isMovie ? 'movie' : 'tv'}/${match.id}/watch/providers`);
+    providersUrl.searchParams.set('api_key', process.env.TMDB_API_KEY);
+    const providersResponse = await fetch(providersUrl);
+    if (providersResponse.ok) providers = await providersResponse.json();
+    const regions = Object.values(providers?.results || {});
+    const availableProviders = regions.flatMap(region => [
+      ...(region.flatrate || []),
+      ...(region.free || []),
+      ...(region.ads || [])
+    ]);
+    const uniqueProviders = [...new Map(availableProviders.map(provider => [provider.provider_id, provider])).values()];
+    const platform = uniqueProviders.map(provider => provider.provider_name).join(', ') || details.networks?.map(network => network.name).join(', ') || '';
 
     let seasonDetails = null;
     if (!isMovie && season && /^\d{1,2}$/.test(season)) {
@@ -47,7 +61,7 @@ exports.handler = async event => {
       name: isMovie ? details.title : details.name,
       type: isMovie ? 'Movie' : 'Series/Show',
       genre: details.genres?.[0]?.name || '',
-      platform: details.networks?.[0]?.name || '',
+      platform,
       season: isMovie ? '' : season,
       episodes: isMovie ? 0 : seasonDetails?.episodes?.length || 0,
       screentime: runtime || 0,
