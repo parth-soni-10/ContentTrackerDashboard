@@ -53,8 +53,8 @@ exports.handler = async event => {
     const providerGroups = ['flatrate', 'free', 'ads', 'rent', 'buy'];
     const availableProviders = regions.flatMap(region => providerGroups.flatMap(group => region[group] || []));
     const uniqueProviders = [...new Map(availableProviders.map(provider => [provider.provider_id, provider])).values()];
-    const platform = uniqueProviders.map(provider => provider.provider_name).join(', ') || details.networks?.map(network => network.name).join(', ') || 'Unknown platform';
-    const genre = details.genres?.map(item => item.name).filter(Boolean).join(', ') || 'Uncategorized';
+    const platform = uniqueProviders[0]?.provider_name || details.networks?.[0]?.name || 'Unknown platform';
+    const genre = details.genres?.[0]?.name || 'Uncategorized';
     const omdb = await omdbLookup(isMovie ? details.title : details.name, isMovie ? 'Movie' : 'Series');
     const omdbGenre = omdb?.Genre && omdb.Genre !== 'N/A' ? omdb.Genre : '';
     const omdbRuntime = parseInt(String(omdb?.Runtime || '').replace(/[^0-9]/g, ''), 10) || 0;

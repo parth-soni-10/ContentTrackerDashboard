@@ -305,6 +305,8 @@ tbody tr:last-child td { border-bottom: none; }
 .admin-card { width: min(100%, 440px); background: var(--surface); border: 1px solid var(--border); border-radius: var(--r); padding: 28px 20px; box-shadow: var(--shadow-sm); }
 .admin-card h2 { font-size: 20px; margin-bottom: 6px; }
 .admin-icon { font-size: 28px; margin-bottom: 12px; }
+.sf-custom-value { margin-top: 8px; }
+
 .admin-name-row { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 8px; align-items: stretch; }
 .admin-check-btn { width: auto; min-width: 108px; padding: 0 12px; color: var(--green); background: var(--green-pale); border-color: var(--border-mid); }
 .admin-check-btn:hover:not(:disabled), .admin-autofill-btn:hover:not(:disabled) { color: var(--green); background: #dcefe3; border-color: var(--green-lite); }
