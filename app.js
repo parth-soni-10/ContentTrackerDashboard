@@ -47,6 +47,17 @@ function toISOFromDisplay(value) {
   return isNaN(date.getTime()) ? '' : date.toISOString().slice(0, 10);
 }
 
+// Returns a sortable timestamp for a sheet watch date, handling the display
+// formats the sheet produces ("29-Aug-26", "29 Aug 2026", ISO "2026-08-29",
+// etc). Missing/undatable entries return 0 so they sort to the bottom.
+function watchDateTimestamp(value) {
+  const text = String(value || '').trim();
+  if (!text) return 0;
+  const iso = toISOFromDisplay(text);
+  const date = iso ? new Date(iso) : new Date(text);
+  return isNaN(date.getTime()) ? 0 : date.getTime();
+}
+
 function bindNavigation() {
   document.querySelectorAll('.nav-tab, .nav-brand').forEach(link => {
     link.addEventListener('click', event => {
@@ -924,14 +935,12 @@ function renderData() {
 }
 
 function updateDataTable() {
-  const d = filterData(rawData, datFilters).sort((a, b) => {
-    const da = a.watchDate ? new Date(a.watchDate) : null;
-    const db = b.watchDate ? new Date(b.watchDate) : null;
-    if (!da && !db) return 0;
-    if (!da) return 1;
-    if (!db) return -1;
-    return db - da;
-  });
+  // Always descending by watch date (newest first); entries without a usable
+  // date fall to the bottom rather than staying in arbitrary order.
+  const d = filterData(rawData, datFilters)
+    .map(r => ({ r, t: watchDateTimestamp(r.watchDate) }))
+    .sort((a, b) => b.t - a.t)
+    .map(x => x.r);
 
   const shows  = d.filter(r => r.type && (r.type.includes('Show') || r.type.includes('Series'))).length;
   const movies = d.filter(r => r.type && r.type.toLowerCase() === 'movie').length;
