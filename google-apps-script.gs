@@ -72,8 +72,9 @@ function handleAdminEntry(payload) {
   const expectedSecret = PropertiesService
     .getScriptProperties()
     .getProperty(WRITE_SECRET_PROPERTY);
+  const suppliedSecret = payload.writeSecret || payload.scriptWriteSecret;
 
-  if (!expectedSecret || !constantTimeEqual(payload.writeSecret, expectedSecret)) {
+  if (!expectedSecret || !constantTimeEqual(suppliedSecret, expectedSecret)) {
     return {
       status: 'error',
       message: 'Unauthorized'
@@ -108,7 +109,7 @@ function handleAdminEntry(payload) {
     name,
     clean(payload.Season, 20),
     type,
-    clean(payload.Genre, 80),
+    clean(payload.Genre || payload['Details/Genre'], 80),
     clean(payload.Platform, 80),
     toNumber(payload.Episodes, 9999),
     '',

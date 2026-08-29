@@ -55,8 +55,15 @@ exports.handler = async event => {
     body: JSON.stringify({ action: 'admin-entry', writeSecret: scriptSecret, ...entry })
   });
 
-  if (!upstream.ok) return json(502, { error: 'The sheet service rejected the entry' });
-  const result = await upstream.json().catch(() => ({}));
-  if (result.status !== 'ok') return json(502, { error: 'The sheet service could not save the entry' });
+  const responseText = await upstream.text();
+  let result;
+  try {
+    result = JSON.parse(responseText);
+  } catch {
+    return json(502, { error: 'The sheet service returned an invalid response' });
+  }
+  if (!upstream.ok || result.status !== 'ok') {
+    return json(502, { error: result.message || 'The sheet service could not save the entry' });
+  }
   return json(200, { ok: true });
 };
