@@ -20,7 +20,8 @@ exports.handler = async event => {
   let body;
   try { body = JSON.parse(event.body || '{}'); } catch { return json(400, { error: 'Invalid request body' }); }
 
-  if (!process.env.ADMIN_PASSWORD || !process.env.ADMIN_SESSION_SECRET || !safeEqual(body.password, process.env.ADMIN_PASSWORD)) {
+  const configuredPassword = String(process.env.ADMIN_PASSWORD || '').trim();
+  if (!configuredPassword || !process.env.ADMIN_SESSION_SECRET || !safeEqual(body.password, configuredPassword)) {
     return json(401, { error: 'Incorrect password' });
   }
 

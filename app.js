@@ -186,13 +186,21 @@ async function checkAdminName() {
   result.textContent = '';
   try {
     if (!rawData.length) await loadData();
-    const matches = rawData.filter(item => item.name.toLowerCase() === name.toLowerCase());
+    const query = name.toLowerCase();
+    const matches = rawData.filter(item => item.name.toLowerCase().includes(query));
     if (!matches.length) {
       result.className = 'admin-name-result available';
-      result.textContent = 'No exact match found. This title can be added.';
+      result.textContent = 'No matching title found. This title can be added.';
     } else {
       result.className = 'admin-name-result found';
-      result.textContent = `Found ${matches.length} existing entr${matches.length === 1 ? 'y' : 'ies'} in the sheet.`;
+      const details = matches.map((item, index) => {
+        const season = item.season ? `Season ${escapeHTML(item.season)}` : '';
+        const type = item.type ? escapeHTML(item.type) : '';
+        const year = item.year ? escapeHTML(item.year) : '';
+        const meta = [type, season, year].filter(Boolean).join(' · ');
+        return `<div class="admin-match"><strong>Match ${index + 1}</strong><span>${meta || 'Existing entry'}</span></div>`;
+      }).join('');
+      result.innerHTML = `<div>Found ${matches.length} matching entr${matches.length === 1 ? 'y' : 'ies'} in the sheet.</div>${details}`;
     }
   } catch {
     result.className = 'admin-name-result found';
