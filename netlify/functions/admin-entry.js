@@ -52,9 +52,10 @@ exports.handler = async event => {
   let upstream;
   try {
     upstream = await fetch(scriptUrl, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'X-Content-Tracker-Secret': scriptSecret },
-    body: JSON.stringify({ action: 'admin-entry', writeSecret: scriptSecret, ...entry })
+      method: 'POST',
+      redirect: 'follow',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'admin-entry', writeSecret: scriptSecret, ...entry })
     });
   } catch (error) {
     console.error('Sheet service request failed:', error);

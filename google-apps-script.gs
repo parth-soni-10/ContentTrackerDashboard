@@ -105,7 +105,7 @@ function handleAdminEntry(payload) {
   const watchDateText = clean(payload.WatchDate || payload.watchDate, 40);
   const parsedDate = parseDate(watchDateText);
 
-  sheet.appendRow([
+  const row = [
     name,
     clean(payload.Season || payload.season, 20),
     type,
@@ -117,7 +117,9 @@ function handleAdminEntry(payload) {
     parsedDate || '',
     parsedDate ? monthName(parsedDate) : '',
     parsedDate ? parsedDate.getFullYear() : ''
-  ]);
+  ];
+
+  sheet.getRange(sheet.getLastRow() + 1, 1, 1, row.length).setValues([row]);
 
   clearSheetCache();
 

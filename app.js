@@ -280,7 +280,10 @@ async function submitAdminEntry(event) {
   });
   button.disabled = true; button.textContent = 'Saving…'; msg.textContent = '';
   try {
-    const response = await fetch('/.netlify/functions/admin-entry', { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin', body: JSON.stringify(payload) });
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 30000);
+    const response = await fetch('/.netlify/functions/admin-entry', { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin', body: JSON.stringify(payload), signal: controller.signal });
+    clearTimeout(timeout);
     const result = await response.json();
     if (!response.ok) throw new Error(result.error || 'Unable to save entry');
     msg.innerHTML = '<div class="sf-success">Entry added successfully. Reloading tracker data…</div>';
