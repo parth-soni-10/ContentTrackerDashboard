@@ -559,7 +559,8 @@ function renderReadme() {
   const usedItems = key => countBy(rawData, key).filter(x => String(x[0] || '').toLowerCase() !== 'unknown' && String(x[0] || '').trim() !== '');
   const platList = usedItems('platform'); const leastPlat = platList[platList.length - 1] || ['', 0];
   const genreList = usedItems('genre'); const leastGenre = genreList[genreList.length - 1] || ['', 0];
-  let goalHrs = 0; try { goalHrs = parseFloat(localStorage.getItem('ct-goal') || '0') || 0; } catch (e) {}
+  let goalHrs = 0, goalYear = ''; try { goalHrs = parseFloat(localStorage.getItem('ct-goal') || '0') || 0; goalYear = String(localStorage.getItem('ct-goal-year') || ''); } catch (e) {}
+  const goalLocked = goalHrs > 0 && goalYear === String(cy);
   if (!(goalHrs > 0)) goalHrs = Math.round(prevST / 60) || 1;
   const goalPct = Math.min(100, (cyrST / (goalHrs * 60)) * 100).toFixed(0);
 
@@ -732,10 +733,11 @@ function renderReadme() {
           <div class="goal-top"><div class="fact-title" style="margin-bottom:0">Watch Goal · ${cy}</div><div class="goal-count"><strong>${fmtHrs(cyrST)}</strong> / ${goalHrs} hrs</div></div>
           <div class="goal-track"><div class="goal-fill" style="width:${goalPct}%"></div></div>
           <div class="goal-edit">
-            <input id="goal-input" class="sf-input" type="number" min="1" placeholder="Target hrs" value="${goalHrs}">
-            <button class="try-btn" id="goal-set" type="button" style="width:auto;padding:8px 12px;min-height:0">Set</button>
+            <input id="goal-input" class="sf-input" type="number" min="1" placeholder="Target hrs" value="${goalHrs}" ${goalLocked ? 'disabled' : ''}>
+            <button class="try-btn" id="goal-set" type="button" style="width:auto;padding:8px 12px;min-height:0" ${goalLocked ? 'disabled' : ''}>${goalLocked ? 'Locked 🔒' : 'Set'}</button>
           </div>
           <div class="goal-note">${paceDiff >= 0 ? 'On track' : 'Behind'} by ${Math.abs(paceDiff)} hrs · on pace for ${projectedHrs} hrs/yr (last year ${fmtHrs(prevST)}).</div>
+          ${goalLocked ? `<div class="goal-note goal-lock-note">🔒 Locked for ${cy} — unlocks to set a new target on 1 Jan.</div>` : ''}
         </div>
         <div class="note-card">
           <div class="note-icon">💡</div>
@@ -750,7 +752,10 @@ function renderReadme() {
     goalSet.addEventListener('click', () => {
       const input = document.getElementById('goal-input');
       const v = parseFloat(input ? input.value : '0') || 0;
-      try { localStorage.setItem('ct-goal', v ? String(v) : '0'); } catch (e) {}
+      try {
+        localStorage.setItem('ct-goal', v ? String(v) : '0');
+        localStorage.setItem('ct-goal-year', String(cy));
+      } catch (e) {}
       renderReadme();
     });
   }

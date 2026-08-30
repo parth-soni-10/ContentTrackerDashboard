@@ -14,7 +14,7 @@
   /* Text — original green-neutral palette */
   --text: #0d1f16;
   --text-mid: #3a5445;
-  --text-soft: #7a9e8a;
+  --text-soft: #4e7a64;
   --red: #c0392b;
   --red-pale: #fde8e8;
   --shadow-sm: 0 1px 3px rgba(13,31,22,.05), 0 6px 16px rgba(13,31,22,.04);
@@ -37,7 +37,7 @@ html.dark {
   --gold-pale: #362b1f;
   --text: #e7efe9;
   --text-mid: #b6cbbd;
-  --text-soft: #82a391;
+  --text-soft: #98b7a4;
   --red: #e7877a;
   --red-pale: #3a2421;
   --shadow-sm: 0 1px 3px rgba(0,0,0,.45), 0 6px 16px rgba(0,0,0,.32);
@@ -579,7 +579,9 @@ html.dark .tool-btn { background: var(--green-pale); }
 .goal-fill { height: 100%; border-radius: 8px 0 0 8px; background: linear-gradient(90deg, var(--green-mid), var(--gold)); transition: width .8s cubic-bezier(.4,0,.2,1); }
 .goal-edit { margin-top: 10px; display: flex; gap: 8px; }
 .goal-edit input { flex: 1; min-width: 0; }
+.goal-edit input:disabled { opacity: .6; cursor: not-allowed; }
 .goal-note { font-size: 12px; color: var(--text-soft); margin-top: 8px; }
+.goal-lock-note { color: var(--gold); }
 
 /* Poster thumbnails in Data table */
 .data-name-cell { display: flex; align-items: center; gap: 10px; min-width: 0; }
