@@ -19,6 +19,7 @@ A 30-second trailer:
 - **Suggestion Generator** — can't decide what to watch? Pick a genre, hit **Spin**, and it lands on a random pick from the list
 - **Timeline** — everything laid out in date order
 - **Suggestions & Submit** — easy ways to request or add a new title
+- **Admin** — a password-protected area for managing the watchlist
 
 ## How it works
 
