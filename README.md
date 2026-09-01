@@ -4,6 +4,12 @@ A personal dashboard that turns my watchlist into pictures and numbers — what 
 
 It reads **live from a Google Sheet**, so whenever I log a new title it shows up here by itself.
 
+## Watch it
+
+A 30-second trailer:
+
+<video src="brag-output/brag.mp4" controls poster="brag-output/brag.jpg" width="360"></video>
+
 ## What you can see
 
 - **Home / Readme** — headline stats at a glance, plus what I watched most recently

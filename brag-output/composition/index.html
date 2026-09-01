@@ -1,0 +1,557 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1080, height=1920" />
+    <title>Content Tracker — Brag</title>
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      body {
+        margin: 0;
+        background: #0d1f16;
+        font-family: 'Inter', system-ui, sans-serif;
+      }
+      #root {
+        position: relative;
+        width: 1080px;
+        height: 1920px;
+        overflow: hidden;
+      }
+      .scene {
+        position: absolute;
+        inset: 0;
+      }
+      .cream {
+        background: #f4f8f5;
+      }
+      .ink {
+        background: #0d1f16;
+      }
+      #proof,
+      #work,
+      #philosophy,
+      #outro {
+        opacity: 0;
+      }
+      #glow {
+        position: absolute;
+        left: 50%;
+        top: 46%;
+        width: 900px;
+        height: 900px;
+        transform: translate(-50%, -50%);
+        background: radial-gradient(closest-side, rgba(116, 198, 157, 0.22), rgba(116, 198, 157, 0) 70%);
+        border-radius: 50%;
+        opacity: 0.5;
+      }
+
+      /* Scene 1 — Hook */
+      #hook {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 20px;
+        padding: 0 70px;
+      }
+      #eyebrow {
+        margin: 0 0 54px 0;
+        font-size: 32px;
+        font-weight: 600;
+        letter-spacing: 0.4em;
+        color: #4e7a64;
+        text-transform: uppercase;
+      }
+      #watchlist-word {
+        margin: 0;
+        font-size: 180px;
+        font-weight: 900;
+        letter-spacing: -0.04em;
+        line-height: 0.98;
+        color: #0d1f16;
+      }
+      #tracked-word {
+        margin: 0;
+        font-size: 180px;
+        font-weight: 900;
+        letter-spacing: -0.04em;
+        line-height: 1.06;
+        color: #2d6a4f;
+      }
+      #plat-dots {
+        display: flex;
+        gap: 34px;
+        margin-top: 72px;
+      }
+      .plat {
+        width: 52px;
+        height: 52px;
+        border-radius: 50%;
+      }
+      #plat-netflix {
+        background: #e50914;
+      }
+      #plat-prime {
+        background: #00a8e1;
+      }
+      #plat-disney {
+        background: #1e3c72;
+      }
+
+      /* Scene 2 — Proof */
+      #proof {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 84px;
+        padding: 0 70px;
+      }
+      #sub {
+        margin: 0;
+        font-size: 54px;
+        font-weight: 500;
+        line-height: 1.42;
+        text-align: center;
+        color: #1e3b2b;
+        max-width: 880px;
+      }
+      #pills {
+        display: flex;
+        flex-direction: column;
+        gap: 32px;
+        align-items: center;
+      }
+      .pill {
+        display: grid;
+        place-items: center;
+        width: 560px;
+        height: 118px;
+        border-radius: 59px;
+        background: #0d1f16;
+        color: #f4f8f5;
+        font-size: 52px;
+        font-weight: 600;
+        letter-spacing: 0.02em;
+      }
+
+      /* Scene 3 — The Work */
+      #work {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      #dash-card {
+        width: 880px;
+        border-radius: 32px;
+        background: #11291d;
+        border: 2px solid rgba(255, 255, 255, 0.1);
+        padding: 58px 58px 50px 58px;
+        box-sizing: border-box;
+      }
+      #dash-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 6px;
+      }
+      #dash-title {
+        margin: 0;
+        font-size: 38px;
+        font-weight: 700;
+        color: #f4f8f5;
+      }
+      #dash-live {
+        font-size: 26px;
+        font-weight: 600;
+        color: #74c69d;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+      }
+      #dash-intro {
+        margin: 0 0 34px 0;
+        font-size: 26px;
+        font-weight: 400;
+        color: #9cc4af;
+        line-height: 1.4;
+      }
+      .kpi {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        padding: 24px 0;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+      }
+      .kpi-label {
+        margin: 0;
+        font-size: 34px;
+        font-weight: 500;
+        color: #f4f8f5;
+      }
+      .kpi-value {
+        margin: 0;
+        font-weight: 800;
+        font-size: 84px;
+        color: #f4f8f5;
+        font-variant-numeric: tabular-nums;
+        letter-spacing: -0.02em;
+      }
+      .kpi-value .kpi-suffix {
+        font-size: 42px;
+        color: #74c69d;
+      }
+      #bars-wrap {
+        margin-top: 36px;
+      }
+      #bars-title {
+        margin: 0 0 22px 0;
+        font-size: 28px;
+        font-weight: 500;
+        color: #9cc4af;
+      }
+      #bars {
+        display: flex;
+        align-items: flex-end;
+        gap: 26px;
+        height: 200px;
+      }
+      .bar-col {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 12px;
+        height: 100%;
+        justify-content: flex-end;
+      }
+      .bar {
+        width: 100%;
+        border-radius: 10px 10px 0 0;
+        transform-origin: bottom;
+      }
+      #bar-netflix {
+        background: linear-gradient(180deg, #ff5a5f, #e50914);
+      }
+      #bar-prime {
+        background: linear-gradient(180deg, #4dc3ff, #00a8e1);
+      }
+      #bar-disney {
+        background: linear-gradient(180deg, #4a6fa5, #1e3c72);
+      }
+      .bar-label {
+        font-size: 24px;
+        font-weight: 500;
+        color: #9cc4af;
+      }
+
+      /* Scene 4 — Philosophy */
+      #philosophy {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 0 90px;
+      }
+      #quote-mark {
+        font-weight: 900;
+        font-size: 300px;
+        line-height: 0.6;
+        color: #2d6a4f;
+        margin-bottom: 10px;
+      }
+      #quote {
+        margin: 0;
+        font-weight: 800;
+        font-size: 88px;
+        line-height: 1.26;
+        text-align: center;
+        color: #0d1f16;
+      }
+
+      /* Scene 5 — Outro */
+      #outro {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 84px;
+        padding: 0 60px;
+      }
+      #cta {
+        margin: 0;
+        font-weight: 900;
+        font-size: 118px;
+        line-height: 1.14;
+        text-align: center;
+        color: #f4f8f5;
+      }
+      #name-card {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 18px;
+      }
+      #name {
+        margin: 0;
+        font-weight: 800;
+        font-size: 84px;
+        color: #f4f8f5;
+      }
+      #role {
+        margin: 0;
+        font-size: 42px;
+        font-weight: 600;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        color: #74c69d;
+      }
+    </style>
+  </head>
+  <body>
+    <div
+      id="root"
+      data-composition-id="brag"
+      data-start="0"
+      data-width="1080"
+      data-height="1920"
+      data-duration="30"
+    >
+      <!-- Audio -->
+      <audio
+        id="bg-music"
+        data-start="0"
+        data-duration="30"
+        data-track-index="10"
+        data-volume="1"
+        src="assets/music/happy-beats-business-moves-vol-11-by-ende-dot-app.mp3"
+      ></audio>
+      <audio
+        id="sfx-dots"
+        data-start="4.226"
+        data-duration="0.18"
+        data-track-index="11"
+        data-volume="0.6"
+        src="assets/sfx/impactSoft_medium_001.ogg"
+      ></audio>
+      <audio
+        id="sfx-dash"
+        data-start="14.22"
+        data-duration="0.11"
+        data-track-index="12"
+        data-volume="0.5"
+        src="assets/sfx/drop_001.ogg"
+      ></audio>
+      <audio
+        id="sfx-bell"
+        data-start="28.43"
+        data-duration="1.48"
+        data-track-index="13"
+        data-volume="0.8"
+        src="assets/sfx/impactBell_heavy_000.ogg"
+      ></audio>
+
+      <!-- Shared glow (behind display type) -->
+      <div id="glow" aria-hidden="true"></div>
+
+      <!-- Scene 1: Hook (0.0-5.6) -->
+      <section id="hook" class="clip scene cream" data-start="0" data-duration="7.0">
+        <p id="eyebrow">&#128250; Content Tracker</p>
+        <p id="watchlist-word">WATCHLIST,</p>
+        <p id="tracked-word">tracked.</p>
+        <div id="plat-dots">
+          <div class="plat" id="plat-netflix"></div>
+          <div class="plat" id="plat-prime"></div>
+          <div class="plat" id="plat-disney"></div>
+        </div>
+      </section>
+
+      <!-- Scene 2: Proof (4.8-11.8) -->
+      <section id="proof" class="clip scene cream" data-start="6.2" data-duration="7.6">
+        <p id="sub">My watchlist, turned into pictures and numbers. Live from a Google Sheet.</p>
+        <div id="pills">
+          <div class="pill" id="pill-1">Platforms</div>
+          <div class="pill" id="pill-2">Genres</div>
+          <div class="pill" id="pill-3">Years</div>
+        </div>
+      </section>
+
+      <!-- Scene 3: The Work (11.0-18.2) -->
+      <section id="work" class="clip scene ink" data-start="13.0" data-duration="10.0">
+        <div id="dash-card">
+          <div id="dash-head">
+            <p id="dash-title">Content Tracker</p>
+            <p id="dash-live">Live &middot; Sheets</p>
+          </div>
+          <p id="dash-intro">Log a title once &mdash; it appears everywhere.</p>
+          <div class="kpi">
+            <p class="kpi-label">Titles Tracked</p>
+            <p class="kpi-value" id="kpi-titles">0</p>
+          </div>
+          <div class="kpi">
+            <p class="kpi-label">Hours Watched</p>
+            <p class="kpi-value" id="kpi-hours">0</p>
+          </div>
+          <div class="kpi">
+            <p class="kpi-label">Shows Watched</p>
+            <p class="kpi-value" id="kpi-shows">0</p>
+          </div>
+          <div id="bars-wrap">
+            <p id="bars-title">Hours by Platform</p>
+            <div id="bars">
+              <div class="bar-col">
+                <div class="bar" id="bar-netflix" style="height: 88%"></div>
+                <span class="bar-label">Netflix</span>
+              </div>
+              <div class="bar-col">
+                <div class="bar" id="bar-prime" style="height: 62%"></div>
+                <span class="bar-label">Prime</span>
+              </div>
+              <div class="bar-col">
+                <div class="bar" id="bar-disney" style="height: 41%"></div>
+                <span class="bar-label">Disney+</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Scene 4: Philosophy (17.4-22.2) -->
+      <section id="philosophy" class="clip scene cream" data-start="22.2" data-duration="4.8">
+        <span id="quote-mark" aria-hidden="true">&ldquo;</span>
+        <p id="quote">If I log it, it shows up. No manual updates.</p>
+      </section>
+
+      <!-- Scene 5: Outro (21.4-26.4) -->
+      <section id="outro" class="clip scene ink" data-start="26.2" data-duration="3.8">
+        <h2 id="cta">Your watchlist,<br />quantified.</h2>
+        <div id="name-card">
+          <p id="name">Content Tracker</p>
+          <p id="role">Live from Google Sheets</p>
+        </div>
+      </section>
+    </div>
+
+    <script>
+      document.fonts.ready.then(function () {
+        const tl = gsap.timeline({ paused: true });
+
+        // Audio fades (targets match the data-volume baseline of 1)
+        tl.fromTo('#bg-music', { volume: 0 }, { volume: 0.32, duration: 0.6 }, 0);
+        tl.to('#bg-music', { volume: 0, duration: 2.4 }, 27.6);
+
+        // Scene 1 — Hook (visual 0.0-4.8)
+        tl.fromTo('#glow', { opacity: 0 }, { opacity: 0.5, duration: 1.4 }, 0.4);
+        tl.to('#glow', { opacity: 0.62, duration: 2.6, ease: 'sine.inOut', yoyo: true, repeat: 5 }, 1.8);
+        tl.fromTo('#eyebrow', { autoAlpha: 0, y: 14 }, { autoAlpha: 1, y: 0, duration: 0.9, ease: 'power2.out' }, 0.5);
+        // beat-locked: 1.60s (vol-11 strong cue)
+        tl.fromTo(
+          '#watchlist-word',
+          { autoAlpha: 0, y: 56, scale: 1.06 },
+          { autoAlpha: 1, y: 0, scale: 1, duration: 1.2, ease: 'power3.out' },
+          1.6022
+        );
+        tl.fromTo('#tracked-word', { autoAlpha: 0, y: 32 }, { autoAlpha: 1, y: 0, duration: 1.2, ease: 'power3.out' }, 3.02);
+        // beat-grid: dots at 4.226 / 4.7485 / 5.2825 (vol-11)
+        const plats = ['#plat-netflix', '#plat-prime', '#plat-disney'];
+        const platStarts = [4.226, 4.7485, 5.2825];
+        plats.forEach(function (sel, i) {
+          tl.fromTo(
+            sel,
+            { autoAlpha: 0, scale: 0.6 },
+            { autoAlpha: 1, scale: 1, duration: 0.45, ease: 'power2.out' },
+            platStarts[i]
+          );
+        });
+
+        // Scene 1 → 2 crossfade (6.2-7.0)
+        tl.to('#hook', { autoAlpha: 0, duration: 0.8, ease: 'none' }, 6.2);
+        tl.fromTo('#proof', { autoAlpha: 0 }, { autoAlpha: 1, duration: 0.8, ease: 'none' }, 6.2);
+
+        // Scene 2 — Proof (visual 7.0-13.0)
+        tl.fromTo('#sub', { autoAlpha: 0, y: 26 }, { autoAlpha: 1, y: 0, duration: 1.2, ease: 'power2.out' }, 7.2);
+        // beat-grid: pills at 8.4405 / 9.497 / 10.5419 (vol-11)
+        const pills = ['#pill-1', '#pill-2', '#pill-3'];
+        const pillStarts = [8.4405, 9.497, 10.5419];
+        pills.forEach(function (sel, i) {
+          tl.fromTo(
+            sel,
+            { autoAlpha: 0, y: 22, scale: 0.96 },
+            { autoAlpha: 1, y: 0, scale: 1, duration: 0.9, ease: 'power2.out' },
+            pillStarts[i]
+          );
+        });
+
+        // Scene 2 → 3 crossfade (13.0-13.8)
+        tl.to('#proof', { autoAlpha: 0, duration: 0.8, ease: 'none' }, 13.0);
+        tl.fromTo('#work', { autoAlpha: 0 }, { autoAlpha: 1, duration: 0.8, ease: 'none' }, 13.0);
+
+        // Scene 3 — The Work (visual 13.8-22.2)
+        // beat-locked: 14.22s (vol-11 strong cue)
+        tl.fromTo(
+          '#dash-card',
+          { autoAlpha: 0, y: 130 },
+          { autoAlpha: 1, y: 0, duration: 1.3, ease: 'power3.out' },
+          14.22
+        );
+        tl.to('#dash-card', { scale: 1.012, duration: 2.4, ease: 'sine.inOut', yoyo: true, repeat: 2 }, 16.0);
+        const counters = [
+          { el: '#kpi-titles', to: 342 },
+          { el: '#kpi-hours', to: 1640 },
+          { el: '#kpi-shows', to: 205 }
+        ];
+        // beat-locked: 16.8577 / 17.9142 / 18.96 (vol-11 strong cues)
+        const countStarts = [16.8577, 17.9142, 18.96];
+        const countDur = 1.3;
+        counters.forEach(function (c, i) {
+          const obj = { v: 0 };
+          tl.to(
+            obj,
+            {
+              v: c.to,
+              duration: countDur,
+              ease: 'power1.inOut',
+              onUpdate: function () {
+                document.querySelector(c.el).textContent = Math.round(obj.v).toLocaleString('en-US');
+              }
+            },
+            countStarts[i]
+          );
+        });
+        // bars grow on the beat grid: 15.28 / 15.81 / 16.34
+        const bars = ['#bar-netflix', '#bar-prime', '#bar-disney'];
+        const barStarts = [15.28, 15.81, 16.34];
+        bars.forEach(function (sel, i) {
+          tl.fromTo(sel, { scaleY: 0 }, { scaleY: 1, duration: 0.7, ease: 'power2.out' }, barStarts[i]);
+        });
+
+        // Scene 3 → 4 crossfade (22.2-23.0)
+        tl.to('#work', { autoAlpha: 0, duration: 0.8, ease: 'none' }, 22.2);
+        tl.fromTo('#philosophy', { autoAlpha: 0 }, { autoAlpha: 1, duration: 0.8, ease: 'none' }, 22.2);
+
+        // Scene 4 — Philosophy (visual 23.0-26.2)
+        // beat-locked: 23.17s (vol-11 beat)
+        tl.fromTo('#quote-mark', { autoAlpha: 0, scale: 0.85 }, { autoAlpha: 1, scale: 1, duration: 0.8, ease: 'power2.out' }, 23.17);
+        // beat-locked: 23.70s (vol-11 strong cue)
+        tl.fromTo('#quote', { autoAlpha: 0, y: 30 }, { autoAlpha: 1, y: 0, duration: 1.3, ease: 'power2.out' }, 23.7);
+
+        // Scene 4 → 5 crossfade (26.2-27.0)
+        tl.to('#philosophy', { autoAlpha: 0, duration: 0.8, ease: 'none' }, 26.2);
+        tl.fromTo('#outro', { autoAlpha: 0 }, { autoAlpha: 1, duration: 0.8, ease: 'none' }, 26.2);
+
+        // Scene 5 — Outro (visual 27.0-30.0)
+        // beat-locked: 27.39s (vol-11 strong cue)
+        tl.fromTo('#cta', { autoAlpha: 0, y: 36 }, { autoAlpha: 1, y: 0, duration: 1.2, ease: 'power3.out' }, 27.39);
+        // beat-locked: 28.43s (vol-11 beat)
+        tl.fromTo('#name-card', { autoAlpha: 0, y: 26 }, { autoAlpha: 1, y: 0, duration: 1.0, ease: 'power2.out' }, 28.43);
+
+        window.__timelines['brag'] = tl;
+      });
+    </script>
+  </body>
+</html>
