@@ -7,7 +7,41 @@ const json = (statusCode, body, headers = {}) => ({
 });
 
 const clean = (value, max) => String(value || '').trim().slice(0, max);
+const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 const sign = value => crypto.createHmac('sha256', process.env.ADMIN_SESSION_SECRET).update(value).digest('base64url');
+
+// Calls the Apps Script web app, retrying once on transient failures. Google's
+// content CDN occasionally 404s (or drops the JSON body) right after a
+// redeploy or on a cold start; one retry clears that. Non-JSON responses are
+// only retried for idempotent actions (update/delete), so a create can't be
+// double-written by retrying after an ambiguous success.
+async function callUpstream(scriptUrl, payload, isIdempotent) {
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    let response;
+    let responseText = '';
+    try {
+      response = await fetch(scriptUrl, {
+        method: 'POST',
+        redirect: 'follow',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      responseText = await response.text();
+    } catch (error) {
+      if (attempt === 1) { await sleep(1000); continue; }
+      return { error };
+    }
+    let result = null;
+    try { result = JSON.parse(responseText); } catch { /* handled as non-JSON below */ }
+    const transient = response.status === 404 || response.status === 429 || response.status >= 500 || (!result && isIdempotent);
+    if (transient && attempt === 1) {
+      console.warn('Sheet service returned a transient response, retrying:', { status: response.status, attempt });
+      await sleep(1000);
+      continue;
+    }
+    return { response, responseText, result };
+  }
+}
 
 function validSession(event) {
   const cookies = event.headers?.cookie || event.headers?.Cookie || '';
@@ -69,30 +103,20 @@ exports.handler = async event => {
     Object.assign(forward, entry);
   }
 
-  let upstream;
-  try {
-    upstream = await fetch(scriptUrl, {
-      method: 'POST',
-      redirect: 'follow',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: scriptAction, ...forward })
-    });
-  } catch (error) {
-    console.error('Sheet service request failed:', error);
-    return json(502, { error: 'Unable to reach the sheet service', code: 'UPSTREAM_NETWORK_ERROR', diagnostics: { message: error.message } });
+  const call = await callUpstream(scriptUrl, { action: scriptAction, ...forward }, action !== 'create');
+  if (call.error) {
+    console.error('Sheet service request failed:', call.error);
+    return json(502, { error: 'Unable to reach the sheet service', code: 'UPSTREAM_NETWORK_ERROR', diagnostics: { message: call.error.message } });
   }
 
-  const responseText = await upstream.text();
-  let result;
-  try {
-    result = JSON.parse(responseText);
-  } catch {
-    console.error('Sheet service returned non-JSON response:', { status: upstream.status, body: responseText.slice(0, 1000) });
-    return json(502, { error: 'The sheet service returned an invalid response', code: 'UPSTREAM_INVALID_JSON', diagnostics: { httpStatus: upstream.status, responsePreview: responseText.slice(0, 300) } });
+  const { response, responseText, result } = call;
+  if (!result) {
+    console.error('Sheet service returned non-JSON response:', { status: response.status, body: responseText.slice(0, 1000) });
+    return json(502, { error: 'The sheet service returned an invalid response', code: 'UPSTREAM_INVALID_JSON', diagnostics: { httpStatus: response.status, responsePreview: responseText.slice(0, 300) } });
   }
-  if (!upstream.ok || result.status !== 'ok') {
-    console.error('Sheet service rejected entry:', { httpStatus: upstream.status, result });
-    return json(502, { error: result.message || 'The sheet service could not save the entry', code: result.message && result.message.startsWith('Unauthorized:') ? 'SHEET_UNAUTHORIZED' : 'SHEET_REJECTED', diagnostics: { httpStatus: upstream.status, upstreamStatus: result.status || null, upstreamMessage: result.message || null } });
+  if (!response.ok || result.status !== 'ok') {
+    console.error('Sheet service rejected entry:', { httpStatus: response.status, result });
+    return json(502, { error: result.message || 'The sheet service could not save the entry', code: result.message && result.message.startsWith('Unauthorized:') ? 'SHEET_UNAUTHORIZED' : 'SHEET_REJECTED', diagnostics: { httpStatus: response.status, upstreamStatus: result.status || null, upstreamMessage: result.message || null } });
   }
   return json(200, { ok: true, saved: action !== 'delete', deleted: action === 'delete', sheetName: result.sheetName || null, rowNumber: result.rowNumber || null, entry: entryMeta });
 };
