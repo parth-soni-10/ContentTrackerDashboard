@@ -27,6 +27,7 @@ const PER_PAGE = 25;
 let suggLastPick = null;
 let adminAuthenticated = false;
 let adminEditRow = null;
+let reloading = false;
 
 function escapeHTML(value) {
   return String(value ?? '').replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
@@ -401,12 +402,10 @@ async function deleteAdminEntry(rowNumber, button) {
         : '';
       throw new Error((result.error || 'Unable to delete entry') + detail);
     }
-    // Proper full refresh (also resets the form), then show feedback + refresh results.
-    await loadData();
-    msg().innerHTML = `<div class="sf-success">Entry deleted${result.rowNumber ? ' (row ' + escapeHTML(result.rowNumber) + ')' : ''}. Tracker reloaded.</div>`;
-    const input = document.getElementById('admin-edit-search');
-    if (input) renderAdminEditResults(input.value);
-    msg().scrollIntoView({ behavior: 'smooth', block: 'center' });
+    // Reload the whole page so the deletion is reflected everywhere.
+    msg().innerHTML = `<div class="sf-success">Entry deleted${result.rowNumber ? ' (row ' + escapeHTML(result.rowNumber) + ')' : ''}. Reloading…</div>`;
+    reloading = true;
+    setTimeout(() => window.location.reload(), 900);
   } catch (error) {
     msg().innerHTML = `<div class="sf-error">${escapeHTML(error.message)}</div>`;
   } finally {
@@ -522,15 +521,14 @@ async function submitAdminEntry(event) {
     const savedLocation = result.sheetName && result.rowNumber
       ? ` Saved to ${escapeHTML(result.sheetName)}, row ${escapeHTML(result.rowNumber)}.`
       : '';
-    // Leave edit mode, then do a proper full refresh of the page data.
-    // loadData() re-renders the current page, which also resets the form — so
-    // apply the success message to the freshly-rendered DOM afterwards.
+    // Leave edit mode, then reload the whole page so the entry shows up everywhere.
     adminEditRow = null;
-    await loadData();
-    document.getElementById('admin-entry-msg').innerHTML = `<div class="sf-success">Entry ${isUpdate ? 'updated' : 'added'} successfully.${savedLocation} Tracker reloaded.</div>`;
+    document.getElementById('admin-entry-msg').innerHTML = `<div class="sf-success">Entry ${isUpdate ? 'updated' : 'added'} successfully.${savedLocation} Reloading…</div>`;
+    reloading = true;
+    setTimeout(() => window.location.reload(), 900);
   } catch (error) {
     msg.innerHTML = `<div class="sf-error">${escapeHTML(error.message)}</div>`;
-  } finally { button.disabled = false; button.textContent = adminEditRow !== null ? 'Update Entry' : 'Add to Watchlist'; }
+  } finally { if (!reloading) { button.disabled = false; button.textContent = adminEditRow !== null ? 'Update Entry' : 'Add to Watchlist'; } }
 }
 
 // ── README ────────────────────────────────────────────────────────────────
