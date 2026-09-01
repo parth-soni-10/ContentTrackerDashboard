@@ -25,10 +25,13 @@ exports.handler = async event => {
     return json(401, { error: 'Incorrect password' });
   }
 
-  const payload = Buffer.from(JSON.stringify({ sub: 'admin', exp: Date.now() + 8 * 60 * 60 * 1000 })).toString('base64url');
+  // Session cookie: no Max-Age/Expires, so the browser keeps it across page
+  // refreshes and only clears it when the browsing session ends. The 30-day
+  // token cap is just a safety net never reached in practice.
+  const payload = Buffer.from(JSON.stringify({ sub: 'admin', exp: Date.now() + 30 * 24 * 60 * 60 * 1000 })).toString('base64url');
   const token = `${payload}.${sign(payload)}`;
 
   return json(200, { ok: true }, {
-    'Set-Cookie': `ct_admin=${token}; Max-Age=28800; Path=/; HttpOnly; Secure; SameSite=Strict`
+    'Set-Cookie': `ct_admin=${token}; Path=/; HttpOnly; Secure; SameSite=Strict`
   });
 };

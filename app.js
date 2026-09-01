@@ -228,6 +228,9 @@ function navigateTo(page, updateHash = true) {
 
 // ── ADMIN ─────────────────────────────────────────────────────────────────
 function renderAdmin() {
+  // Keep the admin session across page refreshes (sessionStorage is per-tab,
+  // so it survives reloads but is cleared when the tab closes).
+  if (!adminAuthenticated && sessionStorage.getItem('ct_admin_session') === '1') adminAuthenticated = true;
   if (!adminAuthenticated) {
     document.getElementById('app').innerHTML = `
       <div class="page-header"><div class="ph-left"><h1>Admin</h1><p>Sign in to add a title directly to the tracker</p></div></div>
@@ -254,6 +257,7 @@ function renderAdmin() {
         const result = await response.json();
         if (!response.ok) throw new Error(result.error || 'Unable to sign in');
         adminAuthenticated = true;
+        sessionStorage.setItem('ct_admin_session', '1');
         renderAdminForm();
       } catch (error) {
         message.innerHTML = `<div class="sf-error">${escapeHTML(error.message)}</div>`;
@@ -304,7 +308,7 @@ function renderAdminForm() {
   });
   document.getElementById('admin-check-name').addEventListener('click', checkAdminName);
   document.getElementById('admin-autofill').addEventListener('click', autofillAdminEntry);
-  document.getElementById('admin-lock').addEventListener('click', () => { adminAuthenticated = false; renderAdmin(); });
+  document.getElementById('admin-lock').addEventListener('click', () => { adminAuthenticated = false; sessionStorage.removeItem('ct_admin_session'); renderAdmin(); });
   document.getElementById('admin-edit-search').addEventListener('input', event => renderAdminEditResults(event.target.value));
   document.getElementById('admin-edit-results').addEventListener('click', event => {
     const del = event.target.closest('.admin-del-btn');
