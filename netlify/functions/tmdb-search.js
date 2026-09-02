@@ -39,12 +39,23 @@ exports.handler = async event => {
         .sort((a, b) => (b.popularity || 0) - (a.popularity || 0))[0];
       // OMDB (IMDb stars) first; fall back to the TMDB score if it's missing.
       // Both are 0-10, so clamp to that scale so the star display is consistent.
+      // The IMDb id comes from the SAME TMDB match that produced the poster
+      // (external_ids), so the Data-table link always lands on the exact title
+      // page for what's shown; OMDB's imdbID is the backup when TMDB has none.
       let rating = null;
+      let imdbId = null;
       if (match) {
+        try {
+          const extUrl = new URL('https://api.themoviedb.org/3/' + (match.media_type === 'movie' ? 'movie' : 'tv') + '/' + match.id + '/external_ids');
+          extUrl.searchParams.set('api_key', process.env.TMDB_API_KEY);
+          const extResponse = await fetch(extUrl);
+          if (extResponse.ok) imdbId = (await extResponse.json()).imdb_id || null;
+        } catch (e) { /* non-fatal — fall back to OMDB below */ }
         if (process.env.OMDB_API_KEY) {
           const omdb = await omdbLookup(match.name || match.title, match.media_type === 'movie' ? 'Movie' : 'Series');
           const imdb = Number(omdb?.imdbRating);
           if (Number.isFinite(imdb) && imdb > 0) rating = imdb;
+          if (!imdbId && omdb?.imdbID) imdbId = omdb.imdbID;
         }
         if (rating == null) {
           const tmdbScore = Number(match.vote_average);
@@ -54,7 +65,8 @@ exports.handler = async event => {
       }
       return json(200, {
         poster: match && match.poster_path ? 'https://image.tmdb.org/t/p/w185' + match.poster_path : null,
-        rating
+        rating,
+        imdbId
       });
     } catch (error) {
       return json(502, { error: 'Unable to reach the autofill service. Please try again.' });

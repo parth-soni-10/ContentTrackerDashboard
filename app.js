@@ -88,9 +88,10 @@ function initTheme() {
   apply();
 }
 
-// Poster + public rating — cached per title to avoid hammering TMDB/OMDB.
-const MEDIA_CACHE = (() => { try { return JSON.parse(localStorage.getItem('ct-media-cache') || '{}'); } catch (e) { return {}; } })();
-function saveMediaCache() { try { localStorage.setItem('ct-media-cache', JSON.stringify(MEDIA_CACHE)); } catch (e) {} }
+// Poster + public rating + IMDb id — cached per title to avoid hammering TMDB/OMDB.
+// Versioned so a schema change (adding imdbId) triggers one refetch pass, then caches forever.
+const MEDIA_CACHE = (() => { try { const c = JSON.parse(localStorage.getItem('ct-media-cache') || '{}'); return c && c.v === 2 ? c.items : {}; } catch (e) { return {}; } })();
+function saveMediaCache() { try { localStorage.setItem('ct-media-cache', JSON.stringify({ v: 2, items: MEDIA_CACHE })); } catch (e) {} }
 function posterFallback(el) { if (el) { el.classList.add('placeholder'); el.textContent = '🎬'; } }
 // Read-only star display for a 0-10 rating (IMDb/TMDB scale), plus the number.
 function ratingStars(value) {
@@ -106,18 +107,46 @@ function applyRating(key, rating) {
   for (const el of nodes) el.innerHTML = ratingStars(rating);
   rawData.forEach(r => { if (String(r.name || '').trim().toLowerCase() === key) r.rating = rating; });
 }
+// Swap a whole name cell (poster + title) from plain text to a link to its
+// EXACT IMDb page. No generic search pages — the link only appears once a
+// real imdbID arrives.
+function applyImdbLink(key, imdbId) {
+  if (!imdbId) return;
+  const nodes = document.querySelectorAll('[data-tk="' + key + '"]');
+  for (const el of nodes) {
+    if (el.tagName === 'SPAN') {
+      const a = document.createElement('a');
+      a.className = 'name-link';
+      a.target = '_blank';
+      a.rel = 'noopener';
+      a.href = 'https://www.imdb.com/title/' + imdbId + '/';
+      a.dataset.tk = el.dataset.tk;
+      a.innerHTML = el.innerHTML;
+      el.replaceWith(a);
+    } else {
+      el.href = 'https://www.imdb.com/title/' + imdbId + '/';
+    }
+  }
+}
 async function loadPoster(title, imgEl) {
   const key = String(title || '').trim().toLowerCase();
   if (!key || !imgEl) { posterFallback(imgEl); return; }
-  if (MEDIA_CACHE[key]) { applyPoster(imgEl, MEDIA_CACHE[key].poster); applyRating(key, MEDIA_CACHE[key].rating); return; }
+  const cached = MEDIA_CACHE[key];
+  if (cached && cached.imdbId) {
+    applyPoster(imgEl, cached.poster);
+    applyRating(key, cached.rating);
+    applyImdbLink(key, cached.imdbId);
+    return;
+  }
   try {
     const res = await fetch('/.netlify/functions/tmdb-search?' + new URLSearchParams({ title, light: '1' }), { credentials: 'same-origin' });
     const data = res.ok ? (await res.json()) : null;
-    const meta = { poster: data?.poster || null, rating: Number(data?.rating) || null };
+    const meta = { poster: data?.poster || null, rating: Number(data?.rating) || null, imdbId: data?.imdbId || null };
     MEDIA_CACHE[key] = meta;
     saveMediaCache();
     applyPoster(imgEl, meta.poster);
     applyRating(key, meta.rating);
+    applyImdbLink(key, meta.imdbId);
   } catch (e) { posterFallback(imgEl); }
 }
 function applyPoster(el, url) {
@@ -1234,12 +1263,15 @@ function updateDataTable() {
     name = escapeHTML(name);
     var    posterTitle  = escapeHTML(r.name || '');
     var ratingKey   = String(r.name || '').trim().toLowerCase();
+    // The whole name cell (poster + title) starts as plain text and becomes a
+    // link to its EXACT IMDb page once the lookup returns an imdbID
+    // (see applyImdbLink) — never a find page.
     rowsHTML += '<tr>';
     rowsHTML += '<td class="row-num">' + (start + i + 1) + '</td>';
-    rowsHTML += '<td style="font-weight:500"><div class="data-name-cell">' +
+    rowsHTML += '<td style="font-weight:500"><span class="name-link" data-tk="' + ratingKey + '">' +
       '<img class="poster" alt="" loading="lazy" data-poster="' + posterTitle + '">' +
-      '<span>' + name + '<span style="color:var(--text-soft);font-weight:400">' + seasonStr + '</span></span>' +
-      '</div></td>';
+      '<span class="title-cell">' + name + '<span style="color:var(--text-soft);font-weight:400">' + seasonStr + '</span></span>' +
+      '</span></td>';
     rowsHTML += '<td><span class="' + pillClass + '">' + typeLabel + '</span></td>';
     rowsHTML += '<td>' + genre + '</td>';
     rowsHTML += '<td>' + platEmoji + ' ' + platName + '</td>';
