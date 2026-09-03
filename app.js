@@ -229,7 +229,7 @@ function bindNavigation() {
 function renderDataError() {
   document.getElementById('app').innerHTML =
     '<div class="page-header"><div class="ph-left"><h1>Couldn\'t load your watchlist</h1><p>The Google Sheet service didn\'t respond.</p></div></div>' +
-    '<div class="note-card" style="max-width:640px;margin:0 0 16px"><div class="note-icon" aria-hidden="true">⚠️</div><div class="note-body"><strong>The data service is unreachable right now.</strong> This is usually a temporary hiccup — the Apps Script backend can take up to a minute to wake up after idle periods.</div></div>' +
+    '<div class="note-card" style="max-width:640px;margin:0 0 16px"><div class="note-icon" aria-hidden="true">⚠️</div><div class="note-body"><strong>The data service is unreachable right now.</strong> This is usually temporary — give it a moment and try again.</div></div>' +
     '<div class="submit-page"><button class="try-btn" id="data-retry" type="button" style="min-height:44px;padding:0 24px">↻ Retry</button></div>';
   const btn = document.getElementById('data-retry');
   if (btn) {
