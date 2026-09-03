@@ -115,8 +115,13 @@ exports.handler = async event => {
     return json(502, { error: 'The sheet service returned an invalid response', code: 'UPSTREAM_INVALID_JSON', diagnostics: { httpStatus: response.status, responsePreview: responseText.slice(0, 300) } });
   }
   if (!response.ok || result.status !== 'ok') {
+    // Google can answer with HTTP 200 + a JSON error envelope that has no
+    // `status` field (e.g. "Service invoked too many times..." exec qps errors
+    // and other service-level rejections). Pull whatever message it carries so
+    // the user sees the real reason instead of a generic fallback.
+    const upstreamMessage = result.message || (typeof result.Error === 'string' ? result.Error : '') || (typeof result.error === 'string' ? result.error : '');
     console.error('Sheet service rejected entry:', { httpStatus: response.status, result });
-    return json(502, { error: result.message || 'The sheet service could not save the entry', code: result.message && result.message.startsWith('Unauthorized:') ? 'SHEET_UNAUTHORIZED' : 'SHEET_REJECTED', diagnostics: { httpStatus: response.status, upstreamStatus: result.status || null, upstreamMessage: result.message || null } });
+    return json(502, { error: upstreamMessage || 'The sheet service could not save the entry', code: upstreamMessage && String(upstreamMessage).startsWith('Unauthorized:') ? 'SHEET_UNAUTHORIZED' : 'SHEET_REJECTED', diagnostics: { httpStatus: response.status, upstreamStatus: result.status || null, upstreamMessage: upstreamMessage || null } });
   }
-  return json(200, { ok: true, saved: action !== 'delete', deleted: action === 'delete', sheetName: result.sheetName || null, rowNumber: result.rowNumber || null, entry: entryMeta });
+  return json(200, { ok: true, saved: action !== 'delete', deleted: action === 'delete', duplicate: Boolean(result.duplicate), sheetName: result.sheetName || null, rowNumber: result.rowNumber || null, entry: entryMeta });
 };

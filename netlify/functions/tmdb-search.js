@@ -107,12 +107,20 @@ exports.handler = async event => {
     const omdbRuntime = parseInt(String(omdb?.Runtime || '').replace(/[^0-9]/g, ''), 10) || 0;
     const mergedGenre = genre !== 'Uncategorized' ? genre : omdbGenre || genre;
 
+    // Series default to season 1 when the caller didn't name one, so the episode
+    // count / runtime describe ONE season (what an entry means), not the whole
+    // series across every season.
     let seasonDetails = null;
-    if (!isMovie && season && /^\d{1,2}$/.test(season)) {
-      const seasonUrl = new URL(`https://api.themoviedb.org/3/tv/${match.id}/season/${Number(season)}`);
+    let usedSeason = '';
+    if (!isMovie) {
+      const wantedSeason = /^\d{1,2}$/.test(season) ? Number(season) : 1;
+      const seasonUrl = new URL(`https://api.themoviedb.org/3/tv/${match.id}/season/${wantedSeason}`);
       seasonUrl.searchParams.set('api_key', process.env.TMDB_API_KEY);
       const seasonResponse = await fetch(seasonUrl);
-      if (seasonResponse.ok) seasonDetails = await seasonResponse.json();
+      if (seasonResponse.ok) {
+        seasonDetails = await seasonResponse.json();
+        usedSeason = String(wantedSeason);
+      }
     }
 
     const runtime = isMovie
@@ -128,7 +136,7 @@ exports.handler = async event => {
       type: isMovie ? 'Movie' : 'Series/Show',
       genre: mergedGenre,
       platform,
-      season: isMovie ? '' : season,
+      season: isMovie ? '' : usedSeason || season,
       episodes: episodeCount,
       screentime: mergedRuntime || (isMovie ? details.runtime || 0 : (details.episode_run_time?.[0] || omdbRuntime || 0) * episodeCount),
       source: 'TMDB'

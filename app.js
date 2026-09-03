@@ -28,6 +28,13 @@ let suggLastPick = null;
 let adminAuthenticated = false;
 let adminEditRow = null;
 let reloading = false;
+let loadFailed = false;
+let loadRetried = false;
+// Shared yearly watch goal (stored server-side so every device sees the same
+// target and lock state). goalError carries a transient save-failure message.
+let goalState = { hrs: 0, year: '' };
+let goalError = '';
+let goalReady = Promise.resolve();
 
 function escapeHTML(value) {
   return String(value ?? '').replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
@@ -50,15 +57,26 @@ function toISOFromDisplay(value) {
   return isNaN(date.getTime()) ? '' : date.toISOString().slice(0, 10);
 }
 
+// Parses a watch date as a LOCAL midnight Date. Date-only strings ("2026-08-29")
+// parsed via new Date() are treated as UTC, which shifts the calendar day for
+// anyone outside UTC — the old +1-day display hacks only patched that for
+// negative-offset timezones. Parsing the parts directly is correct everywhere.
+function parseLocalDate(value) {
+  const text = String(value || '').trim();
+  if (!text) return null;
+  const iso = text.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  const date = iso
+    ? new Date(Number(iso[1]), Number(iso[2]) - 1, Number(iso[3]))
+    : new Date(text);
+  return isNaN(date.getTime()) ? null : date;
+}
+
 // Returns a sortable timestamp for a sheet watch date, handling the display
 // formats the sheet produces ("29-Aug-26", "29 Aug 2026", ISO "2026-08-29",
 // etc). Missing/undatable entries return 0 so they sort to the bottom.
 function watchDateTimestamp(value) {
-  const text = String(value || '').trim();
-  if (!text) return 0;
-  const iso = toISOFromDisplay(text);
-  const date = iso ? new Date(iso) : new Date(text);
-  return isNaN(date.getTime()) ? 0 : date.getTime();
+  const date = parseLocalDate(value);
+  return date ? date.getTime() : 0;
 }
 
 // Canonical platform labels so duplicate spellings merge into one bar/group.
@@ -121,12 +139,36 @@ function applyImdbLink(key, imdbId) {
       a.rel = 'noopener';
       a.href = 'https://www.imdb.com/title/' + imdbId + '/';
       a.dataset.tk = el.dataset.tk;
-      a.innerHTML = el.innerHTML;
+      // MOVE the existing children (poster <img> + title text) into the link
+      // rather than cloning them, so lookups still in flight for other rows
+      // of the same title update the same live img element.
+      while (el.firstChild) a.appendChild(el.firstChild);
       el.replaceWith(a);
     } else {
       el.href = 'https://www.imdb.com/title/' + imdbId + '/';
     }
   }
+}
+// One in-flight lookup per title, shared by every row of that title on the
+// page (e.g. Daredevil S1-S3), so a season set costs one API call, not three.
+const mediaLookups = {};
+async function lookupMedia(key, title) {
+  if (MEDIA_CACHE[key] && MEDIA_CACHE[key].imdbId) return MEDIA_CACHE[key];
+  if (!mediaLookups[key]) {
+    mediaLookups[key] = (async () => {
+      try {
+        const res = await fetch('/.netlify/functions/tmdb-search?' + new URLSearchParams({ title, light: '1' }), { credentials: 'same-origin' });
+        const data = res.ok ? (await res.json()) : null;
+        const meta = { poster: data?.poster || null, rating: Number(data?.rating) || null, imdbId: data?.imdbId || null };
+        MEDIA_CACHE[key] = meta;
+        saveMediaCache();
+        return meta;
+      } finally {
+        delete mediaLookups[key];
+      }
+    })();
+  }
+  return mediaLookups[key];
 }
 async function loadPoster(title, imgEl) {
   const key = String(title || '').trim().toLowerCase();
@@ -139,11 +181,7 @@ async function loadPoster(title, imgEl) {
     return;
   }
   try {
-    const res = await fetch('/.netlify/functions/tmdb-search?' + new URLSearchParams({ title, light: '1' }), { credentials: 'same-origin' });
-    const data = res.ok ? (await res.json()) : null;
-    const meta = { poster: data?.poster || null, rating: Number(data?.rating) || null, imdbId: data?.imdbId || null };
-    MEDIA_CACHE[key] = meta;
-    saveMediaCache();
+    const meta = await lookupMedia(key, title);
     applyPoster(imgEl, meta.poster);
     applyRating(key, meta.rating);
     applyImdbLink(key, meta.imdbId);
@@ -155,10 +193,20 @@ function applyPoster(el, url) {
   if (url) { el.onerror = () => posterFallback(el); el.src = url; }
   else posterFallback(el);
 }
-// Sequential loader for the visible data page (gentle on the API).
+// Loads the visible posters with a small concurrency pool — a full page
+// (~25 titles) resolves in a few waves instead of one long serial chain,
+// while staying gentle on the media APIs.
 async function loadVisiblePosters(container) {
   const imgs = container ? Array.from(container.querySelectorAll('img[data-poster]')) : [];
-  for (const img of imgs) await loadPoster(img.dataset.poster, img);
+  const CONCURRENCY = 6;
+  let next = 0;
+  const worker = async () => {
+    while (next < imgs.length) {
+      const img = imgs[next++];
+      await loadPoster(img.dataset.poster, img);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(CONCURRENCY, imgs.length) }, () => worker()));
 }
 
 function bindNavigation() {
@@ -175,38 +223,214 @@ function bindNavigation() {
 // data refresh. Pass true when you're on a stateful page (the admin form)
 // and want to refresh rawData WITHOUT tearing down the DOM and losing form
 // state / messages.
+// Painted when the very first data fetch fails, so a transient upstream hiccup
+// (the Apps Script service is often slow to wake) doesn't masquerade as an
+// empty dashboard. Retry button + one automatic retry attempt.
+function renderDataError() {
+  document.getElementById('app').innerHTML =
+    '<div class="page-header"><div class="ph-left"><h1>Couldn\'t load your watchlist</h1><p>The Google Sheet service didn\'t respond.</p></div></div>' +
+    '<div class="note-card" style="max-width:640px;margin:0 0 16px"><div class="note-icon" aria-hidden="true">⚠️</div><div class="note-body"><strong>The data service is unreachable right now.</strong> This is usually a temporary hiccup — the Apps Script backend can take up to a minute to wake up after idle periods.</div></div>' +
+    '<div class="submit-page"><button class="try-btn" id="data-retry" type="button" style="min-height:44px;padding:0 24px">↻ Retry</button></div>';
+  const btn = document.getElementById('data-retry');
+  if (btn) {
+    btn.addEventListener('click', () => {
+      btn.disabled = true;
+      btn.textContent = 'Loading…';
+      loadData();
+    });
+  }
+}
+
+// POST the yearly goal to the shared store; returns the server-confirmed
+// { hrs, year } or null on failure.
+async function setSharedGoal(hrs, year) {
+  try {
+    const res = await fetch('/.netlify/functions/goal', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ hrs, year })
+    });
+    const data = res.ok ? await res.json().catch(() => ({})) : null;
+    if (data && data.status === 'ok' && data.goal) {
+      return { hrs: Number(data.goal.hrs) || 0, year: String(data.goal.year || '') };
+    }
+  } catch (e) { /* fall through */ }
+  return null;
+}
+
+// Fetch the shared goal. If the server has none yet but this browser has an
+// old local goal, migrate it up once so it starts syncing to other devices.
+// If the server can't answer (backend not yet updated / offline), fall back to
+// whatever this browser last saved locally so the card still works.
+async function loadGoal() {
+  let serverReachable = false;
+  try {
+    const res = await fetch(SCRIPT_URL + '?goal=1', { redirect: 'follow', mode: 'cors', cache: 'no-store' });
+    if (res.ok) {
+      const data = await res.json();
+      if (data && typeof data.hrs !== 'undefined') {
+        goalState = { hrs: Number(data.hrs) || 0, year: String(data.year || '') };
+        serverReachable = true;
+      }
+    }
+  } catch (e) { /* fall through to the local fallback */ }
+  let localHrs = 0, localYear = '';
+  try {
+    localHrs = parseFloat(localStorage.getItem('ct-goal') || '0') || 0;
+    localYear = String(localStorage.getItem('ct-goal-year') || '');
+  } catch (e) {}
+  if (!goalState.hrs && localHrs > 0) {
+    if (serverReachable) {
+      const saved = await setSharedGoal(localHrs, localYear || String(new Date().getFullYear()));
+      if (saved) goalState = saved;
+    } else {
+      goalState = { hrs: localHrs, year: localYear };
+    }
+  }
+}
+
+// ── FAST FIRST PAINT ────────────────────────────────────────────────────
+// The last successfully fetched sheet JSON (plus the shared goal) is kept in
+// localStorage, so a repeat visit can paint the dashboard instantly from the
+// snapshot while the network copy is fetched underneath — the page feels
+// immediate even when the backend is cold, then silently corrects itself if
+// the data actually changed.
+const SNAP_KEY = 'ct-data-snap-v1';
+
+function mapRows(json) {
+  return (json || []).map(r => ({
+    name:       r.Name       || r.name       || '',
+    season:     r.Season     || r.season     || '',
+    type:       r.Type       || r.type       || '',
+    genre:      r['Details/Genre'] || r.Genre || r.genre || '',
+    platform:   normalizePlatform(r.Platform   || r.platform   || ''),
+    episodes:   parseInt(r['Episode Count'] || r['Episode Count '] || r.episodes || 0) || 0,
+    screentime: parseFloat(r.Screentime || r.screentime || 0) || 0,
+    // Unify stored date formats into ISO (dd-MMM-yy stays as-is when unparsable).
+    watchDate:  toISOFromDisplay(r['Watch Date'] || r.watchDate || '') || (r['Watch Date'] || r.watchDate || ''),
+    month:      r.Month      || r.month      || '',
+    row:        Number(r._row || r.row || 0),
+    year:       parseInt(r.Year || r.year || 0) || 0
+  })).filter(r => r.name && r.year > 0);
+}
+
+// Cheap signature of the current dataset (rows + goal) used to tell whether a
+// network refresh actually changed anything worth repainting.
+function dataSignature(rows, goal) {
+  goal = goal || goalState;
+  let hash = 5381;
+  rows.forEach(r => {
+    hash = ((hash * 33) ^ (r.row * 131 + (r.name || '').length + (r.watchDate || '').length + (Number(r.screentime) || 0))) >>> 0;
+  });
+  return hash + ':' + rows.length + ':' + goal.hrs + ':' + goal.year;
+}
+
+function saveDataSnapshot(json) {
+  try {
+    localStorage.setItem(SNAP_KEY, JSON.stringify({ ts: Date.now(), rows: json, goal: goalState }));
+  } catch (e) { /* full/unavailable storage — the snapshot is an optimization only */ }
+}
+
+function readDataSnapshot() {
+  try {
+    const snap = JSON.parse(localStorage.getItem(SNAP_KEY));
+    return (snap && Array.isArray(snap.rows) && snap.rows.length) ? snap : null;
+  } catch (e) { return null; }
+}
+
+// Boot: when a snapshot exists (and this isn't a post-write ?fresh= reload),
+// paint it immediately, then refresh from the network underneath — repainting
+// only when the data actually changed, and never on stateful pages (admin /
+// submit forms) where a surprise re-render would lose what you typed.
+async function bootData() {
+  const snap = readDataSnapshot();
+  if (new URLSearchParams(location.search).get('fresh') || !snap) {
+    await loadData(false);
+    return;
+  }
+  const before = mapRows(snap.rows);
+  rawData = before;
+  if (snap.goal && snap.goal.year) goalState = { hrs: Number(snap.goal.hrs) || 0, year: String(snap.goal.year || '') };
+  const beforeSig = dataSignature(before, goalState);
+  loadFailed = false;
+  document.getElementById('loading').classList.add('hide');
+  const page = () => window.location.hash.slice(1) || 'readme';
+  const repaintIfChanged = () => {
+    if (!loadFailed && dataSignature(rawData) !== beforeSig && page() !== 'admin' && page() !== 'submit') {
+      navigateTo(page(), false);
+    }
+  };
+  navigateTo(page(), false); // instant first paint from the snapshot
+  await loadData(true);      // silent refresh underneath
+  if (loadFailed) {
+    if (!loadRetried) {
+      loadRetried = true;
+      setTimeout(async () => { await loadData(true); repaintIfChanged(); }, 3500);
+    }
+    return;
+  }
+  repaintIfChanged();
+}
+
 async function loadData(skipRerender) {
   try {
+    goalReady = loadGoal();
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 8000);
-    const res = await fetch(SCRIPT_URL, { redirect: 'follow', mode: 'cors', signal: controller.signal, cache: 'default' });
+    // The CDN normally answers in a blink, but right after an admin write the
+    // upstream Apps Script cache is cold and a full read can take ~20s+, so
+    // allow well past the Netlify function's own timeout (the fetch resolves
+    // with that error instead of a misleading client-side abort).
+    const timeout = setTimeout(() => controller.abort(), 45000);
+    // A one-shot ?fresh= marker (set by reloadFresh after an admin write)
+    // bypasses the CDN cache so the reload shows the write immediately.
+    const fresh = new URLSearchParams(location.search).get('fresh');
+    const url = fresh ? SCRIPT_URL + '?fresh=' + encodeURIComponent(fresh) : SCRIPT_URL;
+    const res = await fetch(url, { redirect: 'follow', mode: 'cors', signal: controller.signal, cache: 'default' });
     clearTimeout(timeout);
+    if (fresh) {
+      try {
+        const qs = new URLSearchParams(location.search);
+        qs.delete('fresh');
+        history.replaceState(null, '', (qs.toString() ? '?' + qs.toString() : '') + location.hash);
+      } catch (e) {}
+    }
     if (!res.ok) throw new Error('Data service returned ' + res.status);
     const json = await res.json();
-    rawData = json.map(r => ({
-      name:       r.Name       || r.name       || '',
-      season:     r.Season     || r.season     || '',
-      type:       r.Type       || r.type       || '',
-      genre:      r['Details/Genre'] || r.Genre || r.genre || '',
-      platform:   normalizePlatform(r.Platform   || r.platform   || ''),
-      episodes:   parseInt(r['Episode Count'] || r['Episode Count '] || r.episodes || 0) || 0,
-      screentime: parseFloat(r.Screentime || r.screentime || 0) || 0,
-      // Unify stored date formats into ISO (dd-MMM-yy stays as-is when unparsable).
-      watchDate:  toISOFromDisplay(r['Watch Date'] || r.watchDate || '') || (r['Watch Date'] || r.watchDate || ''),
-      month:      r.Month      || r.month      || '',
-      row:        Number(r._row || r.row || 0),
-      year:       parseInt(r.Year || r.year || 0) || 0
-    })).filter(r => r.name && r.year > 0);
+    rawData = mapRows(json);
+    loadFailed = false;
+    // The goal read is fast (Script Properties, no sheet), so waiting for it
+    // here means the readme renders with the synced goal on the first paint.
+    await goalReady;
+    // Keep a snapshot so the next visit can paint instantly from cache while
+    // this fetch refreshes underneath (see bootData).
+    saveDataSnapshot(json);
   } catch (e) {
     console.warn('Data load failed:', e);
     rawData = [];
+    loadFailed = true;
   }
   document.getElementById('loading').classList.add('hide');
-  if (!skipRerender) navigateTo(window.location.hash.slice(1) || 'readme', false);
+  if (skipRerender) return;
+  if (loadFailed && !rawData.length) {
+    renderDataError();
+    if (!loadRetried) {
+      loadRetried = true;
+      setTimeout(() => { if (loadFailed) loadData(); }, 3500);
+    }
+    return;
+  }
+  navigateTo(window.location.hash.slice(1) || 'readme', false);
 }
 
 // ── UTILS ─────────────────────────────────────────────────────────────────
-const maxYear  = () => rawData.length ? Math.max(...rawData.map(r => r.year)) : new Date().getFullYear();
+// "Current year" for the dashboard: the latest year actually watched, never a
+// future year — so an entry dated next year can't rebrand the whole page as
+// "This Year (next year)". Empty data falls back to the real current year.
+const maxYear  = () => {
+  const nowYear = new Date().getFullYear();
+  const dataYear = rawData.length ? Math.max(...rawData.map(r => r.year)) : 0;
+  return dataYear > nowYear ? nowYear : (dataYear || nowYear);
+};
 const fmtHrs   = m  => (m / 60).toFixed(1).replace(/\.0$/, '') + ' hrs';
 const fmtK     = n  => n.toLocaleString('en-GB');
 const pe       = p  => PEMOJI[p] || '📺';
@@ -325,6 +549,11 @@ function renderAdminForm() {
       <p class="submit-sub">Search the tracker, then click <strong>Edit</strong> to load a title into the form above.</p>
       <input id="admin-edit-search" class="sf-input" type="text" placeholder="Search by title…" autocomplete="off">
       <div id="admin-edit-results" class="admin-edit-results" aria-live="polite"></div>
+    </div>
+    <div class="submit-form-card">
+      <h2 class="submit-heading">Duplicate Checker</h2>
+      <p class="submit-sub">Automatically scans the tracker for entries that look like the same thing was logged twice. Runs every time this page opens.</p>
+      <div id="admin-dup-results" class="admin-dup-results" aria-live="polite"></div>
     </div></div><div class="submit-right"><div class="note-card"><div class="note-icon" aria-hidden="true">💡</div><div class="note-body"><strong>Protected entry</strong>The password is checked server-side and is never sent to Google Sheets.</div></div><button class="try-btn" id="admin-lock" type="button">Lock Admin</button></div></div>`;
   document.getElementById('admin-entry-form').addEventListener('submit', submitAdminEntry);
   ['genre', 'platform'].forEach(key => {
@@ -346,6 +575,14 @@ function renderAdminForm() {
     if (button) startAdminEdit(Number(button.dataset.row));
   });
   document.getElementById('admin-cancel-edit').addEventListener('click', cancelAdminEdit);
+  const dupResults = document.getElementById('admin-dup-results');
+  dupResults.addEventListener('click', event => {
+    const del = event.target.closest('.dup-del-btn');
+    if (del) { deleteAdminEntry(Number(del.dataset.row), del); return; }
+    const groupBtn = event.target.closest('.dup-group-btn');
+    if (groupBtn) removeDupCopies(Number(groupBtn.dataset.group), groupBtn);
+  });
+  renderDuplicateScan();
 }
 
 function renderAdminEditResults(query) {
@@ -424,25 +661,219 @@ async function deleteAdminEntry(rowNumber, button) {
   if (button) { button.disabled = true; button.textContent = 'Deleting…'; }
   const msg = () => document.getElementById('admin-entry-msg');
   try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 30000);
+    const result = await requestAdminDelete(rowNumber);
+    if (result === null) return; // session expired — the login screen is already up
+    // Reload the whole page so the deletion is reflected everywhere.
+    msg().innerHTML = `<div class="sf-success">Entry deleted${result.rowNumber ? ' (row ' + escapeHTML(result.rowNumber) + ')' : ''}. Reloading…</div>`;
+    reloading = true;
+    setTimeout(() => reloadFresh(), 900);
+  } catch (error) {
+    msg().innerHTML = `<div class="sf-error">${escapeHTML(error.message)}</div>`;
+  } finally {
+    if (button) { button.disabled = false; button.textContent = 'Delete'; }
+  }
+}
+
+// Posts a single-row delete to the admin service. Resolves with the parsed
+// result, throws an Error on a failed request, and returns null when the admin
+// session has expired (the login screen is already up — stop and wait).
+async function requestAdminDelete(rowNumber) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 45000);
+  try {
     const response = await fetch('/.netlify/functions/admin-entry', { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin', body: JSON.stringify({ action: 'delete', row: rowNumber }), signal: controller.signal });
-    clearTimeout(timeout);
     const result = await response.json().catch(() => ({}));
+    if (response.status === 401 && result.code === 'SESSION_INVALID') {
+      expireAdminSession('Your admin session has ended.');
+      return null;
+    }
     if (!response.ok) {
       const detail = result.diagnostics
         ? ` [${result.code || 'ERROR'}${result.diagnostics.httpStatus ? ` · HTTP ${result.diagnostics.httpStatus}` : ''}${result.diagnostics.upstreamMessage ? ` · ${result.diagnostics.upstreamMessage}` : ''}]`
         : '';
       throw new Error((result.error || 'Unable to delete entry') + detail);
     }
-    // Reload the whole page so the deletion is reflected everywhere.
-    msg().innerHTML = `<div class="sf-success">Entry deleted${result.rowNumber ? ' (row ' + escapeHTML(result.rowNumber) + ')' : ''}. Reloading…</div>`;
-    reloading = true;
-    setTimeout(() => window.location.reload(), 900);
-  } catch (error) {
-    msg().innerHTML = `<div class="sf-error">${escapeHTML(error.message)}</div>`;
+    return result;
   } finally {
-    if (button) { button.disabled = false; button.textContent = 'Delete'; }
+    clearTimeout(timeout);
+  }
+}
+
+// Server-side sessions can end (cookie cleared, secret rotated, 30-day cap), so
+// an admin write may come back 401 even though sessionStorage still says
+// "logged in". Drop the flag and put the login form back up instead of leaving
+// the user stuck behind a dead session.
+// After an admin write the reload must skip the Netlify CDN copy (up to 60s
+// stale) so it hits the upstream — where the Apps Script cache was just
+// patched by the write and answers in a second or two, not 20-40s.
+// The ?fresh= marker is one-shot: loadData strips it after fetching.
+function reloadFresh() {
+  try {
+    const qs = new URLSearchParams(location.search);
+    qs.set('fresh', String(Date.now()));
+    history.replaceState(null, '', (qs.toString() ? '?' + qs.toString() : '') + location.hash);
+  } catch (e) {}
+  window.location.reload();
+}
+
+function expireAdminSession(reason) {
+  adminAuthenticated = false;
+  adminEditRow = null;
+  reloading = false;
+  try { sessionStorage.removeItem('ct_admin_session'); } catch (e) {}
+  renderAdmin();
+  const box = document.getElementById('admin-login-msg');
+  if (box && reason) box.innerHTML = `<div class="sf-error">${escapeHTML(reason)} Please sign in again.</div>`;
+}
+
+// Returns the first existing entry that exactly matches a create payload
+// (name, season, watch date and screentime), or null. Mirrors the server-side
+// duplicate guard so mistakes are caught before they reach the network.
+function findDuplicateEntry(payload) {
+  const name = String(payload.name || '').trim().toLowerCase();
+  if (!name) return null;
+  const season = String(payload.season || '').trim().toLowerCase();
+  const date = String(payload.watchDate || '').trim();
+  const screentime = Number(payload.screentime) || 0;
+  return rawData.find(item =>
+    String(item.name || '').trim().toLowerCase() === name &&
+    String(item.season || '').trim().toLowerCase() === season &&
+    String(item.watchDate || '').trim() === date &&
+    (Number(item.screentime) || 0) === screentime
+  ) || null;
+}
+
+// ── DUPLICATE CHECKER ────────────────────────────────────────────────────
+// Entries are "the same thing" when their title (case/space insensitive), kind
+// (movie vs show) and season agree. Within such a group, rows sharing the same
+// watch date are near-certain double-logs; rows on different dates are only
+// surfaced for review, because a genuine rewatch looks identical.
+let dupScanGroups = [];
+
+function dupNormTitle(value) {
+  return String(value || '').trim().toLowerCase().replace(/\s+/g, ' ');
+}
+
+function dupKind(value) {
+  return String(value || '').toLowerCase().includes('movie') ? 'movie' : 'show';
+}
+
+// 'S1', 's 01', 'Season 1' and '01' all describe season one.
+function dupSeasonKey(value) {
+  let text = String(value || '').trim().toLowerCase()
+    .replace(/^season\s*/, '')
+    .replace(/^series\s*/, '')
+    .replace(/^#\s*/, '');
+  if (/^s\s*\d/.test(text)) text = text.slice(1).trim();
+  const number = Number(text);
+  return text && Number.isInteger(number) ? String(number) : text;
+}
+
+// Canonical yyyy-mm-dd so differently formatted representations compare equal.
+function dupDateKey(value) {
+  return toISOFromDisplay(value) || String(value || '').trim().toLowerCase();
+}
+
+function dupFmtDate(value) {
+  const dt = parseLocalDate(value);
+  return dt ? dt.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : String(value || '—');
+}
+
+// Groups rows by name+kind+season, flags later rows that repeat an earlier
+// row's watch date as duplicate copies, and returns the suspicious groups
+// (those with more than one member), ordered by title.
+function scanDuplicates(rows) {
+  const byKey = new Map();
+  rows.forEach(item => {
+    const key = dupKind(item.type) + '|' + dupSeasonKey(item.season) + '|' + dupNormTitle(item.name);
+    if (!byKey.has(key)) byKey.set(key, { name: item.name, seasonLabel: item.season || '', rows: [] });
+    byKey.get(key).rows.push(item);
+  });
+  const groups = [];
+  byKey.forEach(group => {
+    if (group.rows.length < 2) return;
+    group.rows.sort((a, b) => a.row - b.row);
+    const firstRowOfDate = new Map();
+    group.rows.forEach(item => {
+      const dateKey = dupDateKey(item.watchDate);
+      item._dupCopy = Boolean(dateKey) && firstRowOfDate.has(dateKey);
+      item._dupOf = item._dupCopy ? firstRowOfDate.get(dateKey) : 0;
+      if (dateKey && !firstRowOfDate.has(dateKey)) firstRowOfDate.set(dateKey, item.row);
+    });
+    groups.push(group);
+  });
+  return groups.sort((a, b) => dupNormTitle(a.name).localeCompare(dupNormTitle(b.name)));
+}
+
+function renderDuplicateScan() {
+  const container = document.getElementById('admin-dup-results');
+  if (!container) return;
+  dupScanGroups = scanDuplicates(rawData);
+
+  const renderGroup = (group, index) => {
+    const hasCopies = group.rows.some(r => r._dupCopy);
+    const copyCount = hasCopies ? group.rows.filter(r => r._dupCopy).length : 0;
+    const season = group.seasonLabel ? ' · ' + escapeHTML(group.seasonLabel) : '';
+    const head = '<div class="dup-group-head"><span class="dup-group-title">' + escapeHTML(group.name) + season + '</span>' +
+      '<span class="dup-group-meta">' + escapeHTML(String(group.rows[0].type)) + ' · ' + group.rows.length + ' entries</span>' +
+      (copyCount ? '<button class="try-btn dup-group-btn" type="button" data-group="' + index + '">Remove ' + copyCount + ' duplicate cop' + (copyCount > 1 ? 'ies' : '') + '</button>' : '') +
+      '</div>';
+    const rowHTML = group.rows.map(row => {
+      const desc = dupFmtDate(row.watchDate) + ' · ' + (Number(row.screentime) || 0) + ' min · row ' + row.row;
+      const tag = row._dupCopy
+        ? '<span class="dup-tag copy">duplicate of row ' + row._dupOf + '</span>'
+        : (hasCopies ? '<span class="dup-tag keep">keep</span>' : '');
+      const del = row._dupCopy
+        ? '<button class="try-btn admin-del-btn dup-del-btn" type="button" data-row="' + row.row + '">Remove</button>'
+        : '';
+      return '<div class="dup-row">' + tag + '<span>' + escapeHTML(desc) + '</span>' + del + '</div>';
+    }).join('');
+    return '<div class="dup-group">' + head + rowHTML + '</div>';
+  };
+
+  // Split the groups by whether they contain flagged copies, keeping the real
+  // dupScanGroups index on each group's button for removeDupCopies.
+  const hard = [], review = [];
+  dupScanGroups.forEach((group, index) => {
+    const html = renderGroup(group, index);
+    (group.rows.some(r => r._dupCopy) ? hard : review).push(html);
+  });
+
+  if (!hard.length && !review.length) {
+    container.innerHTML = '<div class="dup-clear">✓ No duplicates found — ' + rawData.length + ' entries scanned.</div>';
+    return;
+  }
+
+  container.innerHTML =
+    (hard.length ? '<div class="dup-sub">' + hard.length + ' group' + (hard.length > 1 ? 's' : '') + ' with duplicate copies</div>' : '') +
+    hard.join('') +
+    (review.length ? '<div class="dup-sub">Review — same title logged on different dates (a rewatch, or a wrong date)</div>' : '') +
+    review.join('');
+}
+
+// Removes every flagged copy of one group, top row first so the row numbers of
+// the remaining copies stay valid, then reloads so the sheet is rescanned.
+async function removeDupCopies(groupIndex, button) {
+  const group = dupScanGroups[groupIndex];
+  if (!group) return;
+  const copies = group.rows.filter(row => row._dupCopy);
+  if (!copies.length) return;
+  const label = group.name + (group.seasonLabel ? ' · ' + group.seasonLabel : '');
+  if (!window.confirm('Remove ' + copies.length + ' duplicate cop' + (copies.length > 1 ? 'ies' : 'y') + ' of "' + label + '"? The first entry is kept — this cannot be undone.')) return;
+  if (button) { button.disabled = true; button.textContent = 'Removing…'; }
+  const msg = () => document.getElementById('admin-entry-msg');
+  try {
+    for (const copy of copies.slice().sort((a, b) => b.row - a.row)) {
+      const result = await requestAdminDelete(copy.row);
+      if (result === null) return; // session expired — the login screen is already up
+    }
+    msg().innerHTML = '<div class="sf-success">Removed ' + copies.length + ' duplicate cop' + (copies.length > 1 ? 'ies' : 'y') + ' of "' + escapeHTML(label) + '". Reloading…</div>';
+    reloading = true;
+    setTimeout(() => reloadFresh(), 900);
+  } catch (error) {
+    msg().innerHTML = '<div class="sf-error">' + escapeHTML(error.message) + ' — some copies may already be removed. Reload the page to rescan.</div>';
+  } finally {
+    if (button) { button.disabled = false; button.textContent = 'Remove duplicate copies'; }
   }
 }
 
@@ -537,28 +968,41 @@ async function submitAdminEntry(event) {
   if (isUpdate) {
     payload.action = 'update';
     payload.row = adminEditRow;
+  } else if (rawData.length) {
+    // Guard against the double-submit / retry pattern that previously created
+    // duplicate rows: an entry identical to one already in the sheet is
+    // almost certainly a mistake, so stop it before it reaches the network.
+    const dup = findDuplicateEntry(payload);
+    if (dup) {
+      msg.innerHTML = `<div class="sf-error">This exact entry already exists (row ${dup.row}${dup.watchDate ? ', watched ' + escapeHTML(dup.watchDate) : ''}). Nothing was submitted — find it in the search below and use <strong>Delete</strong> if it was added by mistake.</div>`;
+      return;
+    }
   }
   button.disabled = true; button.textContent = 'Saving…'; msg.textContent = '';
   try {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 30000);
+    const timeout = setTimeout(() => controller.abort(), 45000);
     const response = await fetch('/.netlify/functions/admin-entry', { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin', body: JSON.stringify(payload), signal: controller.signal });
     clearTimeout(timeout);
     const result = await response.json().catch(() => ({}));
+    if (response.status === 401 && result.code === 'SESSION_INVALID') {
+      expireAdminSession('Your admin session has ended.');
+      return;
+    }
     if (!response.ok) {
       const detail = result.diagnostics
         ? ` [${result.code || 'ERROR'}${result.diagnostics.httpStatus ? ` · HTTP ${result.diagnostics.httpStatus}` : ''}${result.diagnostics.upstreamMessage ? ` · ${result.diagnostics.upstreamMessage}` : ''}]`
         : '';
       throw new Error((result.error || 'Unable to save entry') + detail);
     }
-    const savedLocation = result.sheetName && result.rowNumber
-      ? ` Saved to ${escapeHTML(result.sheetName)}, row ${escapeHTML(result.rowNumber)}.`
-      : '';
     // Leave edit mode, then reload the whole page so the entry shows up everywhere.
     adminEditRow = null;
-    document.getElementById('admin-entry-msg').innerHTML = `<div class="sf-success">Entry ${isUpdate ? 'updated' : 'added'} successfully.${savedLocation} Reloading…</div>`;
+    const where = result.rowNumber ? ` (row ${escapeHTML(String(result.rowNumber))})` : '';
+    document.getElementById('admin-entry-msg').innerHTML = result.duplicate
+      ? `<div class="sf-success">That entry was already saved${where} — nothing was added again. Reloading…</div>`
+      : `<div class="sf-success">Entry ${isUpdate ? 'updated' : 'added'} successfully${where}. Reloading…</div>`;
     reloading = true;
-    setTimeout(() => window.location.reload(), 900);
+    setTimeout(() => reloadFresh(), 900);
   } catch (error) {
     msg.innerHTML = `<div class="sf-error">${escapeHTML(error.message)}</div>`;
   } finally { if (!reloading) { button.disabled = false; button.textContent = adminEditRow !== null ? 'Update Entry' : 'Add to Watchlist'; } }
@@ -590,8 +1034,10 @@ function renderReadme() {
   const usedItems = key => countBy(rawData, key).filter(x => String(x[0] || '').toLowerCase() !== 'unknown' && String(x[0] || '').trim() !== '');
   const platList = usedItems('platform'); const leastPlat = platList[platList.length - 1] || ['', 0];
   const genreList = usedItems('genre'); const leastGenre = genreList[genreList.length - 1] || ['', 0];
-  let goalHrs = 0, goalYear = ''; try { goalHrs = parseFloat(localStorage.getItem('ct-goal') || '0') || 0; goalYear = String(localStorage.getItem('ct-goal-year') || ''); } catch (e) {}
-  const goalLocked = goalHrs > 0 && goalYear === String(cy);
+  // Shared yearly goal: stored server-side so every device sees the same
+  // target and lock state (set once per year, unlocks on 1 January).
+  let goalHrs = Number(goalState.hrs) || 0;
+  const goalLocked = goalHrs > 0 && String(goalState.year || '') === String(cy);
   if (!(goalHrs > 0)) goalHrs = Math.round(prevST / 60) || 1;
   const goalPct = Math.min(100, (cyrST / (goalHrs * 60)) * 100).toFixed(0);
 
@@ -619,9 +1065,19 @@ function renderReadme() {
   const deepFranchise = Object.entries(deep).sort((a, b) => b[1] - a[1])[0] || ['', 0];
   const deepCount = rawData.filter(r => String(r.name || '').trim().toLowerCase() === deepFranchise[0]).length;
 
-  const elapsed = latestMo ? (monthIdx[latestMo] + 1) : 0;
+  // Months elapsed drives the pace/projection line. If the latest entry is
+  // dated in the future of the current year, don't let it count the year as
+  // complete — cap at the real current month in that case.
+  const latestMoIdx = latestMo ? monthIdx[latestMo] : -1;
+  const calNow = new Date();
+  const elapsed = (cy === calNow.getFullYear() && latestMoIdx > calNow.getMonth())
+    ? calNow.getMonth() + 1
+    : (latestMoIdx >= 0 ? latestMoIdx + 1 : 0);
   const projectedHrs = elapsed ? Math.round((cyrST / 60) / elapsed * 12) : Math.round(cyrST / 60);
   const paceDiff = Math.round((cyrST / 60) - (goalHrs / 12) * elapsed);
+  const paceNote = goalError
+    ? '⚠️ ' + goalError
+    : (paceDiff >= 0 ? 'On track' : 'Behind') + ' by ' + Math.abs(paceDiff) + ' hrs · on pace for ' + projectedHrs + ' hrs/yr (last year ' + fmtHrs(prevST) + ').';
   const cyTopGenre = countBy(cyrData, 'genre')[0] || ['—', 0];
   const cyTopPlat = countBy(cyrData, 'platform')[0] || ['—', 0];
   const cyBestMo = Object.entries(countByMonth(cyrData)).sort((a, b) => b[1] - a[1])[0] || ['—', 0];
@@ -639,15 +1095,13 @@ function renderReadme() {
     var clean = String(s).trim();
     var pre = clean.match(/^(\d{1,2}\s+[A-Za-z]{3})\s+\d{4}$/);
     if (pre) return pre[1];
-    var dt = new Date(clean);
-    if (!isNaN(dt.getTime())) {
-      dt.setDate(dt.getDate() + 1);
-      return dt.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' });
-    }
-    return '';
+    var dt = parseLocalDate(clean);
+    return dt ? dt.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' }) : '';
   };
+  // "Recently watched" means actually watched — future-dated entries are
+  // planned, so they don't appear here (they still show in Data/Timeline).
   const recent = rawData
-    .filter(r => r.watchDate)
+    .filter(r => r.watchDate && watchDateTimestamp(r.watchDate) <= Date.now())
     .sort((a, b) => new Date(b.watchDate) - new Date(a.watchDate))
     .slice(0, 6);
   const RW_ICONS = ['🎬','📽️','🎭','🍿','📺','🎞️','🎥','🎦','🌟','✨','🎪','🎨'];
@@ -767,7 +1221,7 @@ function renderReadme() {
             <input id="goal-input" class="sf-input" type="number" min="1" placeholder="Target hrs" value="${goalHrs}" ${goalLocked ? 'disabled' : ''}>
             <button class="try-btn" id="goal-set" type="button" style="width:auto;padding:8px 12px;min-height:0" ${goalLocked ? 'disabled' : ''}>${goalLocked ? 'Locked 🔒' : 'Set'}</button>
           </div>
-          <div class="goal-note">${paceDiff >= 0 ? 'On track' : 'Behind'} by ${Math.abs(paceDiff)} hrs · on pace for ${projectedHrs} hrs/yr (last year ${fmtHrs(prevST)}).</div>
+          <div class="goal-note">${paceNote}</div>
           ${goalLocked ? `<div class="goal-note goal-lock-note">🔒 Locked for ${cy} — unlocks to set a new target on 1 Jan.</div>` : ''}
         </div>
         <div class="note-card">
@@ -780,13 +1234,26 @@ function renderReadme() {
 
   const goalSet = document.getElementById('goal-set');
   if (goalSet) {
-    goalSet.addEventListener('click', () => {
+    goalSet.addEventListener('click', async () => {
       const input = document.getElementById('goal-input');
-      const v = parseFloat(input ? input.value : '0') || 0;
-      try {
-        localStorage.setItem('ct-goal', v ? String(v) : '0');
-        localStorage.setItem('ct-goal-year', String(cy));
-      } catch (e) {}
+      const v = Math.max(0, parseFloat(input ? input.value : '') || 0);
+      if (input) input.disabled = true;
+      goalSet.disabled = true;
+      goalSet.textContent = 'Saving…';
+      const saved = await setSharedGoal(v, String(cy));
+      if (saved) {
+        goalState = saved;
+        goalError = '';
+      } else {
+        // Server save unavailable (backend not redeployed yet / offline): keep
+        // the card working on this device and say so instead of pretending.
+        try {
+          localStorage.setItem('ct-goal', v ? String(v) : '0');
+          localStorage.setItem('ct-goal-year', String(cy));
+        } catch (e) {}
+        goalState = { hrs: v, year: v ? String(cy) : '' };
+        goalError = 'Saved on this device only — syncing is unavailable right now.';
+      }
       renderReadme();
     });
   }
@@ -1239,12 +1706,8 @@ function updateDataTable() {
     if (!s) return '—';
     var clean = String(s).trim();
     if (/^\d{1,2}\s+[A-Za-z]{3}\s+\d{4}$/.test(clean)) return clean;
-    var dt = new Date(clean);
-    if (!isNaN(dt.getTime())) {
-      dt.setDate(dt.getDate() + 1);
-      return dt.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
-    }
-    return clean;
+    var dt = parseLocalDate(clean);
+    return dt ? dt.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : clean;
   };
 
   // Build each row with pure string concatenation — no template literals
@@ -1312,9 +1775,8 @@ function updateDataTable() {
 
 // ── TIMELINE ──────────────────────────────────────────────────────────────
 function shortDate(value) {
-  const iso = toISOFromDisplay(value);
-  const d = iso ? new Date(iso) : new Date(value);
-  return isNaN(d.getTime()) ? '' : d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' });
+  const d = parseLocalDate(value);
+  return d ? d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' }) : '';
 }
 
 function renderTimeline() {
@@ -1637,6 +2099,8 @@ function renderSubmit() {
 }
 
 function renderSubmitSidebar() {
+  const box = document.getElementById('submit-sidebar-content');
+  if (!box) return; // user navigated away before the suggestions loaded
   const topGenre = (() => {
     const m = {};
     suggData.forEach(r => { if (r.Genre) m[r.Genre] = (m[r.Genre] || 0) + 1; });
@@ -1736,4 +2200,4 @@ async function submitSuggestion() {
 bindNavigation();
 initTheme();
 window.addEventListener('hashchange', () => navigateTo(window.location.hash.slice(1) || 'readme', false));
-loadData();
+bootData();
