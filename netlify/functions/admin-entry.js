@@ -1,4 +1,5 @@
 const crypto = require('crypto');
+const sheets = require('./lib/sheets');
 
 const json = (statusCode, body, headers = {}) => ({
   statusCode,
@@ -59,6 +60,50 @@ function validSession(event) {
   } catch { return false; }
 }
 
+// Direct Google Sheets API path (see lib/sheets.js) — used once the
+// GOOGLE_SERVICE_ACCOUNT_JSON + SPREADSHEET_ID env vars exist. Same envelope
+// as the Apps Script path below, so the frontend can't tell the difference.
+async function handleDirect(body, action, rowNumber) {
+  try {
+    if (action === 'delete') {
+      if (!Number.isInteger(rowNumber)) return json(400, { error: 'A valid row number is required' });
+      await sheets.deleteRowNumber('Data', rowNumber);
+      return json(200, { ok: true, saved: false, deleted: true, duplicate: false, sheetName: 'Data', rowNumber, entry: null });
+    }
+    const entry = {
+      name: clean(body.name, 160),
+      season: clean(body.season, 20),
+      type: clean(body.type, 30),
+      genre: clean(body.genre, 80),
+      platform: clean(body.platform, 80),
+      episodes: Number.isFinite(Number(body.episodes)) ? Math.max(0, Math.min(9999, Number(body.episodes))) : 0,
+      screentime: Number.isFinite(Number(body.screentime)) ? Math.max(0, Math.min(100000, Number(body.screentime))) : 0,
+      watchDate: clean(body.watchDate, 40)
+    };
+    if (!entry.name || !['Movie', 'Series/Show'].includes(entry.type)) {
+      return json(400, { error: 'Name and a valid type are required' });
+    }
+    const isUpdate = action === 'update';
+    if (isUpdate && !Number.isInteger(rowNumber)) return json(400, { error: 'A valid row number is required' });
+    const { rows } = await sheets.readSheet('Data');
+    if (isUpdate) {
+      await sheets.updateEntryRow('Data', rowNumber, entry);
+    } else {
+      // Mirror the old Apps Script guard: an exact duplicate (name, season,
+      // watch date, screentime) is reported instead of written a second time.
+      const existing = sheets.findDuplicateRow(rows, entry);
+      if (existing) {
+        return json(200, { ok: true, saved: true, duplicate: true, sheetName: 'Data', rowNumber: existing, entry: { name: entry.name, type: entry.type, season: entry.season } });
+      }
+      rowNumber = await sheets.appendEntryRow('Data', entry);
+    }
+    return json(200, { ok: true, saved: true, deleted: false, duplicate: false, sheetName: 'Data', rowNumber, entry: { name: entry.name, type: entry.type, season: entry.season } });
+  } catch (error) {
+    console.error('Sheets API write failed:', error);
+    return json(502, { error: error.message || 'Unable to save entry', code: 'SHEETS_API_ERROR', diagnostics: { message: error.message } });
+  }
+}
+
 exports.handler = async event => {
   if (event.httpMethod !== 'POST') return json(405, { error: 'Method not allowed' });
   if (!validSession(event)) return json(401, { error: 'Admin session required', code: 'SESSION_INVALID' });
@@ -70,6 +115,10 @@ exports.handler = async event => {
   // Script dispatches on the action, and update/delete also carry a row number.
   const action = body.action === 'delete' ? 'delete' : (body.action === 'update' ? 'update' : 'create');
   const rowNumber = Number(body.row);
+
+  // Direct mode: once Google creds are configured, writes go straight to the
+  // Sheets API and this function never touches Apps Script again.
+  if (sheets.sheetsEnabled()) return handleDirect(body, action, rowNumber);
 
   const scriptUrl = String(process.env.SCRIPT_URL || '').trim();
   const scriptSecret = String(process.env.SCRIPT_WRITE_SECRET || '').trim();
