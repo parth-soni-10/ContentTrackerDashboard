@@ -17,7 +17,23 @@ It reads **live from a Google Sheet**, so whenever I log a new title it shows up
 
 ## How it works
 
-My watchlist lives in a **Google Sheet** — one row per title, with its type, dates, ratings, and more. A lightweight **Google Apps Script** serves that data, and the dashboard reads it live. No database, no subscription, no sign-up.
+The watchlist lives in a **Google Sheet** — one row per title, with its type, dates, ratings, and more. **Netlify functions** talk to that sheet directly through the **Google Sheets API**, authenticated as a service account — no Apps Script in the middle, nothing to redeploy by hand. Edit the sheet (or the admin panel) and the change shows up on the site automatically.
+
+## Setup (one-time)
+
+The site reaches the spreadsheet through two environment variables on Netlify:
+
+- `SPREADSHEET_ID` — the long string between `/d/` and `/edit` in the spreadsheet's URL
+- `GOOGLE_SERVICE_ACCOUNT_JSON` — the entire contents of a Google service-account key file (the whole JSON blob, braces included)
+
+Creating the service account takes about ten minutes, once:
+
+1. In the **Google Cloud Console**, create a project and enable the **Google Sheets API**.
+2. Create a **service account** under APIs & Services → Credentials, then add a JSON key and download it.
+3. In the spreadsheet, click **Share** and add the service account's email address as an **Editor**.
+4. In **Netlify** → Site settings → Environment variables, add the two variables above, then redeploy (or just push).
+
+That is the whole setup. After it's done the code talks to the sheet directly — **no Apps Script is used, so nothing ever needs a manual redeploy again** (the old Apps Script deployment, if present, can be deleted: spreadsheet → Extensions → Apps Script → Deploy → Manage deployments → ⋮ → Delete).
 
 ## Run it locally
 
@@ -31,7 +47,7 @@ The live data comes from the sheet, so it needs an internet connection.
 
 ## Built with
 
-Plain **HTML / CSS / JavaScript**, the **Google Sheets API** via **Apps Script**, and **Chart.js** for the charts. Hosted on **Netlify**.
+Plain **HTML / CSS / JavaScript**, **Netlify functions** talking straight to the **Google Sheets API** (service-account auth), and **Chart.js** for the charts. Hosted on **Netlify**.
 
 ---
 
