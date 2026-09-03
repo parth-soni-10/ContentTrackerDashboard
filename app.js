@@ -97,7 +97,12 @@ function normalizePlatform(value) {
 function initTheme() {
   const btn = document.getElementById('theme-toggle');
   if (!btn) return;
-  const apply = () => { btn.textContent = document.documentElement.classList.contains('dark') ? '☀️' : '🌙'; };
+  const apply = () => {
+    const dark = document.documentElement.classList.contains('dark');
+    btn.setAttribute('aria-pressed', String(dark));
+    btn.querySelector('.icon-sun')?.classList.toggle('show', dark);
+    btn.querySelector('.icon-moon')?.classList.toggle('show', !dark);
+  };
   btn.addEventListener('click', () => {
     const dark = document.documentElement.classList.toggle('dark');
     try { localStorage.setItem('ct-theme', dark ? 'dark' : 'light'); } catch (e) {}
@@ -114,7 +119,7 @@ function posterFallback(el) { if (el) { el.classList.add('placeholder'); el.text
 // Read-only star display for a 0-10 rating (IMDb/TMDB scale), plus the number.
 function ratingStars(value) {
   const v = Number(value);
-  if (!isFinite(v) || v <= 0) return '<span class="rt-na">—</span>';
+  if (!isFinite(v) || v <= 0) return '<span class="rt-na">-</span>';
   const filled = Math.max(0, Math.min(5, Math.round(v / 2)));
   let stars = '';
   for (let i = 1; i <= 5; i++) stars += '<span class="rt-star' + (i <= filled ? ' on' : '') + '">★</span>';
@@ -229,7 +234,7 @@ function bindNavigation() {
 function renderDataError() {
   document.getElementById('app').innerHTML =
     '<div class="page-header"><div class="ph-left"><h1>Couldn\'t load your watchlist</h1><p>The Google Sheet service didn\'t respond.</p></div></div>' +
-    '<div class="note-card" style="max-width:640px;margin:0 0 16px"><div class="note-icon" aria-hidden="true">⚠️</div><div class="note-body"><strong>The data service is unreachable right now.</strong> This is usually temporary — give it a moment and try again.</div></div>' +
+    '<div class="note-card" style="max-width:640px;margin:0 0 16px"><div class="note-icon" aria-hidden="true">⚠️</div><div class="note-body"><strong>The data service is unreachable right now.</strong> This is usually temporary. Give it a moment and try again.</div></div>' +
     '<div class="submit-page"><button class="try-btn" id="data-retry" type="button" style="min-height:44px;padding:0 24px">↻ Retry</button></div>';
   const btn = document.getElementById('data-retry');
   if (btn) {
@@ -636,7 +641,7 @@ function startAdminEdit(rowNumber) {
   document.getElementById('admin-date').value = toISOFromDisplay(item.watchDate);
 
   document.getElementById('admin-form-heading').textContent = 'Edit Entry';
-  document.getElementById('admin-form-sub').textContent = 'Update row ' + rowNumber + ' — changes are saved to the Google Sheet.';
+  document.getElementById('admin-form-sub').textContent = 'Update row ' + rowNumber + '. Changes are saved to the Google Sheet.';
   document.getElementById('admin-edit-row').textContent = rowNumber;
   document.getElementById('admin-edit-bar').hidden = false;
   document.getElementById('admin-submit-btn').textContent = 'Update Entry';
@@ -776,7 +781,7 @@ function dupDateKey(value) {
 
 function dupFmtDate(value) {
   const dt = parseLocalDate(value);
-  return dt ? dt.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : String(value || '—');
+  return dt ? dt.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : String(value || '-');
 }
 
 // Groups rows by name+kind+season, flags later rows that repeat an earlier
@@ -840,14 +845,14 @@ function renderDuplicateScan() {
   });
 
   if (!hard.length && !review.length) {
-    container.innerHTML = '<div class="dup-clear">✓ No duplicates found — ' + rawData.length + ' entries scanned.</div>';
+    container.innerHTML = '<div class="dup-clear">✓ No duplicates found. ' + rawData.length + ' entries scanned.</div>';
     return;
   }
 
   container.innerHTML =
     (hard.length ? '<div class="dup-sub">' + hard.length + ' group' + (hard.length > 1 ? 's' : '') + ' with duplicate copies</div>' : '') +
     hard.join('') +
-    (review.length ? '<div class="dup-sub">Review — same title logged on different dates (a rewatch, or a wrong date)</div>' : '') +
+    (review.length ? '<div class="dup-sub">Review: same title logged on different dates (a rewatch, or a wrong date)</div>' : '') +
     review.join('');
 }
 
@@ -859,7 +864,7 @@ async function removeDupCopies(groupIndex, button) {
   const copies = group.rows.filter(row => row._dupCopy);
   if (!copies.length) return;
   const label = group.name + (group.seasonLabel ? ' · ' + group.seasonLabel : '');
-  if (!window.confirm('Remove ' + copies.length + ' duplicate cop' + (copies.length > 1 ? 'ies' : 'y') + ' of "' + label + '"? The first entry is kept — this cannot be undone.')) return;
+  if (!window.confirm('Remove ' + copies.length + ' duplicate cop' + (copies.length > 1 ? 'ies' : 'y') + ' of "' + label + '"? The first entry is kept. This cannot be undone.')) return;
   if (button) { button.disabled = true; button.textContent = 'Removing…'; }
   const msg = () => document.getElementById('admin-entry-msg');
   try {
@@ -871,7 +876,7 @@ async function removeDupCopies(groupIndex, button) {
     reloading = true;
     setTimeout(() => reloadFresh(), 900);
   } catch (error) {
-    msg().innerHTML = '<div class="sf-error">' + escapeHTML(error.message) + ' — some copies may already be removed. Reload the page to rescan.</div>';
+    msg().innerHTML = '<div class="sf-error">' + escapeHTML(error.message) + '. Some copies may already be removed. Reload the page to rescan.</div>';
   } finally {
     if (button) { button.disabled = false; button.textContent = 'Remove duplicate copies'; }
   }
@@ -974,7 +979,7 @@ async function submitAdminEntry(event) {
     // almost certainly a mistake, so stop it before it reaches the network.
     const dup = findDuplicateEntry(payload);
     if (dup) {
-      msg.innerHTML = `<div class="sf-error">This exact entry already exists (row ${dup.row}${dup.watchDate ? ', watched ' + escapeHTML(dup.watchDate) : ''}). Nothing was submitted — find it in the search below and use <strong>Delete</strong> if it was added by mistake.</div>`;
+      msg.innerHTML = `<div class="sf-error">This exact entry already exists (row ${dup.row}${dup.watchDate ? ', watched ' + escapeHTML(dup.watchDate) : ''}). Nothing was submitted. Find it in the search below and use <strong>Delete</strong> if it was added by mistake.</div>`;
       return;
     }
   }
@@ -999,7 +1004,7 @@ async function submitAdminEntry(event) {
     adminEditRow = null;
     const where = result.rowNumber ? ` (row ${escapeHTML(String(result.rowNumber))})` : '';
     document.getElementById('admin-entry-msg').innerHTML = result.duplicate
-      ? `<div class="sf-success">That entry was already saved${where} — nothing was added again. Reloading…</div>`
+      ? `<div class="sf-success">That entry was already saved${where}. Nothing was added again. Reloading…</div>`
       : `<div class="sf-success">Entry ${isUpdate ? 'updated' : 'added'} successfully${where}. Reloading…</div>`;
     reloading = true;
     setTimeout(() => reloadFresh(), 900);
