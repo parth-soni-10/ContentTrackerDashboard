@@ -162,10 +162,6 @@ function parseDateParts(value) {
   return null;
 }
 
-function dateSerial(date) {
-  return Math.round((Date.UTC(date.y, date.mo - 1, date.d) - Date.UTC(1899, 11, 30)) / 86400000);
-}
-
 function formatDateLikeSheet(date) {
   return `${date.d}-${MONTH_SHORT[date.mo - 1]}-${String(date.y).slice(2)}`;
 }
