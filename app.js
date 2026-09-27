@@ -552,7 +552,7 @@ function renderAdminForm() {
     <div class="submit-form-card">
       <h2 class="submit-heading">Edit Existing Entry</h2>
       <p class="submit-sub">Search the tracker, then click <strong>Edit</strong> to load a title into the form above.</p>
-      <input id="admin-edit-search" class="sf-input" type="text" placeholder="Search by title…" autocomplete="off">
+      <input id="admin-edit-search" class="sf-input" type="text" aria-label="Search by title" placeholder="Search by title…" autocomplete="off">
       <div id="admin-edit-results" class="admin-edit-results" aria-live="polite"></div>
     </div>
     <div class="submit-form-card">
@@ -1169,10 +1169,10 @@ function renderReadme() {
       <div>
         <div class="cards-label">What's inside</div>
         <div class="cards-grid">
-          <div class="info-card" onclick="navigateTo('current')"><div class="ic-icon">📅</div><div class="ic-body"><h3>Current Year Numbers</h3><p>This year's stats — shows vs movies, platform breakdown, genre split and monthly viewing trend.</p></div></div>
-          <div class="info-card" onclick="navigateTo('alltime')"><div class="ic-icon">📈</div><div class="ic-body"><h3>All Time Numbers</h3><p>Complete viewing history across all years. Filter by year, platform or genre to spot long-term patterns.</p></div></div>
-          <div class="info-card" onclick="navigateTo('data')"><div class="ic-icon">🗂️</div><div class="ic-body"><h3>Data</h3><p>Full list of every title logged. Search by name, filter by type, genre, platform or month.</p></div></div>
-          <div class="info-card" onclick="navigateTo('suggestions')"><div class="ic-icon gold">🎲</div><div class="ic-body"><h3>Suggestion Generator</h3><p>Can't decide what to watch? Spin for a random pick filtered by genre or type.</p></div></div>
+          <a class="info-card" href="#current"><div class="ic-icon">📅</div><div class="ic-body"><h2>Current Year Numbers</h2><p>This year's stats — shows vs movies, platform breakdown, genre split and monthly viewing trend.</p></div></a>
+          <a class="info-card" href="#alltime"><div class="ic-icon">📈</div><div class="ic-body"><h2>All Time Numbers</h2><p>Complete viewing history across all years. Filter by year, platform or genre to spot long-term patterns.</p></div></a>
+          <a class="info-card" href="#data"><div class="ic-icon">🗂️</div><div class="ic-body"><h2>Data</h2><p>Full list of every title logged. Search by name, filter by type, genre, platform or month.</p></div></a>
+          <a class="info-card" href="#suggestions"><div class="ic-icon gold">🎲</div><div class="ic-body"><h2>Suggestion Generator</h2><p>Can't decide what to watch? Spin for a random pick filtered by genre or type.</p></div></a>
         </div>
         <div class="rw-section">
           <div class="cards-label">Recently Watched</div>
@@ -1223,7 +1223,7 @@ function renderReadme() {
           <div class="goal-top"><div class="fact-title" style="margin-bottom:0">Watch Goal · ${cy}</div><div class="goal-count"><strong>${fmtHrs(cyrST)}</strong> / ${goalHrs} hrs</div></div>
           <div class="goal-track"><div class="goal-fill" style="width:${goalPct}%"></div></div>
           <div class="goal-edit">
-            <input id="goal-input" class="sf-input" type="number" min="1" placeholder="Target hrs" value="${goalHrs}" ${goalLocked ? 'disabled' : ''}>
+            <input id="goal-input" class="sf-input" type="number" aria-label="Target hours" inputmode="numeric" min="1" placeholder="Target hrs" value="${goalHrs}" ${goalLocked ? 'disabled' : ''}>
             <button class="try-btn" id="goal-set" type="button" style="width:auto;padding:8px 12px;min-height:0" ${goalLocked ? 'disabled' : ''}>${goalLocked ? 'Locked 🔒' : 'Set'}</button>
           </div>
           <div class="goal-note">${paceNote}</div>
@@ -1305,7 +1305,7 @@ function optTags(items, allLabel) {
 // Build a page-header filter control (label + select).
 function phFilter(label, id, onchange, optionsHtml) {
   const span = 'font-size:12px;line-height:16px;text-transform:uppercase;letter-spacing:.8px;color:rgba(255,255,255,.5);margin-right:6px;font-weight:500';
-  return `<div class="ph-filter"><span style="${span}">${label}</span><select id="${id}" onchange="${onchange}">${optionsHtml}</select></div>`;
+  return `<div class="ph-filter"><label for="${id}" style="${span}">${label}</label><select id="${id}" onchange="${onchange}">${optionsHtml}</select></div>`;
 }
 
 function renderCurrentYear() {
@@ -1569,15 +1569,15 @@ function renderData() {
       </div>
     </div>
     <div class="data-filters">
-      <div class="df-select"><select id="df-year"  onchange="datFilters.year=this.value;dataPageNum=1;updateDataTable()">${yearOpts}</select></div>
-      <div class="df-select"><select id="df-plat"  onchange="datFilters.platform=this.value;dataPageNum=1;updateDataTable()">${platOpts}</select></div>
-      <div class="df-select"><select id="df-type"  onchange="datFilters.type=this.value;dataPageNum=1;updateDataTable()">${typeOpts}</select></div>
-      <div class="df-select"><select id="df-genre" onchange="datFilters.genre=this.value;dataPageNum=1;updateDataTable()">${genreOpts}</select></div>
-      <div class="df-select"><select id="df-month" onchange="datFilters.month=this.value;dataPageNum=1;updateDataTable()">${monthOpts}</select></div>
+      <div class="df-select"><select id="df-year" aria-label="Year"  onchange="datFilters.year=this.value;dataPageNum=1;updateDataTable()">${yearOpts}</select></div>
+      <div class="df-select"><select id="df-plat" aria-label="Platform"  onchange="datFilters.platform=this.value;dataPageNum=1;updateDataTable()">${platOpts}</select></div>
+      <div class="df-select"><select id="df-type" aria-label="Type"  onchange="datFilters.type=this.value;dataPageNum=1;updateDataTable()">${typeOpts}</select></div>
+      <div class="df-select"><select id="df-genre" aria-label="Genre" onchange="datFilters.genre=this.value;dataPageNum=1;updateDataTable()">${genreOpts}</select></div>
+      <div class="df-select"><select id="df-month" aria-label="Month" onchange="datFilters.month=this.value;dataPageNum=1;updateDataTable()">${monthOpts}</select></div>
       <div class="df-divider"></div>
       <div class="df-search">
-        <svg width="13" height="13" viewBox="0 0 16 16" fill="none"><circle cx="6.5" cy="6.5" r="5" stroke="#7a9e8a" stroke-width="1.5"/><path d="M10.5 10.5L14 14" stroke="#7a9e8a" stroke-width="1.5" stroke-linecap="round"/></svg>
-        <input id="df-search" type="text" placeholder="Search by name…" oninput="datFilters.search=this.value;dataPageNum=1;updateDataTable()">
+        <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle cx="6.5" cy="6.5" r="5" stroke="#7a9e8a" stroke-width="1.5"/><path d="M10.5 10.5L14 14" stroke="#7a9e8a" stroke-width="1.5" stroke-linecap="round"/></svg>
+        <input id="df-search" type="text" aria-label="Search by name" placeholder="Search by name…" oninput="datFilters.search=this.value;dataPageNum=1;updateDataTable()">
       </div>
     </div>
     <div class="data-main">
@@ -1737,7 +1737,7 @@ function updateDataTable() {
     rowsHTML += '<tr>';
     rowsHTML += '<td class="row-num">' + (start + i + 1) + '</td>';
     rowsHTML += '<td style="font-weight:500"><span class="name-link" data-tk="' + ratingKey + '">' +
-      '<img class="poster" alt="" loading="lazy" data-poster="' + posterTitle + '">' +
+      '<img class="poster" alt="" loading="lazy" width="42" height="60" data-poster="' + posterTitle + '">' +
       '<span class="title-cell">' + name + '<span style="color:var(--text-soft);font-weight:400">' + seasonStr + '</span></span>' +
       '</span></td>';
     rowsHTML += '<td><span class="' + pillClass + '">' + typeLabel + '</span></td>';
@@ -1838,13 +1838,13 @@ function renderSuggestions() {
       <div class="sugg-inner">
         <div class="sugg-filters">
           <div>
-            <div class="sf-label">Genre</div>
+            <label class="sf-label" for="sg-genre">Genre</label>
             <select id="sg-genre" class="sf-select" onchange="updateSuggCount()">
               <option value="all">All Genres</option>${genreOptions}
             </select>
           </div>
           <div>
-            <div class="sf-label">Type</div>
+            <label class="sf-label" for="sg-type">Type</label>
             <select id="sg-type" class="sf-select" onchange="updateSuggCount()">
               <option value="all">All Types</option>${typeOptions}
             </select>
@@ -1928,10 +1928,13 @@ function showSuggResult(item, animate = true) {
   if (animate) ne.addEventListener('animationend', () => ne.classList.remove('spinning'), { once: true });
   ne.textContent = item.name;
   const typeEmoji = item.type === 'Movie' ? '🎬' : '📺';
+  // Every one of these comes from the sheet, so it is escaped on the way into
+  // the DOM: a genre or type cell is free text that anyone with sheet access
+  // (or the admin form) can write.
   me.innerHTML = `
-    <span class="rm-badge plat">${pe(item.platform)} ${item.platform}</span>
-    <span class="rm-badge type">${typeEmoji} ${item.type}</span>
-    <span class="rm-badge genre">🏷️ ${item.genre}</span>`;
+    <span class="rm-badge plat">${pe(item.platform)} ${escapeHTML(item.platform)}</span>
+    <span class="rm-badge type">${typeEmoji} ${escapeHTML(item.type)}</span>
+    <span class="rm-badge genre">🏷️ ${escapeHTML(item.genre)}</span>`;
   burstConfetti();
 }
 
@@ -2043,20 +2046,20 @@ function renderSubmit() {
           <p class="submit-sub">Fill in the details below — all submissions are saved directly to the Google Sheet.</p>
 
           <div class="sf-field">
-            <label class="sf-lbl">Title <span class="sf-req">*</span></label>
+            <label class="sf-lbl" for="sf-title">Title <span class="sf-req">*</span></label>
             <input id="sf-title" type="text" class="sf-input" placeholder="e.g. Severance, Dune: Part Two…">
           </div>
 
           <div class="sf-row">
             <div class="sf-field">
-              <label class="sf-lbl">Type <span class="sf-req">*</span></label>
+              <label class="sf-lbl" for="sf-type">Type <span class="sf-req">*</span></label>
               <select id="sf-type" class="sf-input">
                 <option value="Show">Show</option>
                 <option value="Movie">Movie</option>
               </select>
             </div>
             <div class="sf-field">
-              <label class="sf-lbl">Genre</label>
+              <label class="sf-lbl" for="sf-genre">Genre</label>
               <select id="sf-genre" class="sf-input">
                 <option value="">— Select —</option>
                 ${genreOpts}
@@ -2065,7 +2068,7 @@ function renderSubmit() {
           </div>
 
           <div class="sf-field">
-            <label class="sf-lbl">Platform</label>
+            <label class="sf-lbl" for="sf-plat">Platform</label>
             <select id="sf-plat" class="sf-input">
               <option value="">— Select —</option>
               ${platOpts}
@@ -2074,7 +2077,7 @@ function renderSubmit() {
           </div>
 
           <div class="sf-field">
-            <label class="sf-lbl">Why watch it?</label>
+            <label class="sf-lbl" for="sf-why">Why watch it?</label>
             <textarea id="sf-why" class="sf-input sf-ta" placeholder="What makes this worth watching? Keep it short…" maxlength="200" oninput="document.getElementById('sf-chars').textContent=this.value.length"></textarea>
             <div class="sf-chars"><span id="sf-chars">0</span> / 200</div>
           </div>
