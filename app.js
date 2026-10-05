@@ -24,6 +24,7 @@ let dataSort = { key: 'watchDate', dir: 'desc' };
 let dataFiltered = [];
 let dataPageNum = 1;
 const PER_PAGE = 25;
+let dataPerPage = PER_PAGE;   // user-selectable rows per page (25 / 50 / 100 / all)
 let suggLastPick = null;
 let adminAuthenticated = false;
 let adminEditRow = null;
@@ -94,6 +95,40 @@ function normalizePlatform(value) {
   return PLATFORM_MAP[text.toLowerCase()] || text;
 }
 
+// Display-level cleanup only — the Sheet keeps whatever was typed. These maps
+// merge near-duplicate labels that had crept into the Genre/Type columns (e.g.
+// "Sci-Fi" vs "Science Fiction" vs "Sci-Fi & Fantasy"), so the filters, the
+// genre treemap and "top genre" finally agree with each other.
+const GENRE_MAP = {
+  'science fiction':   'Sci-Fi',
+  'sci-fi & fantasy':  'Sci-Fi',
+  'sitcom':            'Comedy',
+  'action/horror':     'Action'
+};
+function normalizeGenre(value) {
+  const text = String(value || '').trim();
+  if (!text) return '';
+  return GENRE_MAP[text.toLowerCase()] || text;
+}
+const TYPE_MAP = { 'series/show': 'Series', 'series': 'Series', 'show': 'Series', 'shows': 'Series', 'movie': 'Movie' };
+function normalizeType(value) {
+  const text = String(value || '').trim();
+  if (!text) return '';
+  return TYPE_MAP[text.toLowerCase()] || text;
+}
+// A few titles were typed entirely in lowercase ("nobod", "challengers"), which
+// reads as a typo in a list of Film names. Capitalise those for display without
+// rewriting the Sheet; anything already carrying a capital is left untouched.
+const SMALL_WORDS = new Set(['a','an','and','as','at','but','by','for','from','in','nor','of','on','or','the','to','vs','with']);
+function smartCaseName(value) {
+  const text = String(value || '');
+  if (!text || /[A-Z]/.test(text)) return text;
+  return text.split(' ').map((word, i) => {
+    if (!word || (i > 0 && SMALL_WORDS.has(word))) return word;
+    return word.replace(/[a-z]/, ch => ch.toUpperCase());
+  }).join(' ');
+}
+
 function initTheme() {
   const btn = document.getElementById('theme-toggle');
   if (!btn) return;
@@ -118,8 +153,37 @@ function initTheme() {
 
 // Poster + public rating + IMDb id — cached per title to avoid hammering TMDB/OMDB.
 // Versioned so a schema change (adding imdbId) triggers one refetch pass, then caches forever.
-const MEDIA_CACHE = (() => { try { const c = JSON.parse(localStorage.getItem('ct-media-cache') || '{}'); return c && c.v === 2 ? c.items : {}; } catch (e) { return {}; } })();
-function saveMediaCache() { try { localStorage.setItem('ct-media-cache', JSON.stringify({ v: 2, items: MEDIA_CACHE })); } catch (e) {} }
+// `miss` remembers titles the lookup came back without a rating for: those
+// never get an imdbId, so without it every re-render re-queried TMDB *and*
+// OMDb for the same handful of titles.
+const MEDIA_STORE = (() => {
+  try {
+    const c = JSON.parse(localStorage.getItem('ct-media-cache') || '{}');
+    if (c && c.v === 2) return { v: 2, items: c.items || {}, miss: c.miss || {} };
+  } catch (e) { /* unreadable or corrupt storage — start from empty */ }
+  return { v: 2, items: {}, miss: {} };
+})();
+const MEDIA_CACHE = MEDIA_STORE.items;
+const MEDIA_MISS  = MEDIA_STORE.miss;
+function saveMediaCache() { try { localStorage.setItem('ct-media-cache', JSON.stringify({ v: 2, items: MEDIA_CACHE, miss: MEDIA_MISS })); } catch (e) {} }
+// Give a title the media API couldn't find a week off before trying again; the
+// key is the sheet spelling, so fixing a typo looks the new spelling up at once.
+const MEDIA_MISS_TTL = 7 * 24 * 60 * 60 * 1000;
+function mediaMissed(key) {
+  const at = MEDIA_MISS[key];
+  if (!at) return false;
+  if (Date.now() - at > MEDIA_MISS_TTL) { delete MEDIA_MISS[key]; saveMediaCache(); return false; }
+  return true;
+}
+function noteMedia(key, meta) {
+  // The API's answer for a given title is stable, so a successful lookup that
+  // brought no rating means there is nothing more to learn — remember that
+  // (poster or not) instead of asking again on every re-render. A later success
+  // clears the marker, so a title that gains a rating stops being a miss.
+  const rated = Number(meta.rating) > 0;
+  if (!rated && !MEDIA_MISS[key]) { MEDIA_MISS[key] = Date.now(); saveMediaCache(); }
+  else if (rated && MEDIA_MISS[key]) { delete MEDIA_MISS[key]; saveMediaCache(); }
+}
 // A broken or missing image can't render the 🎬 itself, so swap it for a span
 // that keeps the same box and classes but can.
 function posterFallback(el) {
@@ -176,13 +240,21 @@ function applyImdbLink(key, imdbId) {
 // page (e.g. Daredevil S1-S3), so a season set costs one API call, not three.
 const mediaLookups = {};
 async function lookupMedia(key, title) {
-  if (MEDIA_CACHE[key] && MEDIA_CACHE[key].imdbId) return MEDIA_CACHE[key];
+  const cached = MEDIA_CACHE[key];
+  if (cached && cached.imdbId) return cached;
+  // No rating came back for this title before: reuse whatever is cached (the
+  // poster, if any) instead of spending another TMDB + OMDb call on it. Without
+  // this, every re-render of the table fired those lookups off again.
+  if (mediaMissed(key)) return cached || { poster: null, rating: null, imdbId: null };
   if (!mediaLookups[key]) {
     mediaLookups[key] = (async () => {
       try {
         const res = await fetch('/.netlify/functions/tmdb-search?' + new URLSearchParams({ title, light: '1' }), { credentials: 'same-origin' });
+        // A 200 with nothing in it is a real "no such title"; a failed request
+        // isn't, so only the former is remembered as a miss.
         const data = res.ok ? (await res.json()) : null;
         const meta = { poster: data?.poster || null, rating: Number(data?.rating) || null, imdbId: data?.imdbId || null };
+        if (res.ok) noteMedia(key, meta);
         MEDIA_CACHE[key] = meta;
         saveMediaCache();
         return meta;
@@ -230,6 +302,8 @@ async function loadVisiblePosters(container) {
     }
   };
   await Promise.all(Array.from({ length: Math.min(CONCURRENCY, imgs.length) }, () => worker()));
+  // Those lookups also bring ratings in, so keep the coverage readout honest.
+  updateRatingStatus();
 }
 
 function bindNavigation() {
@@ -328,10 +402,10 @@ const SNAP_KEY = 'ct-data-snap-v1';
 
 function mapRows(json) {
   return (json || []).map(r => ({
-    name:       r.Name       || r.name       || '',
+    name:       smartCaseName(r.Name || r.name || ''),
     season:     r.Season     || r.season     || '',
-    type:       r.Type       || r.type       || '',
-    genre:      r['Details/Genre'] || r.Genre || r.genre || '',
+    type:       normalizeType(r.Type || r.type || ''),
+    genre:      normalizeGenre(r['Details/Genre'] || r.Genre || r.genre || ''),
     platform:   normalizePlatform(r.Platform   || r.platform   || ''),
     episodes:   parseInt(r['Episode Count'] || r['Episode Count '] || r.episodes || 0) || 0,
     screentime: parseFloat(r.Screentime || r.screentime || 0) || 0,
@@ -419,7 +493,9 @@ async function loadData(skipRerender) {
       try {
         const qs = new URLSearchParams(location.search);
         qs.delete('fresh');
-        history.replaceState(null, '', (qs.toString() ? '?' + qs.toString() : '') + location.hash);
+        // location.pathname keeps the marker from lingering when it was the
+        // only query param (a fragment-only URL keeps the old query string).
+        history.replaceState(null, '', location.pathname + (qs.toString() ? '?' + qs.toString() : '') + location.hash);
       } catch (e) {}
     }
     if (!res.ok) throw new Error('Data service returned ' + res.status);
@@ -739,7 +815,7 @@ function reloadFresh() {
   try {
     const qs = new URLSearchParams(location.search);
     qs.set('fresh', String(Date.now()));
-    history.replaceState(null, '', (qs.toString() ? '?' + qs.toString() : '') + location.hash);
+    history.replaceState(null, '', location.pathname + (qs.toString() ? '?' + qs.toString() : '') + location.hash);
   } catch (e) {}
   window.location.reload();
 }
@@ -1046,8 +1122,6 @@ function renderReadme() {
   const cyrST    = cyrData.reduce((s, r) => s + r.screentime, 0);
   const prevData = rawData.filter(r => r.year === cy - 1);
   const prevST   = prevData.reduce((s, r) => s + r.screentime, 0);
-  const diff     = cyrST - prevST;
-  const diffPct  = prevST ? ((diff / prevST) * 100).toFixed(1) : null;
   const topPlat  = countBy(rawData, 'platform')[0];
   const topGenre = countBy(rawData, 'genre')[0];
   const bestMo   = Object.entries(countByMonth(rawData)).sort((a, b) => b[1] - a[1])[0];
@@ -1080,23 +1154,40 @@ function renderReadme() {
 
   const cyMonths = [...new Set(cyrData.map(r => r.month).filter(Boolean))].sort((a, b) => monthIdx[a] - monthIdx[b]);
   const latestMo = cyMonths[cyMonths.length - 1] || '';
+  // Which month is "now" (used by the like-for-like comparisons below).
+  const latestMoIdx = latestMo ? monthIdx[latestMo] : -1;
+  const calNow = new Date();
   let yoyMonth = null;
   if (latestMo) {
     const cur = cyrData.filter(r => r.month === latestMo);
-    const pr = prevData.filter(r => r.month === latestMo);
-    yoyMonth = { name: latestMo, curTitles: cur.length, prevTitles: pr.length, curST: cur.reduce((s, r) => s + r.screentime, 0), prevST: pr.reduce((s, r) => s + r.screentime, 0) };
+    let pr = prevData.filter(r => r.month === latestMo);
+    // A month that is still running can't be compared with a finished one: cap
+    // last year's side at the same day of the month (e.g. 1–5 Oct vs 1–5 Oct).
+    const monthRunning = cy === calNow.getFullYear() && latestMoIdx === calNow.getMonth();
+    if (monthRunning) {
+      const cutoff = calNow.getDate();
+      pr = pr.filter(r => { const dt = parseLocalDate(r.watchDate); return !!dt && dt.getDate() <= cutoff; });
+    }
+    yoyMonth = { name: latestMo, monthRunning: monthRunning, curTitles: cur.length, prevTitles: pr.length, curST: cur.reduce((s, r) => s + r.screentime, 0), prevST: pr.reduce((s, r) => s + r.screentime, 0) };
   }
 
+  // Group seasons/sequels by title, but remember the first spelling seen so the
+  // insight can show "The Blacklist" instead of the lowercased grouping key.
   const deep = {};
-  rawData.forEach(r => { const b = String(r.name || '').trim().toLowerCase(); if (b) deep[b] = (deep[b] || 0) + (r.screentime || 0); });
-  const deepFranchise = Object.entries(deep).sort((a, b) => b[1] - a[1])[0] || ['', 0];
-  const deepCount = rawData.filter(r => String(r.name || '').trim().toLowerCase() === deepFranchise[0]).length;
+  rawData.forEach(r => {
+    const label = String(r.name || '').trim();
+    const key   = label.toLowerCase();
+    if (!key) return;
+    if (!deep[key]) deep[key] = { hrs: 0, label: label };
+    deep[key].hrs += r.screentime || 0;
+  });
+  const deepTop = Object.entries(deep).sort((a, b) => b[1].hrs - a[1].hrs)[0] || ['', { hrs: 0, label: '' }];
+  const deepFranchise = [deepTop[1].label, deepTop[1].hrs];
+  const deepCount = rawData.filter(r => String(r.name || '').trim().toLowerCase() === deepTop[0]).length;
 
   // Months elapsed drives the pace/projection line. If the latest entry is
   // dated in the future of the current year, don't let it count the year as
   // complete — cap at the real current month in that case.
-  const latestMoIdx = latestMo ? monthIdx[latestMo] : -1;
-  const calNow = new Date();
   const elapsed = (cy === calNow.getFullYear() && latestMoIdx > calNow.getMonth())
     ? calNow.getMonth() + 1
     : (latestMoIdx >= 0 ? latestMoIdx + 1 : 0);
@@ -1105,6 +1196,23 @@ function renderReadme() {
   const paceNote = goalError
     ? '⚠️ ' + goalError
     : (paceDiff >= 0 ? 'On track' : 'Behind') + ' by ' + Math.abs(paceDiff) + ' hrs · on pace for ' + projectedHrs + ' hrs/yr (last year ' + fmtHrs(prevST) + ').';
+  // ── Year over year, like for like ───────────────────────────────────────
+  // Comparing year-to-date against a whole previous year (9 months vs 12) made
+  // the change look several points worse than it is, so both sides use the same
+  // months, and a month that is still running is left out of both. The goal and
+  // pace lines above still use the full-year figure and say so.
+  const partialMo = (cy === calNow.getFullYear() && latestMoIdx === calNow.getMonth()) ? latestMo : '';
+  const yoyMonths = cyMonths.filter(m => m !== partialMo);
+  const yoySet    = new Set(yoyMonths);
+  const yoyCurST  = cyrData.filter(r => yoySet.has(r.month)).reduce((s, r) => s + r.screentime, 0);
+  const yoyPrevST = prevData.filter(r => yoySet.has(r.month)).reduce((s, r) => s + r.screentime, 0);
+  const diff      = yoyCurST - yoyPrevST;
+  const diffPct   = yoyPrevST ? ((diff / yoyPrevST) * 100).toFixed(1) : null;
+  const yoyRange  = yoyMonths.length
+    ? (yoyMonths.length === 1 ? yoyMonths[0] : yoyMonths[0].slice(0, 3) + '–' + yoyMonths[yoyMonths.length - 1].slice(0, 3))
+    : '';
+  const yoyTip    = 'Same months compared with ' + (cy - 1) + ' (' + yoyRange + '), not year-to-date against a full year';
+
   const cyTopGenre = countBy(cyrData, 'genre')[0] || ['—', 0];
   const cyTopPlat = countBy(cyrData, 'platform')[0] || ['—', 0];
   const cyBestMo = Object.entries(countByMonth(cyrData)).sort((a, b) => b[1] - a[1])[0] || ['—', 0];
@@ -1113,7 +1221,7 @@ function renderReadme() {
   const diffBadgeClass = diff >= 0 ? 'badge badge-green' : 'badge badge-red';
   const diffSign       = diff >= 0 ? '+' : '';
   const diffBadge      = diffPct === null ? '—' : diffSign + diffPct + '%';
-  const yoyBarWidth    = prevST ? Math.min((cyrST / prevST) * 100, 100) : 50;
+  const yoyBarWidth    = yoyPrevST ? Math.min((yoyCurST / yoyPrevST) * 100, 100) : 50;
 
   // Recent watches — last 6 titles with a valid watch date, sorted newest first
   const fmtShortDate = s => {
@@ -1185,7 +1293,7 @@ function renderReadme() {
         <div class="readme-stat">
           <div class="rs-label">All Time Screentime</div>
           <div class="rs-val">${fmtK(Math.round(allST / 60))}<small> hrs</small></div>
-          <div class="rs-sub">${fmtK(Math.round(allST))} mins logged</div>
+          <div class="rs-sub">≈ ${Math.round(allST / 60 / 24).toLocaleString('en-GB')} days of screen time</div>
         </div>
         <div class="readme-stat">
           <div class="rs-label">This Year (${cy})</div>
@@ -1206,7 +1314,7 @@ function renderReadme() {
           <a class="info-card slim" href="#current" title="This year's stats — shows vs movies, platform breakdown, genre split and monthly viewing trend."><div class="ic-icon">📅</div><div class="ic-body"><h2>Current Year</h2></div></a>
           <a class="info-card slim" href="#alltime" title="Complete viewing history across all years. Filter by year, platform or genre to spot long-term patterns."><div class="ic-icon">📈</div><div class="ic-body"><h2>All Time</h2></div></a>
           <a class="info-card slim" href="#data" title="Full list of every title logged. Search by name, filter by type, genre, platform or month."><div class="ic-icon">🗂️</div><div class="ic-body"><h2>Data</h2></div></a>
-          <a class="info-card slim" href="#suggestions" title="Can't decide what to watch? Spin for a random pick filtered by genre or type."><div class="ic-icon gold">🎲</div><div class="ic-body"><h2>Ideas</h2></div></a>
+          <a class="info-card slim" href="#suggestions" title="Can't decide what to watch? Spin for a random pick from your own list, filtered by genre or type."><div class="ic-icon gold">🎲</div><div class="ic-body"><h2>Random Pick</h2></div></a>
         </div>
         <div class="rw-section">
           <div class="cards-label">Recently Watched</div>
@@ -1232,26 +1340,27 @@ function renderReadme() {
           <div class="fact-row"><div class="fact-l"><span>🎭</span> Top Genre</div><div class="fact-r">${topGenre ? escapeHTML(topGenre[0]) : '—'}</div></div>
           <div class="fact-row"><div class="fact-l"><span>📆</span> Best Month</div><div class="fact-r">${bestMo ? bestMo[0] : '—'}</div></div>
           <div class="fact-row"><div class="fact-l"><span>📊</span> Avg / Month</div><div class="fact-r">${avgMo} titles</div></div>
-          <div class="fact-row"><div class="fact-l"><span>📺</span> Shows</div><div class="fact-r">${total ? (shows / total * 100).toFixed(1) : 0}%</div></div>
-          <div class="fact-row"><div class="fact-l"><span>🎬</span> Movies</div><div class="fact-r">${total ? (movies / total * 100).toFixed(1) : 0}%</div></div>
+          <div class="fact-row"><div class="fact-l"><span>📺</span> Shows (of titles)</div><div class="fact-r">${total ? (shows / total * 100).toFixed(1) : 0}%</div></div>
+          <div class="fact-row"><div class="fact-l"><span>🎬</span> Movies (of titles)</div><div class="fact-r">${total ? (movies / total * 100).toFixed(1) : 0}%</div></div>
         </div>
         <div class="fact-card">
           <div class="fact-title">Insights</div>
           <div class="ins-row"><div class="ins-l">🔥 Longest binge streak</div><div class="ins-r">${streak} day${streak === 1 ? '' : 's'}</div></div>
           <div class="ins-row"><div class="ins-l">🕒 Screen-time split</div><div class="ins-r">${stShowsPct}%<span class="ins-sub"> shows / ${100 - stShowsPct}% movies</span></div></div>
-          <div class="ins-row"><div class="ins-l">📺 Biggest binges</div><div class="ins-r">${escapeHTML(String(bingePlat[0]))}<span class="ins-sub"> ${fmtHrs(bingePlat[1])}/title</span></div></div>
-          ${yoyMonth ? `<div class="ins-row"><div class="ins-l">🔄 ${escapeHTML(yoyMonth.name)} ytd</div><div class="ins-r">${yoyMonth.curTitles}<span class="ins-sub"> vs ${yoyMonth.prevTitles} last yr</span></div></div>` : ''}
+          <div class="ins-row"><div class="ins-l">📺 Most time per title</div><div class="ins-r">${escapeHTML(String(bingePlat[0]))}<span class="ins-sub"> ${fmtHrs(bingePlat[1])}/title</span></div></div>
+          ${yoyMonth ? `<div class="ins-row"><div class="ins-l">🔄 ${escapeHTML(yoyMonth.name)}${yoyMonth.monthRunning ? ' so far' : ' ytd'}</div><div class="ins-r">${yoyMonth.curTitles}<span class="ins-sub"> vs ${yoyMonth.prevTitles} ${yoyMonth.monthRunning ? 'by this day last yr' : 'last yr'}</span></div></div>` : ''}
           <div class="ins-row"><div class="ins-l">🎬 Deepest franchise</div><div class="ins-r">${escapeHTML(String(deepFranchise[0]) || '—')}<span class="ins-sub"> ${fmtHrs(deepFranchise[1])} · ${deepCount}×</span></div></div>
           <div class="ins-cta">👀 Try next — you've watched little ${escapeHTML(String(leastGenre[0]) || 'any genre')}: something on ${escapeHTML(String(leastPlat[0]) || 'any platform')}?</div>
         </div>
         <div class="yoy-card">
           <div class="yoy-title">Year on Year</div>
           <div class="yoy-row">
-            <div><div class="yoy-label">This year so far</div><div class="yoy-val">${fmtHrs(cyrST)}</div></div>
-            <span class="${diffBadgeClass}" title="Screentime difference versus the same period last year">${diffBadge}</span>
+            <div><div class="yoy-label">${yoyRange || 'This year'} so far</div><div class="yoy-val">${fmtHrs(yoyCurST)}</div></div>
+            <span class="${diffBadgeClass}" title="${yoyTip}">${diffBadge}</span>
           </div>
           <div class="yoy-bar-track"><div class="yoy-bar-fill" style="width:${yoyBarWidth}%"></div></div>
-          <div class="yoy-note">vs ${fmtHrs(prevST)} full year ${cy - 1}</div>
+          <div class="yoy-note">vs ${fmtHrs(yoyPrevST)} in the same months of ${cy - 1}</div>
+          <div class="yoy-note">full ${cy - 1}: ${fmtHrs(prevST)}</div>
         </div>
         <div class="fact-card">
           <div class="goal-top"><div class="fact-title" style="margin-bottom:0">Watch Goal · ${cy}</div><div class="goal-count"><strong>${fmtHrs(cyrST)}</strong> / ${goalHrs} hrs</div></div>
@@ -1380,14 +1489,32 @@ function updateCurrentYear() {
   const cy   = maxYear();
   const base = rawData.filter(r => r.year === cy);
   const d    = filterData(base, curFilters);
-  const prev = rawData.filter(r => r.year === cy - 1);
+  // Last year gets the same filters, otherwise a platform/genre filter would
+  // compare a filtered year against an unfiltered one.
+  const prev = filterData(rawData.filter(r => r.year === cy - 1), curFilters);
 
   const shows  = d.filter(r => r.type.includes('Show') || r.type.includes('Series')).length;
   const movies = d.filter(r => r.type.toLowerCase() === 'movie').length;
   const st     = d.reduce((s, r) => s + r.screentime, 0);
-  const prevST = prev.reduce((s, r) => s + r.screentime, 0);
-  const diff   = st - prevST;
-  const diffPct = prevST ? ((diff / prevST) * 100).toFixed(1) : null;
+  const prevFullST = prev.reduce((s, r) => s + r.screentime, 0);
+
+  // Difference YoY is like-for-like: the same months on both sides, skipping a
+  // month that is still running (year-to-date against a whole previous year
+  // made the drop look ~7 points worse than it is).
+  const calNowY      = new Date();
+  const cyMonthsAll  = [...new Set(base.map(r => r.month).filter(Boolean))].sort((a, b) => MONTHS.indexOf(a) - MONTHS.indexOf(b));
+  const lastMo       = cyMonthsAll[cyMonthsAll.length - 1] || '';
+  const runningMo    = (cy === calNowY.getFullYear() && lastMo && MONTHS.indexOf(lastMo) === calNowY.getMonth()) ? lastMo : '';
+  const yoyMonths    = cyMonthsAll.filter(m => m !== runningMo);
+  const yoySet       = new Set(yoyMonths);
+  const yoyCurST     = d.filter(r => yoySet.has(r.month)).reduce((s, r) => s + r.screentime, 0);
+  const yoyPrevST    = prev.filter(r => yoySet.has(r.month)).reduce((s, r) => s + r.screentime, 0);
+  const diff   = yoyCurST - yoyPrevST;
+  const diffPct = yoyPrevST ? ((diff / yoyPrevST) * 100).toFixed(1) : null;
+  const yoyRange = yoyMonths.length
+    ? (yoyMonths.length === 1 ? yoyMonths[0] : yoyMonths[0].slice(0, 3) + '–' + yoyMonths[yoyMonths.length - 1].slice(0, 3))
+    : '';
+  const yoyTip   = 'Same months compared with ' + (cy - 1) + ' (' + (yoyRange || 'no months yet') + '), not year-to-date against a full year. Full ' + (cy - 1) + ': ' + fmtHrs(prevFullST) + '.';
 
   const platCounts = countBy(d, 'platform').slice(0, 8);
   const genCounts  = countBy(d, 'genre').slice(0, 5);
@@ -1417,12 +1544,12 @@ function updateCurrentYear() {
       <div class="kpi-card a1">
         <div class="kpi-label">Shows This Year</div>
         <div class="kpi-val">${shows}</div>
-        <div class="kpi-sub"><span class="badge badge-green">${showsPct}%</span> of total · ${totalEpscy} eps</div>
+        <div class="kpi-sub"><span class="badge badge-green">${showsPct}%</span> of titles · ${totalEpscy} eps</div>
       </div>
       <div class="kpi-card a2">
         <div class="kpi-label">Movies This Year</div>
         <div class="kpi-val">${movies}</div>
-        <div class="kpi-sub"><span class="badge badge-gold">${moviesPct}%</span> of total</div>
+        <div class="kpi-sub"><span class="badge badge-gold">${moviesPct}%</span> of titles</div>
       </div>
       <div class="kpi-card a3">
         <div class="kpi-label">Screentime This Year</div>
@@ -1432,7 +1559,7 @@ function updateCurrentYear() {
       <div class="${diffCardClass}">
         <div class="kpi-label">Difference YoY</div>
         <div class="${diffValClass}">${diffSign}${diffHrs} <small>hrs</small></div>
-        <div class="kpi-sub"><span class="${diffBadgeClass}" title="Screentime difference versus the same period last year">${diffBadge}</span> vs last year</div>
+        <div class="kpi-sub"><span class="${diffBadgeClass}" title="${yoyTip}">${diffBadge}</span> vs ${escapeHTML(yoyRange || 'last year')} ${cy - 1}</div>
       </div>
     </div>
     <div class="charts-row">
@@ -1542,17 +1669,17 @@ function updateAllTime() {
       <div class="kpi-card accent-gold a2">
         <div class="kpi-label">Screentime All Time</div>
         <div class="kpi-val">${fmtK(Math.round(st / 60))}<small> hrs</small></div>
-        <div class="kpi-sub">${fmtK(Math.round(st))} minutes</div>
+        <div class="kpi-sub">≈ ${Math.round(st / 60 / 24).toLocaleString('en-GB')} days of screen time</div>
       </div>
       <div class="kpi-card a3">
         <div class="kpi-label">Shows (All Time)</div>
         <div class="kpi-val">${shows}</div>
-        <div class="kpi-sub"><span class="badge badge-green">${showsPct}%</span> of total · ${totalEpsat} eps</div>
+        <div class="kpi-sub"><span class="badge badge-green">${showsPct}%</span> of titles · ${totalEpsat} eps</div>
       </div>
       <div class="kpi-card a4">
         <div class="kpi-label">Movies (All Time)</div>
         <div class="kpi-val">${movies}</div>
-        <div class="kpi-sub"><span class="badge badge-gold">${moviesPct}%</span> of total</div>
+        <div class="kpi-sub"><span class="badge badge-gold">${moviesPct}%</span> of titles</div>
       </div>
     </div>
     <div class="charts-row">
@@ -1635,6 +1762,16 @@ function renderData() {
       <div class="data-header-row">
         <div class="data-count" id="dat-count"></div>
         <div class="data-tools">
+          <label class="tool-select" title="How many rows to show at once">Rows
+            <select id="data-per">
+              <option value="25">25</option>
+              <option value="50">50</option>
+              <option value="100">100</option>
+              <option value="9999">All</option>
+            </select>
+          </label>
+          <span class="rating-status" id="rat-status"></span>
+          <button class="tool-btn" id="rat-load" type="button" title="Fetch the public rating for every title still missing one, so sorting and the CSV export cover the whole list">⭐ Load all ratings</button>
           <button class="tool-btn" id="data-export" type="button" title="Download the filtered list as CSV">⬇ CSV</button>
           <button class="data-reset" id="data-reset" type="button">Reset filters</button>
         </div>
@@ -1655,12 +1792,27 @@ function renderData() {
   document.getElementById('dat-table').addEventListener('click', event => {
     const th = event.target.closest('th[data-sort]');
     if (!th) return;
-    const key = th.dataset.sort;
-    if (dataSort.key === key) dataSort.dir = dataSort.dir === 'asc' ? 'desc' : 'asc';
-    else dataSort = { key: key, dir: key === 'watchDate' ? 'desc' : 'asc' };
-    dataPageNum = 1;
-    updateDataTable();
+    sortDataBy(th.dataset.sort);
   });
+  // Same sort, from the keyboard (Enter / Space on a focused header cell).
+  document.getElementById('dat-table').addEventListener('keydown', event => {
+    if (event.key !== 'Enter' && event.key !== ' ' && event.key !== 'Spacebar') return;
+    const th = event.target.closest('th[data-sort]');
+    if (!th) return;
+    event.preventDefault();
+    sortDataBy(th.dataset.sort);
+  });
+  const perSel = document.getElementById('data-per');
+  if (perSel) {
+    perSel.value = String(dataPerPage);
+    perSel.addEventListener('change', () => {
+      dataPerPage = Math.max(1, parseInt(perSel.value, 10) || PER_PAGE);
+      dataPageNum = 1;
+      updateDataTable();
+    });
+  }
+  const ratingBtn = document.getElementById('rat-load');
+  if (ratingBtn) ratingBtn.addEventListener('click', loadAllRatings);
   applyDataFilters();
   updateDataTable();
 }
@@ -1671,10 +1823,25 @@ function dataVal(r, key) {
     case 'type':
     case 'genre':
     case 'platform': return r[key] || '';
+    // Missing numbers must read as EMPTY, not as the value 0: movies have no
+    // episode count and a cold cache has no rating, and compareData() only
+    // sinks empty values — sorting them as 0 dumped all 92 movies (or every
+    // unrated row) on top of an ascending sort.
     case 'episodes':
-    case 'screentime': return r[key] || 0;
-    case 'rating': return Number(r.rating) || 0;
-    case 'watchDate': return watchDateTimestamp(r.watchDate);
+    case 'screentime': {
+      const n = Number(r[key]);
+      return isFinite(n) && n > 0 ? n : '';
+    }
+    case 'rating': {
+      const n = Number(r.rating);
+      return isFinite(n) && n > 0 ? n : '';
+    }
+    // Same for dates the sheet never gave us a usable value for (the helper
+    // reports those as 0, which is otherwise the oldest possible timestamp).
+    case 'watchDate': {
+      const t = watchDateTimestamp(r.watchDate);
+      return t > 0 ? t : '';
+    }
     default: return r[key] == null ? '' : String(r[key]);
   }
 }
@@ -1690,14 +1857,34 @@ function compareData(a, b) {
   if (typeof va === 'number' && typeof vb === 'number') return (va - vb) * dir;
   return String(va).localeCompare(String(vb)) * dir;
 }
+// Sort state lives in one place so the header click and the keyboard handler
+// can't drift apart.
+function sortDataBy(key) {
+  if (dataSort.key === key) dataSort.dir = dataSort.dir === 'asc' ? 'desc' : 'asc';
+  else dataSort = { key: key, dir: key === 'watchDate' ? 'desc' : 'asc' };
+  dataPageNum = 1;
+  updateDataTable();
+  // Sorting re-renders the table, which throws the header element away and
+  // drops focus onto <body>. Put it back on the same column so a keyboard user
+  // keeps their place; a mouse user sees no ring, because :focus-visible skips
+  // programmatic focus that follows a pointer click. Both handlers come
+  // through here so the mouse and keyboard paths can't drift apart.
+  const again = document.querySelector('#dat-table th[data-sort="' + key + '"]');
+  if (again) again.focus();
+}
 function dataHeader(key, label) {
   const active = dataSort.key === key;
   const arrow = active ? (dataSort.dir === 'asc' ? ' ▲' : ' ▼') : '';
-  return '<th class="sortable" data-sort="' + key + '">' + label +
+  // title + aria-sort make the sorting discoverable, and tabindex keeps the
+  // headers reachable for keyboard and screen-reader users.
+  const state = active ? (dataSort.dir === 'asc' ? 'ascending' : 'descending') : 'none';
+  return '<th class="sortable" data-sort="' + key + '" tabindex="0" aria-sort="' + state + '" title="Sort by ' + label.toLowerCase() + '">' + label +
     (active ? '<span class="sort-arrow">' + arrow + '</span>' : '') + '</th>';
 }
 function buildDataCSV() {
-  const rows = dataFiltered.map(r => [r.name, r.type, r.genre, r.platform, r.episodes || '', r.screentime || '', r.month || '', r.year || '', r.watchDate || '', r.rating || '']);
+  // Ratings fall back to the device cache, so the export covers every row we
+  // already know a rating for — not just the ones on screen right now.
+  const rows = dataFiltered.map(r => [r.name, r.type, r.genre, r.platform, r.episodes || '', r.screentime || '', r.month || '', r.year || '', r.watchDate || '', r.rating || cachedRating(r.name) || '']);
   const esc = s => { s = String(s == null ? '' : s); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
   const head = ['Name','Type','Genre','Platform','Episodes','Screentime (mins)','Month','Year','Watch Date','Rating'].map(esc).join(',');
   return head + '\n' + rows.map(r => r.map(esc).join(',')).join('\n');
@@ -1725,7 +1912,10 @@ function syncDataURL() {
   ['year','platform','type','genre','month'].forEach(k => { if (datFilters[k] && datFilters[k] !== 'all') p.set(k, datFilters[k]); });
   if (datFilters.search) p.set('search', datFilters.search);
   const qs = p.toString();
-  try { history.replaceState(null, '', (qs ? '?' + qs : '') + '#data'); } catch (e) {}
+  // A fragment-only URL keeps the CURRENT query string, so a cleared filter
+  // stayed in the address bar and came straight back the next time the page
+  // read it (applyDataFilters runs on every render) — write the path out.
+  try { history.replaceState(null, '', location.pathname + (qs ? '?' + qs : '') + '#data'); } catch (e) {}
 }
 
 function updateDataTable() {
@@ -1743,10 +1933,10 @@ function updateDataTable() {
   if (el('dh-movies')) el('dh-movies').textContent = movies;
   if (el('dh-total'))  el('dh-total').textContent  = d.length;
 
-  const totalPages = Math.max(1, Math.ceil(d.length / PER_PAGE));
+  const totalPages = Math.max(1, Math.ceil(d.length / dataPerPage));
   if (dataPageNum > totalPages) dataPageNum = 1;
-  const start = (dataPageNum - 1) * PER_PAGE;
-  const end   = start + PER_PAGE;
+  const start = (dataPageNum - 1) * dataPerPage;
+  const end   = start + dataPerPage;
   const page  = d.slice(start, end);
 
   const countEl = el('dat-count');
@@ -1787,9 +1977,12 @@ function updateDataTable() {
     // (see applyImdbLink) — never a find page.
     rowsHTML += '<tr>';
     rowsHTML += '<td class="row-num">' + (start + i + 1) + '</td>';
+    // The Episodes column is dropped on phones to stop the table scrolling so
+    // far, so the count rides along under the title instead of disappearing.
+    var epsMobile  = (r.episodes && !isMovie) ? '<span class="meta-mobile">' + escapeHTML(r.episodes + ' eps') + '</span>' : '';
     rowsHTML += '<td style="font-weight:500"><span class="name-link" data-tk="' + ratingKey + '">' +
       '<img class="poster" alt="" loading="lazy" width="42" height="60" data-poster="' + posterTitle + '">' +
-      '<span class="title-cell">' + name + '<span style="color:var(--text-soft);font-weight:400">' + seasonStr + '</span></span>' +
+      '<span class="title-cell">' + name + '<span style="color:var(--text-soft);font-weight:400">' + seasonStr + '</span>' + epsMobile + '</span>' +
       '</span></td>';
     rowsHTML += '<td><span class="' + pillClass + '">' + typeLabel + '</span></td>';
     rowsHTML += '<td>' + genre + '</td>';
@@ -1822,11 +2015,81 @@ function updateDataTable() {
   var nextDisabled = dataPageNum >= totalPages ? 'disabled' : '';
 
   el('dat-pag').innerHTML =
-    '<div class="pag-info">Showing ' + (start + 1) + '–' + Math.min(end, d.length) + ' of ' + d.length + '</div>' +
+    '<div class="pag-info">Showing ' + (start + 1) + '–' + Math.min(end, d.length) + ' of ' + d.length +
+      '<span class="pag-page"> · page ' + dataPageNum + ' of ' + totalPages + '</span></div>' +
     '<div class="pag-btns">' +
       '<button class="pag-btn" onclick="dataPageNum--;updateDataTable()" ' + prevDisabled + '>← Prev</button>' +
       '<button class="pag-btn" onclick="dataPageNum++;updateDataTable()" ' + nextDisabled + '>Next →</button>' +
     '</div>';
+
+  updateRatingStatus();
+}
+
+// ── RATINGS ───────────────────────────────────────────────────────────────
+// Public ratings arrive with the on-demand TMDB/OMDb lookup and live in the
+// per-device cache, so a fresh browser only knows the rows it has actually
+// rendered — which made the Rating column look half-broken and quietly thinned
+// the CSV export. This shows honest coverage and fills the rest in one pass.
+function cachedRating(name) {
+  const cached = MEDIA_CACHE[String(name || '').trim().toLowerCase()];
+  return (cached && Number(cached.rating) > 0) ? Number(cached.rating) : 0;
+}
+function ratingCoverage() {
+  let have = 0, dead = 0;
+  rawData.forEach(r => {
+    if (cachedRating(r.name) > 0 || Number(r.rating) > 0) have++;
+    // A title the media API has already answered for, without a rating, can't
+    // gain one by asking again — count it as unavailable rather than letting it
+    // hold the coverage short forever.
+    else if (mediaMissed(String(r.name || '').trim().toLowerCase())) dead++;
+  });
+  return { have: have, dead: dead, total: rawData.length, missing: rawData.length - have - dead };
+}
+let ratingScan = { running: false, done: 0, total: 0 };
+function updateRatingStatus() {
+  const status = document.getElementById('rat-status');
+  const btn    = document.getElementById('rat-load');
+  if (!status && !btn) return;
+  const cov = ratingCoverage();
+  if (status) {
+    status.textContent = ratingScan.running
+      ? '⏳ Ratings ' + cov.have + '/' + cov.total + ' · fetching ' + ratingScan.done + '/' + ratingScan.total
+      : 'Ratings ' + cov.have + '/' + cov.total + (cov.dead ? ' · ' + cov.dead + ' unavailable' : '');
+    status.classList.toggle('complete', cov.missing === 0);
+  }
+  if (btn) {
+    btn.disabled = ratingScan.running || cov.missing === 0;
+    btn.textContent = ratingScan.running
+      ? '⏳ Loading…'
+      : (cov.missing === 0 ? '⭐ Ratings complete' : '⭐ Load all ratings (' + cov.missing + ')');
+  }
+}
+async function loadAllRatings() {
+  if (ratingScan.running) return;
+  // Titles already known to be unfindable are skipped rather than re-fetched.
+  const pending = rawData.filter(r => cachedRating(r.name) <= 0 && !(Number(r.rating) > 0) &&
+    !mediaMissed(String(r.name || '').trim().toLowerCase()));
+  if (!pending.length) { updateRatingStatus(); return; }
+  ratingScan = { running: true, done: 0, total: pending.length };
+  updateRatingStatus();
+  const CONCURRENCY = 3;   // gentle on the media APIs
+  let next = 0;
+  const worker = async () => {
+    while (next < pending.length) {
+      const row = pending[next++];
+      try {
+        const meta = await lookupMedia(String(row.name || '').trim().toLowerCase(), row.name);
+        if (meta && Number(meta.rating) > 0) row.rating = Number(meta.rating);
+      } catch (e) { /* nothing to do — coverage just stays short */ }
+      ratingScan.done++;
+      if (ratingScan.done % 4 === 0 || ratingScan.done === ratingScan.total) updateRatingStatus();
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(CONCURRENCY, pending.length) }, () => worker()));
+  ratingScan.running = false;
+  updateRatingStatus();
+  // Repaint the visible page so the new stars show up straight away.
+  if (document.getElementById('dat-table')) updateDataTable();
 }
 
 // ── TIMELINE ──────────────────────────────────────────────────────────────
@@ -1846,26 +2109,68 @@ function renderTimeline() {
     if (ya !== yb) return Number(yb || 0) - Number(ya || 0);
     return MONTHS.indexOf(mb || '') - MONTHS.indexOf(ma || '');
   });
+  // 370 entries in one scroll was the worst page to actually use: long months
+  // now start collapsed, the month headers stick, and a jump bar skips years.
+  const COLLAPSE_AFTER = 5;
+  const yearSeen = {};
   const sections = keys.map(k => {
     const [year, month] = k.split('|');
-    const items = byKey[k].map(r => {
+    const items = byKey[k].map((r, i) => {
       const season = (r.season ? ' <span class="tl-season">S' + escapeHTML(r.season) + '</span>' : '');
       const type = r.type && r.type.toLowerCase() === 'movie' ? 'Movie' : 'Show';
-      return '<div class="tl-item">' +
+      const extra = i >= COLLAPSE_AFTER ? ' tl-extra' : '';
+      return '<div class="tl-item' + extra + '">' +
         '<span class="tl-name">' + escapeHTML(r.name) + season + '</span>' +
         '<span class="tl-meta">' + escapeHTML(type) + ' · ' + escapeHTML(r.genre || '') + '</span>' +
         '<span class="tl-date">' + escapeHTML(shortDate(r.watchDate)) + '</span>' +
       '</div>';
     }).join('');
-    return '<div class="tl-section">' +
+    // The first section of each year carries the anchor the jump bar targets.
+    const anchor = yearSeen[year] ? '' : ' id="tl-y' + escapeHTML(String(year)) + '"';
+    yearSeen[year] = true;
+    const hiddenCount = byKey[k].length - COLLAPSE_AFTER;
+    const moreBtn = hiddenCount > 0
+      ? '<button class="tl-more" type="button" aria-expanded="false">Show ' + hiddenCount + ' more</button>'
+      : '';
+    return '<div class="tl-section"' + anchor + '>' +
       '<div class="tl-head">' + escapeHTML(month || 'N/A') + ' ' + escapeHTML(String(year)) + '<span class="tl-count">' + byKey[k].length + '</span></div>' +
-      '<div class="tl-list">' + items + '</div>' +
+      '<div class="tl-list">' + items + moreBtn + '</div>' +
     '</div>';
   }).join('');
+
+  const years = [...new Set(keys.map(k => k.split('|')[0]))];
+  const jumpBar = years.length > 1
+    ? '<div class="tl-jump"><span class="tl-jump-label">Jump to</span>' +
+        years.map(y => '<button class="tl-jump-btn" type="button" data-year="' + escapeHTML(String(y)) + '">' + escapeHTML(String(y)) + '</button>').join('') +
+      '</div>'
+    : '';
+
   document.getElementById('app').innerHTML =
     '<div class="page-header"><div class="ph-left"><h1>Timeline</h1><p>Your watch history, month by month</p></div></div>' +
-    '<div class="timeline">' + sections + '</div>' +
+    '<div class="timeline">' + jumpBar + sections + '</div>' +
     '<div class="footer">Data loaded live from Google Sheets · ' + rawData.length + ' titles</div>';
+
+  bindTimelineNav();
+}
+
+// Jump bar + month expanders for the timeline.
+function bindTimelineNav() {
+  document.querySelectorAll('.tl-jump-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const target = document.getElementById('tl-y' + btn.dataset.year);
+      if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  });
+  document.querySelectorAll('.tl-more').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const section = btn.closest('.tl-section');
+      if (!section) return;
+      const open = section.classList.toggle('expanded');
+      btn.setAttribute('aria-expanded', String(open));
+      const hidden = section.querySelectorAll('.tl-extra').length;
+      btn.textContent = open ? 'Show less' : 'Show ' + hidden + ' more';
+    });
+  });
 }
 
 // ── SUGGESTIONS ───────────────────────────────────────────────────────────
@@ -1884,7 +2189,7 @@ function renderSuggestions() {
   const typeOptions  = types.map(t  => `<option value="${escapeHTML(t)}">${escapeHTML(t)}</option>`).join('');
 
   document.getElementById('app').innerHTML = `
-    <div class="page-header"><div class="ph-left"><h1>Suggestion Generator</h1><p>Spin for a random pick from your watchlist</p></div></div>
+    <div class="page-header"><div class="ph-left"><h1>What Should I Watch?</h1><p>Spin for a random pick from your own watchlist — the Submit tab is where you recommend a <em>new</em> title</p></div></div>
     <div class="sugg-page">
       <div class="sugg-inner">
         <div class="sugg-filters">
@@ -1945,6 +2250,7 @@ function suggSpin(e) {
     if (ne) { ne.textContent = t.name; ne.className = 'result-name'; }
     const me = document.getElementById('sugg-meta');
     if (me) me.innerHTML = '';
+    setSuggPoster(null);
     if (++f >= 7) {
       clearInterval(iv);
       const pick = pickFrom(pool, suggLastPick?.name);
@@ -1973,11 +2279,13 @@ function showSuggResult(item, animate = true) {
     ne.className = 'result-name empty';
     ne.innerHTML = '<span aria-hidden="true">😕</span>No matches. Try different filters';
     me.innerHTML = '';
+    setSuggPoster(null);
     return;
   }
   ne.className = animate ? 'result-name spinning' : 'result-name';
   if (animate) ne.addEventListener('animationend', () => ne.classList.remove('spinning'), { once: true });
   ne.textContent = item.name;
+  setSuggPoster(item);
   const typeEmoji = item.type === 'Movie' ? '🎬' : '📺';
   // Every one of these comes from the sheet, so it is escaped on the way into
   // the DOM: a genre or type cell is free text that anyone with sheet access
@@ -1985,8 +2293,27 @@ function showSuggResult(item, animate = true) {
   me.innerHTML = `
     <span class="rm-badge plat">${pe(item.platform)} ${escapeHTML(item.platform)}</span>
     <span class="rm-badge type">${typeEmoji} ${escapeHTML(item.type)}</span>
-    <span class="rm-badge genre">🏷️ ${escapeHTML(item.genre)}</span>`;
+    <span class="rm-badge genre">🏷️ ${escapeHTML(item.genre)}</span>
+    <span class="rm-badge time">⏱ ${escapeHTML(fmtHrs(item.screentime))}</span>`;
   burstConfetti();
+}
+
+// Poster for the current pick, created per spin so a title the media API can't
+// resolve (which swaps the <img> for a placeholder) never sticks around.
+function setSuggPoster(item) {
+  const card = document.getElementById('sugg-card');
+  if (!card) return;
+  const old = document.getElementById('sugg-poster');
+  if (old) old.remove();
+  if (!item) return;
+  const img = document.createElement('img');
+  img.className = 'result-poster';
+  img.id = 'sugg-poster';
+  img.alt = '';
+  img.width = 84;
+  img.height = 126;
+  card.insertBefore(img, card.querySelector('.result-name'));
+  loadPoster(item.name, img);
 }
 
 function burstConfetti() {
@@ -2116,13 +2443,13 @@ function renderSubmit() {
 
           <div class="sf-field">
             <label class="sf-lbl" for="sf-title">Title <span class="sf-req">*</span></label>
-            <input id="sf-title" type="text" class="sf-input" placeholder="e.g. Severance, Dune: Part Two…">
+            <input id="sf-title" type="text" class="sf-input" placeholder="e.g. Severance, Dune: Part Two…" required aria-required="true" maxlength="120">
           </div>
 
           <div class="sf-row">
             <div class="sf-field">
               <label class="sf-lbl" for="sf-type">Type <span class="sf-req">*</span></label>
-              <select id="sf-type" class="sf-input">
+              <select id="sf-type" class="sf-input" required aria-required="true">
                 <option value="Show">Show</option>
                 <option value="Movie">Movie</option>
               </select>

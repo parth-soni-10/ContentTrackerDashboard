@@ -59,7 +59,7 @@ html.dark .page-header { background: linear-gradient(115deg, #123526, #1d4a36); 
 html.dark .note-card { background: var(--gold-pale); border-color: #4a3a24; }
 html.dark .note-body { color: #e8d1b3; }
 html.dark .note-body strong { color: #f6e5cc; }
-html.dark tbody tr:nth-child(even) { background: #101b14; }
+html.dark tbody tr:nth-child(even) td { background: #101b14; }
 html.dark .data-filters { background: var(--surface); }
 html.dark .df-select, html.dark .df-search { background: var(--surface-soft); }
 html.dark select option { background: var(--surface); color: var(--text); }
@@ -258,13 +258,23 @@ html.dark .theme-toggle .icon-moon.show { display: none; }
 .data-reset:hover { background: var(--green-pale); }
 .data-count { font-size: 14px; color: var(--text-mid); font-weight: 400; }
 .data-count strong { color: var(--text-mid); font-weight: 600; }
-table { width: 100%; border-collapse: collapse; background: var(--surface); border: 1px solid var(--border); border-radius: var(--r); overflow: hidden; box-shadow: var(--shadow-sm); font-size: 14px; }
-thead tr { background: var(--green); }
+/* overflow stays visible so the sticky header can work; the rounded corners are
+   painted per-cell (a table with overflow:hidden traps sticky cells in a box
+   that never scrolls). Row backgrounds live on the cells for the same reason. */
+table { width: 100%; border-collapse: collapse; background: var(--surface); border: 1px solid var(--border); border-radius: var(--r); box-shadow: var(--shadow-sm); font-size: 14px; }
+thead tr { background: transparent; }
 thead th  { padding: 12px 16px; text-align: left; font-size: 12px; line-height: 16px; font-weight: 500; text-transform: uppercase; letter-spacing: .8px; color: rgba(255,255,255,.85); }
-tbody tr:nth-child(even) { background: var(--bg); }
-tbody tr:hover { background: var(--green-pale); }
-thead th { position: sticky; top: 0; z-index: 1; }
+tbody tr:nth-child(even) td { background: var(--bg); }
+tbody tr:hover td { background: var(--green-pale); }
+/* Parks under the sticky nav instead of sliding beneath it. */
+thead th { position: sticky; top: var(--nav-h); z-index: 2; background: var(--green); }
+thead th:first-child { border-top-left-radius: var(--r); }
+thead th:last-child  { border-top-right-radius: var(--r); }
+tbody tr:last-child td:first-child { border-bottom-left-radius: var(--r); }
+tbody tr:last-child td:last-child  { border-bottom-right-radius: var(--r); }
 tbody td { padding: 11px 16px; color: var(--text); border-bottom: 1px solid var(--border); }
+/* Episode count under the title — phones only (see the ≤600px block). */
+.meta-mobile { display: none; }
 tbody tr:last-child td { border-bottom: none; }
 .row-num { color: var(--text-soft); font-size: 11px; width: 32px; }
 .type-pill       { display: inline-flex; align-items: center; padding: 2px 10px; border-radius: 20px; font-size: 11px; font-weight: 500; }
@@ -296,6 +306,10 @@ tbody tr:last-child td { border-bottom: none; }
 .rm-badge.plat { background: var(--green-pale); color: var(--green); }
 .rm-badge.type { background: var(--gold-pale);  color: var(--gold); }
 .rm-badge.genre { background: #f0f0f0; color: #555; }
+.rm-badge.time { background: var(--surface-soft); color: var(--text-mid); }
+html.dark .rm-badge.genre { background: #24382c; color: var(--text-mid); }
+.result-poster { display: block; width: 84px; height: 126px; margin: 0 auto 14px; border-radius: 8px; object-fit: cover; background: linear-gradient(135deg, var(--green-pale), var(--surface-soft)); border: 1px solid var(--border); box-shadow: var(--shadow-sm); }
+.result-poster.placeholder { display: flex; align-items: center; justify-content: center; font-size: 26px; }
 @keyframes slotSpin { 0% { transform: translateY(-18px); opacity: 0 } 40% { transform: translateY(4px); opacity: .7 } 70% { transform: translateY(-3px); opacity: .9 } 100% { transform: translateY(0); opacity: 1 } }
 .spin-btn { width: 100%; padding: 13px; background: linear-gradient(135deg, #2e7a56 0%, #1b4032 100%); color: #fff; border: none; border-radius: var(--r); font-family: "Inter", sans-serif; font-size: 14px; font-weight: 500; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 10px; position: relative; overflow: hidden; transition: transform .15s, box-shadow .15s; box-shadow: 0 4px 20px rgba(45,106,79,.35); }
 .spin-btn::after { content: ""; position: absolute; inset: 0; background: linear-gradient(135deg, rgba(255,255,255,.15) 0%, transparent 60%); pointer-events: none; }
@@ -454,6 +468,16 @@ html.dark .sf-submit-btn { background: linear-gradient(135deg, #2e7a56, #1b4032)
   .main, .readme-main, .data-main, .sugg-page, .submit-page { padding-left: 20px; padding-right: 20px; }
   .kpi-row { grid-template-columns: 1fr 1fr; }
   .charts-row, .bottom-row, .readme-main, .readme-stats, .submit-page { grid-template-columns: 1fr; }
+  /* Between 601px and ~850px the single-row nav is wider than the viewport, so
+     the last tabs and the theme toggle used to spill off the edge with no way
+     to reach them. Icons go and the strip scrolls (with an edge fade as the
+     cue) so every tab stays reachable. */
+  .nav-tab svg { display: none; }
+  .nav-tab { flex-shrink: 0; }
+  .nav-tabs { overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none;
+              -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 16px), transparent);
+              mask-image: linear-gradient(to right, #000 calc(100% - 16px), transparent); }
+  .nav-tabs::-webkit-scrollbar { display: none; }
   .data-filters { padding: 12px 20px; }
   .page-header { padding: 20px; flex-direction: column; align-items: flex-start; gap: 12px; }
   .readme-hero { padding: 28px 24px 24px; }
@@ -461,6 +485,14 @@ html.dark .sf-submit-btn { background: linear-gradient(135deg, #2e7a56, #1b4032)
   .rw-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .cards-grid { grid-template-columns: 1fr 1fr; }
   .cards-grid.slim { grid-template-columns: 1fr 1fr; }
+  /* The 9-column table is ~915px wide, so from 601px up to roughly 950px it
+     ran past the viewport and the body's overflow-x:hidden clipped the last
+     columns away with no way to reach them at all. Scrolling the table beats
+     losing Rating / Watch Date. Note the sticky header only applies where the
+     table fits without scrolling — inside a horizontally scrolling wrapper the
+     header sticks to that wrapper, which never scrolls vertically (same as the
+     phone layout below). */
+  #dat-table { overflow-x: auto; -webkit-overflow-scrolling: touch; }
 }
 
 /* ── MOBILE (≤600px) ── */
@@ -468,13 +500,21 @@ html.dark .sf-submit-btn { background: linear-gradient(135deg, #2e7a56, #1b4032)
   body { background: var(--bg); }
   nav { backdrop-filter: none; }
 
-  /* Nav — horizontally scrollable strip */
-  nav { padding: 0; overflow-x: auto; -webkit-overflow-scrolling: touch; display: flex; flex-wrap: nowrap; border-bottom: 1px solid var(--border); }
-  nav::-webkit-scrollbar { display: none; }
-  .nav-brand { padding: 0 16px; font-size: 14px; white-space: nowrap; flex-shrink: 0; }
-  .nav-tabs { flex-wrap: nowrap; overflow-x: visible; }
-  .nav-tab { padding: 0 12px; font-size: 12px; white-space: nowrap; flex-shrink: 0; }
-  .nav-brand { border-right: 1px solid var(--border); }
+  /* Nav — brand + theme toggle on a fixed top row, tabs in their own scroll
+     strip below. Previously one long scrolling strip put Timeline / Random Pick
+     / Submit off-screen with a hidden scrollbar and no cue, so they were simply
+     undiscoverable, and the theme toggle sat off-screen with them. */
+  :root { --nav-h: 73px; }   /* must match the measured nav height (see the sticky offsets) */
+  nav { padding: 0 10px; display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 0 8px; border-bottom: 1px solid var(--border); }
+  .nav-brand { padding: 8px 0; margin-right: 0; font-size: 14px; white-space: nowrap; }
+  .theme-toggle { grid-column: 2; grid-row: 1; margin: 0; }
+  .nav-tabs { grid-column: 1 / -1; grid-row: 2; display: flex; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none;
+              padding-bottom: 4px; -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 16px), transparent);
+              mask-image: linear-gradient(to right, #000 calc(100% - 16px), transparent); }
+  .nav-tabs::-webkit-scrollbar { display: none; }
+  /* min-height must go, or every tab inherits --nav-h and the strip becomes
+     74px tall on its own. */
+  .nav-tab { padding: 6px 10px; min-height: 0; font-size: 12px; white-space: nowrap; flex-shrink: 0; }
   .nav-tab svg { display: none; }
 
   /* Page headers */
@@ -532,13 +572,12 @@ html.dark .sf-submit-btn { background: linear-gradient(135deg, #2e7a56, #1b4032)
 
   /* Data table — horizontal scroll, with the Name column frozen and the two
      lowest-value columns (#, Episodes) dropped so the title stays readable
-     while you swipe through the rest. */
+     while you swipe through the rest. The episode count moves under the title
+     so that information stays on the page. */
+  .meta-mobile { display: block; font-size: 11px; font-weight: 400; color: var(--text-soft); margin-top: 1px; }
   #dat-table { overflow-x: auto; -webkit-overflow-scrolling: touch; border: 1px solid var(--border); border-radius: var(--r); position: relative; }
   #dat-table::after { content: "Swipe to view more →"; display: block; padding: 8px 12px; color: var(--text-soft); font-size: 11px; text-align: right; background: var(--surface-soft, var(--bg)); }
-  /* overflow:hidden on the table would trap the sticky cells in a
-     non-scrolling box, so let #dat-table (which owns the scrollport) clip the
-     corners instead. */
-  table { font-size: 13px; min-width: 560px; overflow: visible; border-radius: 0; }
+  table { font-size: 13px; min-width: 560px; border-radius: 0; }
   thead th { padding: 10px 12px; font-size: 11px; }
   tbody td { padding: 9px 12px; }
   thead th:nth-child(1), tbody td:nth-child(1),
@@ -601,8 +640,9 @@ html.dark .sf-submit-btn { background: linear-gradient(135deg, #2e7a56, #1b4032)
 
 /* Timeline journal */
 .timeline { max-width: 900px; margin: 0 auto; padding: 28px 28px 48px; }
-.tl-section { margin-bottom: 26px; }
-.tl-head { font-size: 14px; font-weight: 700; color: var(--text); letter-spacing: -.2px; display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+.tl-section { margin-bottom: 26px; scroll-margin-top: calc(var(--nav-h) + 62px); }
+/* Month headers stick under the nav + jump bar so a long month keeps its label. */
+.tl-head { font-size: 14px; font-weight: 700; color: var(--text); letter-spacing: -.2px; display: flex; align-items: center; gap: 8px; margin-bottom: 6px; position: sticky; top: calc(var(--nav-h) + 48px); z-index: 3; background: var(--bg); padding: 8px 0 6px; }
 .tl-count { font-size: 11px; color: var(--green); background: var(--green-pale); padding: 2px 8px; border-radius: 20px; font-weight: 600; }
 .tl-list { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; box-shadow: var(--shadow-sm); }
 .tl-item { display: flex; align-items: center; gap: 12px; padding: 10px 16px; }
@@ -611,15 +651,32 @@ html.dark .sf-submit-btn { background: linear-gradient(135deg, #2e7a56, #1b4032)
 .tl-season { color: var(--text-soft); font-weight: 400; }
 .tl-meta { font-size: 12px; color: var(--text-soft); white-space: nowrap; }
 .tl-date { font-size: 13px; color: var(--text-mid); }
+/* Year jump bar — pins under the nav so you can skip around a 370-item log. */
+.tl-jump { position: sticky; top: var(--nav-h); z-index: 4; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; padding: 8px 0 10px; background: var(--bg); }
+.tl-jump-label { font-size: 11px; text-transform: uppercase; letter-spacing: .8px; color: var(--text-soft); font-weight: 700; margin-right: 2px; }
+.tl-jump-btn { font: inherit; font-size: 12px; font-weight: 600; color: var(--green); background: var(--green-pale); border: 1px solid var(--border-mid); border-radius: 20px; padding: 4px 12px; cursor: pointer; }
+.tl-jump-btn:hover { background: var(--green); color: #fff; }
+/* Long months start collapsed rather than making you scroll past everything. */
+.tl-extra { display: none; }
+.tl-section.expanded .tl-extra { display: flex; }
+.tl-more { display: block; width: 100%; font: inherit; font-size: 13px; font-weight: 600; color: var(--green); background: var(--surface-soft); border: 0; border-top: 1px solid var(--border); padding: 10px; cursor: pointer; }
+.tl-more:hover { background: var(--green-pale); }
 
 /* Sortable table headers */
 .sortable { cursor: pointer; user-select: none; }
-.sortable:hover { background: rgba(255,255,255,.12); }
-html.dark .sortable:hover { background: rgba(255,255,255,.08); }
+/* A translucent-white wash layered over the green (a plain background would
+   replace it, and the cells now carry the header colour themselves). */
+.sortable:hover { background-image: linear-gradient(rgba(255,255,255,.12), rgba(255,255,255,.12)); }
+html.dark .sortable:hover { background-image: linear-gradient(rgba(255,255,255,.08), rgba(255,255,255,.08)); }
 .sortable .sort-arrow { display: inline-block; margin-left: 5px; font-size: 10px; opacity: .7; }
 
 /* Data page toolbar (export / save-default) */
-.data-tools { display: flex; align-items: center; gap: 8px; }
+.data-tools { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.tool-select { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-soft); }
+.tool-select select { font: inherit; font-size: 13px; color: var(--text-mid); background: var(--surface-soft); border: 1px solid var(--border-mid); border-radius: 6px; padding: 4px 6px; cursor: pointer; }
+.rating-status { font-size: 12px; color: var(--text-soft); white-space: nowrap; }
+.rating-status.complete { color: var(--green); font-weight: 600; }
+.pag-page { color: var(--text-soft); }
 .tool-btn { border: 0; background: var(--green-pale); color: var(--green); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; padding: 6px 10px; border-radius: 6px; display: inline-flex; align-items: center; gap: 6px; }
 .tool-btn:hover { background: var(--green); color: #fff; }
 html.dark .tool-btn { background: var(--green-pale); }
