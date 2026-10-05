@@ -173,7 +173,7 @@ html.dark .theme-toggle .icon-moon.show { display: none; }
 .stat-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r); padding: 16px 18px; display: flex; align-items: center; justify-content: space-between; box-shadow: var(--shadow-sm); animation: fadeUp .5s ease both; }
 .stat-info .stat-label { font-size: 12px; line-height: 16px; font-weight: 500; text-transform: uppercase; letter-spacing: .8px; color: var(--text-mid); }
 .stat-info .stat-val   { font-family: "Inter", sans-serif; font-size: 18px; line-height: 24px; font-weight: 600; color: var(--text); letter-spacing: -.1px; margin-top: 3px; font-variant-numeric: tabular-nums; }
-.stat-badge { background: var(--green-pale); color: var(--green); font-size: 13px; font-weight: 500; padding: 4px 11px; border-radius: 20px; white-space: nowrap; }
+.stat-badge2 { background: var(--green-pale); color: var(--green); font-size: 13px; font-weight: 500; padding: 4px 11px; border-radius: 20px; white-space: nowrap; }
 
 /* ── YOY CARD ── */
 .yoy-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r); padding: 16px; box-shadow: var(--shadow-sm); animation: fadeUp .5s ease both; }
@@ -341,9 +341,8 @@ tbody tr:last-child td { border-bottom: none; }
 .footer { text-align: right; font-size: 13px; color: var(--text-soft); padding: 0 32px 24px; }
 
 /* ── EMPTY STATE ── */
-.empty-state { text-align: center; padding: 48px; color: var(--text-soft); font-size: 14px; font-weight: 400; }
+.empty-state { text-align: center; padding: 48px; color: var(--text-soft); font-size: 14px; font-weight: 400; background: var(--surface); border: 1px solid var(--border); border-radius: var(--r); box-shadow: var(--shadow-sm); }
 .empty-state span { display: block; font-size: 32px; margin-bottom: 12px; }
-.empty-state { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r); box-shadow: var(--shadow-sm); }
 
 /* ── ADMIN PAGE ── */
 .admin-page { padding: 32px 32px 48px; display: flex; justify-content: center; }
@@ -399,7 +398,6 @@ tbody tr:last-child td { border-bottom: none; }
 
 /* ── SUBMIT PAGE ── */
 .submit-page { padding: 28px 32px 48px; display: grid; grid-template-columns: 1fr 320px; gap: 24px; }
-.submit-left {}
 .submit-form-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r); padding: 28px 22px; box-shadow: var(--shadow-sm); }
 .submit-heading { font-family: "Inter", sans-serif; font-size: 18px; line-height: 24px; font-weight: 600; color: var(--text); letter-spacing: -.1px; margin-bottom: 6px; }
 .submit-sub { font-size: 14px; color: var(--text-mid); margin-bottom: 24px; line-height: 1.6; }

@@ -73,6 +73,4 @@ module.exports = {
   clearFailures,
   sleep,
   FAILURE_DELAY_MS,
-  MAX_FAILURES,
-  WINDOW_MS,
 };

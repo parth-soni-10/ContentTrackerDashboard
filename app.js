@@ -1,5 +1,5 @@
 // ── CONFIG ────────────────────────────────────────────────────────────────
-const SCRIPT_URL = '/.netlify/functions/watchlist';
+const WATCHLIST_URL = '/.netlify/functions/watchlist';
 const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 const PEMOJI = {
   'Netflix': '🔴',
@@ -218,7 +218,13 @@ function bindNavigation() {
   document.querySelectorAll('.nav-tab, .nav-brand').forEach(link => {
     link.addEventListener('click', event => {
       event.preventDefault();
-      navigateTo(link.dataset.page || 'readme');
+      const page = link.dataset.page || 'readme';
+      // Changing the hash lets the single hashchange listener do the render,
+      // so a navigation renders exactly once (setting the hash here used to
+      // fire hashchange as well and render a second time). Clicking the tab
+      // you're already on never fires that event, so render directly.
+      if (window.location.hash.slice(1) === page) navigateTo(page);
+      else window.location.hash = page;
     });
   });
 }
@@ -229,8 +235,8 @@ function bindNavigation() {
 // and want to refresh rawData WITHOUT tearing down the DOM and losing form
 // state / messages.
 // Painted when the very first data fetch fails, so a transient upstream hiccup
-// (the Apps Script service is often slow to wake) doesn't masquerade as an
-// empty dashboard. Retry button + one automatic retry attempt.
+// (the sheet service can be slow to wake) doesn't masquerade as an empty
+// dashboard. Retry button + one automatic retry attempt.
 function renderDataError() {
   document.getElementById('app').innerHTML =
     '<div class="page-header"><div class="ph-left"><h1>Couldn\'t load your watchlist</h1><p>The Google Sheet service didn\'t respond.</p></div></div>' +
@@ -265,12 +271,12 @@ async function setSharedGoal(hrs, year) {
 
 // Fetch the shared goal. If the server has none yet but this browser has an
 // old local goal, migrate it up once so it starts syncing to other devices.
-// If the server can't answer (backend not yet updated / offline), fall back to
+// If the server can't answer (offline / not configured), fall back to
 // whatever this browser last saved locally so the card still works.
 async function loadGoal() {
   let serverReachable = false;
   try {
-    const res = await fetch(SCRIPT_URL + '?goal=1', { redirect: 'follow', mode: 'cors', cache: 'no-store' });
+    const res = await fetch(WATCHLIST_URL + '?goal=1', { redirect: 'follow', mode: 'cors', cache: 'no-store' });
     if (res.ok) {
       const data = await res.json();
       if (data && typeof data.hrs !== 'undefined') {
@@ -362,10 +368,10 @@ async function bootData() {
   const page = () => window.location.hash.slice(1) || 'readme';
   const repaintIfChanged = () => {
     if (!loadFailed && dataSignature(rawData) !== beforeSig && page() !== 'admin' && page() !== 'submit') {
-      navigateTo(page(), false);
+      navigateTo(page());
     }
   };
-  navigateTo(page(), false); // instant first paint from the snapshot
+  navigateTo(page()); // instant first paint from the snapshot
   await loadData(true);      // silent refresh underneath
   if (loadFailed) {
     if (!loadRetried) {
@@ -381,15 +387,14 @@ async function loadData(skipRerender) {
   try {
     goalReady = loadGoal();
     const controller = new AbortController();
-    // The CDN normally answers in a blink, but right after an admin write the
-    // upstream Apps Script cache is cold and a full read can take ~20s+, so
-    // allow well past the Netlify function's own timeout (the fetch resolves
-    // with that error instead of a misleading client-side abort).
+    // The CDN normally answers in a blink; give a slow upstream room to
+    // finish rather than aborting early, so the fetch surfaces the
+    // function's own timeout error instead of a misleading client-side abort.
     const timeout = setTimeout(() => controller.abort(), 45000);
     // A one-shot ?fresh= marker (set by reloadFresh after an admin write)
     // bypasses the CDN cache so the reload shows the write immediately.
     const fresh = new URLSearchParams(location.search).get('fresh');
-    const url = fresh ? SCRIPT_URL + '?fresh=' + encodeURIComponent(fresh) : SCRIPT_URL;
+    const url = fresh ? WATCHLIST_URL + '?fresh=' + encodeURIComponent(fresh) : WATCHLIST_URL;
     const res = await fetch(url, { redirect: 'follow', mode: 'cors', signal: controller.signal, cache: 'default' });
     clearTimeout(timeout);
     if (fresh) {
@@ -411,7 +416,9 @@ async function loadData(skipRerender) {
     saveDataSnapshot(json);
   } catch (e) {
     console.warn('Data load failed:', e);
-    rawData = [];
+    // Keep the rows already loaded (the snapshot painted on this visit, or an
+    // earlier successful fetch) — a failed background refresh must not blank
+    // the dashboard. Only loadFailed flips; that's what the retry logic uses.
     loadFailed = true;
   }
   document.getElementById('loading').classList.add('hide');
@@ -424,18 +431,14 @@ async function loadData(skipRerender) {
     }
     return;
   }
-  navigateTo(window.location.hash.slice(1) || 'readme', false);
+  navigateTo(window.location.hash.slice(1) || 'readme');
 }
 
 // ── UTILS ─────────────────────────────────────────────────────────────────
-// "Current year" for the dashboard: the latest year actually watched, never a
-// future year — so an entry dated next year can't rebrand the whole page as
-// "This Year (next year)". Empty data falls back to the real current year.
-const maxYear  = () => {
-  const nowYear = new Date().getFullYear();
-  const dataYear = rawData.length ? Math.max(...rawData.map(r => r.year)) : 0;
-  return dataYear > nowYear ? nowYear : (dataYear || nowYear);
-};
+// The real calendar year. Future-dated entries never rebrand it (the This
+// Year filters compare against this value), and after 1 January the dashboard
+// — and the yearly goal lock — roll over even before the first new entry.
+const maxYear = () => new Date().getFullYear();
 const fmtHrs   = m  => (m / 60).toFixed(1).replace(/\.0$/, '') + ' hrs';
 const fmtK     = n  => n.toLocaleString('en-GB');
 const pe       = p  => PEMOJI[p] || '📺';
@@ -473,11 +476,10 @@ function destroyCharts() {
   charts = {};
 }
 
-function navigateTo(page, updateHash = true) {
+function navigateTo(page) {
   destroyCharts();
   document.querySelectorAll('.nav-tab').forEach(t => t.classList.toggle('active', t.dataset.page === page));
   document.getElementById('app').innerHTML = '';
-  if (updateHash && window.location.hash.slice(1) !== page) window.location.hash = page;
   const pages = { readme: renderReadme, current: renderCurrentYear, alltime: renderAllTime, data: renderData, timeline: renderTimeline, suggestions: renderSuggestions, submit: renderSubmit, admin: renderAdmin };
   (pages[page] || renderReadme)();
   document.getElementById('app').focus({ preventScroll: true });
@@ -605,7 +607,7 @@ function renderAdminEditResults(query) {
     return;
   }
   container.innerHTML = matches.map(item => {
-    const meta = [item.type, item.season ? 'S' + escapeHTML(item.season) : '', item.year].filter(Boolean).join(' · ');
+    const meta = [escapeHTML(item.type), item.season ? 'S' + escapeHTML(item.season) : '', item.year].filter(Boolean).join(' · ');
     return '<div class="admin-edit-item">' +
       '<div class="admin-edit-info"><div class="admin-edit-name">' + escapeHTML(item.name) + '</div>' +
       (meta ? '<div class="admin-edit-meta">' + meta + '</div>' : '') + '</div>' +
@@ -693,10 +695,7 @@ async function requestAdminDelete(rowNumber) {
       return null;
     }
     if (!response.ok) {
-      const detail = result.diagnostics
-        ? ` [${result.code || 'ERROR'}${result.diagnostics.httpStatus ? ` · HTTP ${result.diagnostics.httpStatus}` : ''}${result.diagnostics.upstreamMessage ? ` · ${result.diagnostics.upstreamMessage}` : ''}]`
-        : '';
-      throw new Error((result.error || 'Unable to delete entry') + detail);
+      throw new Error((result.error || 'Unable to delete entry') + (result.code ? ` [${result.code}]` : ''));
     }
     return result;
   } finally {
@@ -708,9 +707,8 @@ async function requestAdminDelete(rowNumber) {
 // an admin write may come back 401 even though sessionStorage still says
 // "logged in". Drop the flag and put the login form back up instead of leaving
 // the user stuck behind a dead session.
-// After an admin write the reload must skip the Netlify CDN copy (up to 60s
-// stale) so it hits the upstream — where the Apps Script cache was just
-// patched by the write and answers in a second or two, not 20-40s.
+// After an admin write the reload must skip the Netlify CDN copy so it hits
+// the sheet directly and shows the write immediately.
 // The ?fresh= marker is one-shot: loadData strips it after fetching.
 function reloadFresh() {
   try {
@@ -893,6 +891,7 @@ async function checkAdminName() {
   result.textContent = '';
   try {
     if (!rawData.length) await loadData(true);
+    if (loadFailed) throw new Error('sheet unreachable');
     const query = name.toLowerCase();
     const matches = rawData.filter(item => item.name.toLowerCase().includes(query));
     if (!matches.length) {
@@ -927,7 +926,6 @@ async function autofillAdminEntry() {
   const season = seasonInput.value.trim();
   if (!name) { result.textContent = 'Enter a title name first.'; nameInput.focus(); return; }
   button.disabled = true;
-  button.classList.add('autofilling');
   button.innerHTML = '<span class="autofill-spinner" aria-hidden="true"></span> Searching…';
   result.className = 'admin-name-result';
   result.textContent = 'Searching TMDB and preparing details…';
@@ -953,7 +951,6 @@ async function autofillAdminEntry() {
     result.textContent = error.message || 'Autofill could not find this title. Please try again.';
   } finally {
     button.disabled = false;
-    button.classList.remove('autofilling');
     button.textContent = 'Autofill';
   }
 }
@@ -995,10 +992,7 @@ async function submitAdminEntry(event) {
       return;
     }
     if (!response.ok) {
-      const detail = result.diagnostics
-        ? ` [${result.code || 'ERROR'}${result.diagnostics.httpStatus ? ` · HTTP ${result.diagnostics.httpStatus}` : ''}${result.diagnostics.upstreamMessage ? ` · ${result.diagnostics.upstreamMessage}` : ''}]`
-        : '';
-      throw new Error((result.error || 'Unable to save entry') + detail);
+      throw new Error((result.error || 'Unable to save entry') + (result.code ? ` [${result.code}]` : ''));
     }
     // Leave edit mode, then reload the whole page so the entry shows up everywhere.
     adminEditRow = null;
@@ -1025,7 +1019,7 @@ function renderReadme() {
   const prevData = rawData.filter(r => r.year === cy - 1);
   const prevST   = prevData.reduce((s, r) => s + r.screentime, 0);
   const diff     = cyrST - prevST;
-  const diffPct  = prevST ? ((diff / prevST) * 100).toFixed(1) : 0;
+  const diffPct  = prevST ? ((diff / prevST) * 100).toFixed(1) : null;
   const topPlat  = countBy(rawData, 'platform')[0];
   const topGenre = countBy(rawData, 'genre')[0];
   const bestMo   = Object.entries(countByMonth(rawData)).sort((a, b) => b[1] - a[1])[0];
@@ -1092,6 +1086,7 @@ function renderReadme() {
   // Pre-compute dynamic classes — avoids single quotes inside template literals
   const diffBadgeClass = diff >= 0 ? 'badge badge-green' : 'badge badge-red';
   const diffSign       = diff >= 0 ? '+' : '';
+  const diffBadge      = diffPct === null ? '—' : diffSign + diffPct + '%';
   const yoyBarWidth    = prevST ? Math.min((cyrST / prevST) * 100, 100) : 50;
 
   // Recent watches — last 6 titles with a valid watch date, sorted newest first
@@ -1214,7 +1209,7 @@ function renderReadme() {
           <div class="yoy-title">Year on Year</div>
           <div class="yoy-row">
             <div><div class="yoy-label">This year so far</div><div class="yoy-val">${fmtHrs(cyrST)}</div></div>
-            <span class="${diffBadgeClass}">${diffSign}${diffPct}%</span>
+            <span class="${diffBadgeClass}">${diffBadge}</span>
           </div>
           <div class="yoy-bar-track"><div class="yoy-bar-fill" style="width:${yoyBarWidth}%"></div></div>
           <div class="yoy-note">vs ${fmtHrs(prevST)} full year ${cy - 1}</div>
@@ -1341,7 +1336,7 @@ function updateCurrentYear() {
   const st     = d.reduce((s, r) => s + r.screentime, 0);
   const prevST = prev.reduce((s, r) => s + r.screentime, 0);
   const diff   = st - prevST;
-  const diffPct = prevST ? ((diff / prevST) * 100).toFixed(1) : 'N/A';
+  const diffPct = prevST ? ((diff / prevST) * 100).toFixed(1) : null;
 
   const platCounts = countBy(d, 'platform').slice(0, 8);
   const genCounts  = countBy(d, 'genre').slice(0, 5);
@@ -1357,6 +1352,7 @@ function updateCurrentYear() {
   const diffValClass  = diff < 0 ? 'kpi-val negative' : 'kpi-val';
   const diffBadgeClass = diff < 0 ? 'badge badge-red' : 'badge badge-green';
   const diffSign      = diff >= 0 ? '+' : '';
+  const diffBadge      = diffPct === null ? '—' : diffSign + diffPct + '%';
   const diffHrs       = Math.round(diff / 60);
   const genrePct      = totalGen ? (topGenre[1] / totalGen * 100).toFixed(1) : 0;
   const topPlatEmoji  = platCounts[0] ? pe(platCounts[0][0]) : '';
@@ -1385,7 +1381,7 @@ function updateCurrentYear() {
       <div class="${diffCardClass}">
         <div class="kpi-label">Difference YoY</div>
         <div class="${diffValClass}">${diffSign}${diffHrs} <small>hrs</small></div>
-        <div class="kpi-sub"><span class="${diffBadgeClass}">${diffSign}${diffPct}%</span> vs last year</div>
+        <div class="kpi-sub"><span class="${diffBadgeClass}">${diffBadge}</span> vs last year</div>
       </div>
     </div>
     <div class="charts-row">
@@ -2014,14 +2010,14 @@ function initLineChart(canvasId, labels, data) {
 }
 
 // ── SUBMIT SUGGESTIONS ───────────────────────────────────────────────────
-let suggData = []; // holds Sheet 3 data
+let suggData = []; // loaded Suggestions rows
 
 async function loadSuggestions() {
   try {
-    const res  = await fetch(SCRIPT_URL + '?sheet=Suggestions', { redirect: 'follow', mode: 'cors' });
+    const res  = await fetch(WATCHLIST_URL + '?sheet=Suggestions', { redirect: 'follow', mode: 'cors' });
     const json = await res.json();
-    // If Apps Script isn't updated yet it returns the main watchlist (has 'Name' not 'Title')
-    // Filter to only rows that look like suggestions
+    // Keep only rows shaped like suggestions (a Title column), so an
+    // unexpected response can never render as fake suggestions.
     suggData = Array.isArray(json) ? json.filter(r => r.Title !== undefined) : [];
   } catch (e) {
     suggData = [];
@@ -2165,23 +2161,13 @@ async function submitSuggestion() {
   msg.textContent = '';
 
   const today = new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
-  const params = new URLSearchParams({
-    action:   'suggest',
-    Title:    title,
-    Type:     type,
-    Genre:    genre,
-    Platform: plat,
-    Note:     why,
-    Date:     today
-  });
 
   try {
-    const res  = await fetch('/.netlify/functions/suggestions', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(Object.fromEntries(params)) });
+    const res  = await fetch('/.netlify/functions/suggestions', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ Title: title, Type: type, Genre: genre, Platform: plat, Note: why, Date: today }) });
     const json = await res.json();
 
-    // If Apps Script isn't updated, it returns the main watchlist not {status:'ok'}
     if (!json || json.status !== 'ok') {
-      msg.innerHTML = '<div class="sf-error">⚠️ The Apps Script needs to be updated to support submissions. Check the setup instructions.</div>';
+      msg.innerHTML = '<div class="sf-error">' + escapeHTML(json && json.error ? json.error : 'Could not save the suggestion. Please try again.') + '</div>';
       btn.disabled = false;
       btn.innerHTML = '<span>✦</span> Submit Suggestion';
       return;
@@ -2207,5 +2193,5 @@ async function submitSuggestion() {
 
 bindNavigation();
 initTheme();
-window.addEventListener('hashchange', () => navigateTo(window.location.hash.slice(1) || 'readme', false));
+window.addEventListener('hashchange', () => navigateTo(window.location.hash.slice(1) || 'readme'));
 bootData();

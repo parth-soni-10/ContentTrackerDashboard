@@ -1,7 +1,7 @@
-// Direct Google Sheets API access for Netlify functions — the replacement for
-// google-apps-script.gs. Authenticates as a service account (no Apps Script,
-// no manual deploys) and mirrors the old script's data shape exactly, so the
-// frontend and the existing row-number based features keep working unchanged.
+// Direct Google Sheets API access for Netlify functions. Authenticates as a
+// service account (no manual deploys) and returns the sheet's data in the
+// shape the frontend expects, so the row-number based features (edit,
+// delete, duplicate scan) keep working unchanged.
 //
 // The service account needs Editor access to the spreadsheet; credentials come
 // from the GOOGLE_SERVICE_ACCOUNT_JSON env var (the full service-account key
@@ -14,7 +14,7 @@ const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 
 const MONTH_SHORT = MONTHS.map(name => name.slice(0, 3));
 // Matches the date display format the sheet's Watch Date column already uses
 // (e.g. "3-Sep-26"), applied explicitly so appended rows render identically
-// to rows written through the old Apps Script path.
+// to the rows already in the sheet.
 const DATE_PATTERN = 'd-mmm-yy';
 
 // Is the direct Sheets API path configured and usable?
@@ -113,10 +113,10 @@ async function readValues(range) {
 }
 
 // ── Row model ─────────────────────────────────────────────────────────────
-// Mirrors the old Apps Script readSheet(): values come back exactly as
-// displayed (dates like "3-Sep-26"), the header row is located by scanning
-// for a cell with the value "name" (a title block above the table is fine),
-// and every row is returned as { _row: <physical sheet row>, ...headers }.
+// Values come back exactly as displayed (dates like "3-Sep-26"), the header
+// row is located by scanning for a cell with the value "name" (a title block
+// above the table is fine), and every row is returned as
+// { _row: <physical sheet row>, ...headers }.
 // `headers` are also returned so writers can align new rows to the columns
 // that actually exist in the sheet.
 async function readSheet(title, fixedHeader = false) {
@@ -190,8 +190,7 @@ function dateKey(value) {
 
 // ── Writes ────────────────────────────────────────────────────────────────
 // Builds a row aligned to the sheet's actual headers (by lowercased header
-// name), so extra/missing columns never shift data — the same alignment the
-// old Apps Script buildEntryRow() did.
+// name), so extra/missing columns never shift data.
 function buildRowForHeaders(headers, entry) {
   const date = parseDateParts(entry.watchDate);
   const valuesByHeader = {
@@ -296,8 +295,8 @@ async function appendPlainRow(title, values) {
 }
 
 // Returns the physical row number of the first existing entry matching an
-// add payload (name, season, watch date and screentime), or 0 — the same
-// duplicate scan the old Apps Script ran before every insert.
+// add payload (name, season, watch date and screentime), or 0 — run before
+// every insert so a double-submit can never write twice.
 function findDuplicateRow(rows, entry) {
   const wanted = {
     name: String(entry.name || '').trim().toLowerCase(),
@@ -316,9 +315,8 @@ function findDuplicateRow(rows, entry) {
 }
 
 // ── Yearly goal (Settings sheet) ───────────────────────────────────────────
-// The goal used to live in Apps Script Script Properties; it now lives in a
-// small key/value "Settings" tab of the same spreadsheet so it still syncs
-// across devices and stays with the data.
+// The goal lives in a small key/value "Settings" tab of the same spreadsheet
+// so it syncs across devices and stays with the data.
 const GOAL_PROPERTY = 'watch-goal';
 
 async function readGoal() {
@@ -345,7 +343,7 @@ async function setGoal(hrs, year) {
     }
     return { status: 'ok', goal: current };
   }
-  const sheet = await addSheet('Settings');
+  await addSheet('Settings');
   const goal = hrs > 0 ? { hrs: Math.round(hrs * 100) / 100, year } : null;
   const values = await readValues('Settings!A1:B5');
   let goalRow = -1;
@@ -366,7 +364,7 @@ async function setGoal(hrs, year) {
     const updated = data.updates && data.updates.updatedRange || '';
     goalRow = Number((updated.match(/:?[A-Z]+(\d+)$/) || [])[1] || 0);
   }
-  if (!sheet || goalRow <= 0) return { status: 'error', message: 'Could not save the goal' };
+  if (goalRow <= 0) return { status: 'error', message: 'Could not save the goal' };
   return { status: 'ok', goal: goal ? { hrs: goal.hrs, year: goal.year } : { hrs: 0, year: '' } };
 }
 
@@ -379,9 +377,5 @@ module.exports = {
   appendPlainRow,
   findDuplicateRow,
   readGoal,
-  setGoal,
-  seasonKey,
-  dateKey,
-  buildRowForHeaders,
-  parseDateParts
+  setGoal
 };

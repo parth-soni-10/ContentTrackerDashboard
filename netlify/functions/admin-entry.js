@@ -31,7 +31,7 @@ async function handleDirect(body, action, rowNumber) {
     if (action === 'delete') {
       if (!Number.isInteger(rowNumber)) return json(400, { error: 'A valid row number is required' });
       await sheets.deleteRowNumber('Data', rowNumber);
-      return json(200, { ok: true, saved: false, deleted: true, duplicate: false, sheetName: 'Data', rowNumber, entry: null });
+      return json(200, { deleted: true, rowNumber });
     }
     const entry = {
       name: clean(body.name, 160),
@@ -57,14 +57,14 @@ async function handleDirect(body, action, rowNumber) {
       // instead of written a second time.
       const existing = sheets.findDuplicateRow(rows, entry);
       if (existing) {
-        return json(200, { ok: true, saved: true, duplicate: true, sheetName: 'Data', rowNumber: existing, entry: { name: entry.name, type: entry.type, season: entry.season } });
+        return json(200, { saved: true, duplicate: true, rowNumber: existing });
       }
       rowNumber = await sheets.appendEntryRow('Data', entry);
     }
-    return json(200, { ok: true, saved: true, deleted: false, duplicate: false, sheetName: 'Data', rowNumber, entry: { name: entry.name, type: entry.type, season: entry.season } });
+    return json(200, { saved: true, duplicate: false, rowNumber });
   } catch (error) {
     console.error('Sheets API write failed:', error);
-    return json(502, { error: error.message || 'Unable to save entry', code: 'SHEETS_API_ERROR', diagnostics: { message: error.message } });
+    return json(502, { error: error.message || 'Unable to save entry', code: 'SHEETS_API_ERROR' });
   }
 }
 
