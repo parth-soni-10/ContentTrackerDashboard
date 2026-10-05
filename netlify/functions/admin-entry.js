@@ -31,7 +31,7 @@ async function handleDirect(body, action, rowNumber) {
     if (action === 'delete') {
       if (!Number.isInteger(rowNumber)) return json(400, { error: 'A valid row number is required' });
       await sheets.deleteRowNumber('Data', rowNumber);
-      return json(200, { deleted: true, rowNumber });
+      return json(200, { rowNumber });
     }
     const entry = {
       name: clean(body.name, 160),
@@ -57,11 +57,11 @@ async function handleDirect(body, action, rowNumber) {
       // instead of written a second time.
       const existing = sheets.findDuplicateRow(rows, entry);
       if (existing) {
-        return json(200, { saved: true, duplicate: true, rowNumber: existing });
+        return json(200, { duplicate: true, rowNumber: existing });
       }
       rowNumber = await sheets.appendEntryRow('Data', entry);
     }
-    return json(200, { saved: true, duplicate: false, rowNumber });
+    return json(200, { duplicate: false, rowNumber });
   } catch (error) {
     console.error('Sheets API write failed:', error);
     return json(502, { error: error.message || 'Unable to save entry', code: 'SHEETS_API_ERROR' });

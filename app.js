@@ -532,6 +532,11 @@ function renderAdmin() {
 }
 
 function renderAdminForm() {
+  // A fresh form is always create mode: without this, starting an edit,
+  // navigating away and coming back would leave adminEditRow set while the
+  // form reads "New Watchlist Entry" — the next submit would silently
+  // overwrite the old row instead of adding an entry.
+  adminEditRow = null;
   const genres = [...new Set(rawData.map(row => row.genre).filter(Boolean))].sort();
   const platforms = [...new Set(rawData.map(row => row.platform).filter(Boolean))].sort();
   const genreOpts = genres.map(genre => `<option value="${escapeHTML(genre)}">${escapeHTML(genre)}</option>`).join('');
@@ -666,7 +671,9 @@ async function deleteAdminEntry(rowNumber, button) {
   const label = item ? item.name : 'this entry';
   if (!window.confirm('Delete "' + label + '" from the watchlist? This cannot be undone.')) return;
   if (button) { button.disabled = true; button.textContent = 'Deleting…'; }
-  const msg = () => document.getElementById('admin-entry-msg');
+  // The element disappears if the user navigates mid-request; writing to a
+  // stand-in object is then a harmless no-op instead of a TypeError.
+  const msg = () => document.getElementById('admin-entry-msg') || { innerHTML: '' };
   try {
     const result = await requestAdminDelete(rowNumber);
     if (result === null) return; // session expired — the login screen is already up
@@ -863,8 +870,11 @@ async function removeDupCopies(groupIndex, button) {
   if (!copies.length) return;
   const label = group.name + (group.seasonLabel ? ' · ' + group.seasonLabel : '');
   if (!window.confirm('Remove ' + copies.length + ' duplicate cop' + (copies.length > 1 ? 'ies' : 'y') + ' of "' + label + '"? The first entry is kept. This cannot be undone.')) return;
+  const originalLabel = button ? button.textContent : '';
   if (button) { button.disabled = true; button.textContent = 'Removing…'; }
-  const msg = () => document.getElementById('admin-entry-msg');
+  // The element disappears if the user navigates mid-request; writing to a
+  // stand-in object is then a harmless no-op instead of a TypeError.
+  const msg = () => document.getElementById('admin-entry-msg') || { innerHTML: '' };
   try {
     for (const copy of copies.slice().sort((a, b) => b.row - a.row)) {
       const result = await requestAdminDelete(copy.row);
@@ -876,7 +886,7 @@ async function removeDupCopies(groupIndex, button) {
   } catch (error) {
     msg().innerHTML = '<div class="sf-error">' + escapeHTML(error.message) + '. Some copies may already be removed. Reload the page to rescan.</div>';
   } finally {
-    if (button) { button.disabled = false; button.textContent = 'Remove duplicate copies'; }
+    if (button) { button.disabled = false; button.textContent = originalLabel; }
   }
 }
 
@@ -1023,7 +1033,7 @@ function renderReadme() {
   const topPlat  = countBy(rawData, 'platform')[0];
   const topGenre = countBy(rawData, 'genre')[0];
   const bestMo   = Object.entries(countByMonth(rawData)).sort((a, b) => b[1] - a[1])[0];
-  const distinctMonths = new Set(rawData.map(r => r.year + '-' + r.month)).size;
+  const distinctMonths = new Set(rawData.filter(r => r.month).map(r => r.year + '-' + r.month)).size;
   const avgMo    = distinctMonths ? (total / distinctMonths).toFixed(1) : '—';
 
   // ── Insights + watch goal ────────────────────────────────────────────────
@@ -1102,7 +1112,7 @@ function renderReadme() {
   // planned, so they don't appear here (they still show in Data/Timeline).
   const recent = rawData
     .filter(r => r.watchDate && watchDateTimestamp(r.watchDate) <= Date.now())
-    .sort((a, b) => new Date(b.watchDate) - new Date(a.watchDate))
+    .sort((a, b) => watchDateTimestamp(b.watchDate) - watchDateTimestamp(a.watchDate))
     .slice(0, 6);
   const RW_ICONS = ['🎬','📽️','🎭','🍿','📺','🎞️','🎥','🎦','🌟','✨','🎪','🎨'];
   const recentHTML = recent.map((r, i) => {
@@ -1303,6 +1313,15 @@ function phFilter(label, id, onchange, optionsHtml) {
   return `<div class="ph-filter"><label for="${id}" style="${span}">${label}</label><select id="${id}" onchange="${onchange}">${optionsHtml}</select></div>`;
 }
 
+// Re-select a persisted filter value in a rebuilt <select>; if that option
+// no longer exists (its rows were deleted), drop the filter back to 'all'.
+function syncFilterSelect(id, value) {
+  const el = document.getElementById(id);
+  if (!el) return value;
+  if (Array.from(el.options).some(option => option.value === value)) { el.value = value; return value; }
+  return 'all';
+}
+
 function renderCurrentYear() {
   const cy        = maxYear();
   const platforms = ['all', ...uniqueVals('platform')];
@@ -1322,6 +1341,10 @@ function renderCurrentYear() {
     <div class="main" id="cy-main"></div>
     <div class="footer" id="cy-footer"></div>`;
 
+  // Filters persist across visits; re-select them so the dropdowns match the
+  // data actually being shown.
+  curFilters.platform = syncFilterSelect('cf-plat', curFilters.platform);
+  curFilters.genre    = syncFilterSelect('cf-genre', curFilters.genre);
   updateCurrentYear();
 }
 
@@ -1449,6 +1472,10 @@ function renderAllTime() {
     <div class="main" id="at-main"></div>
     <div class="footer" id="at-footer"></div>`;
 
+  // Same persisted-filter re-sync as Current Year, for all three dropdowns.
+  allFilters.year     = syncFilterSelect('af-year', allFilters.year);
+  allFilters.platform = syncFilterSelect('af-plat', allFilters.platform);
+  allFilters.genre    = syncFilterSelect('af-genre', allFilters.genre);
   updateAllTime();
 }
 
