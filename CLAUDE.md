@@ -20,7 +20,8 @@ netlify/functions/    → admin-entry.js, tmdb-search.js
 ## Code Style / Conventions
 - Nav tabs carry inline 13px SVGs declared in `index.html`; the brand mark is an inline TV SVG (the 📺 emoji was replaced).
 - The theme-toggle button's content is controlled by `app.js` (`btn.textContent = '🌙'/'☀️'`) — do not put a static SVG inside that button; it gets overwritten.
-- The app body uses many emojis as icons (media-type emojis, insight rows, `RW_ICONS`). Standardizing onto a real icon library is a known, feasible refactor — be careful: `app.js` frequently rewrites these nodes.
+- The app body uses many emojis as icons (media-type emojis, insight rows, poster placeholders). Standardizing onto a real icon library is a known, feasible refactor — be careful: `app.js` frequently rewrites these nodes.
+- "Recently Watched" cards and the Data table both pull real posters through the shared `MEDIA_CACHE` / `loadVisiblePosters` path; the emoji fallback is only for titles the media API can't resolve.
 - Data loads from the deployed Apps Script web app URL at runtime, so local `python -m http.server` serves the shell but returns 404 for data — expected without the backend.
 
 ## Build & Run

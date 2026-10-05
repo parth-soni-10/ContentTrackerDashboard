@@ -107,6 +107,11 @@ function initTheme() {
     const dark = document.documentElement.classList.toggle('dark');
     try { localStorage.setItem('ct-theme', dark ? 'dark' : 'light'); } catch (e) {}
     apply();
+    // Charts resolve their colours from the theme at init and Chart.js can't
+    // re-read CSS variables, so rebuild the two pages that own a chart. Form
+    // pages are left alone so nothing typed is lost to a surprise re-render.
+    const page = window.location.hash.slice(1) || 'readme';
+    if (page === 'current' || page === 'alltime') navigateTo(page);
   });
   apply();
 }
@@ -115,7 +120,20 @@ function initTheme() {
 // Versioned so a schema change (adding imdbId) triggers one refetch pass, then caches forever.
 const MEDIA_CACHE = (() => { try { const c = JSON.parse(localStorage.getItem('ct-media-cache') || '{}'); return c && c.v === 2 ? c.items : {}; } catch (e) { return {}; } })();
 function saveMediaCache() { try { localStorage.setItem('ct-media-cache', JSON.stringify({ v: 2, items: MEDIA_CACHE })); } catch (e) {} }
-function posterFallback(el) { if (el) { el.classList.add('placeholder'); el.textContent = '🎬'; } }
+// A broken or missing image can't render the 🎬 itself, so swap it for a span
+// that keeps the same box and classes but can.
+function posterFallback(el) {
+  if (!el) return;
+  if (el.tagName === 'IMG') {
+    const box = document.createElement('span');
+    box.className = el.className + ' placeholder';
+    box.textContent = '🎬';
+    el.replaceWith(box);
+    return;
+  }
+  el.classList.add('placeholder');
+  el.textContent = '🎬';
+}
 // Read-only star display for a 0-10 rating (IMDb/TMDB scale), plus the number.
 function ratingStars(value) {
   const v = Number(value);
@@ -826,7 +844,7 @@ function renderDuplicateScan() {
     const season = group.seasonLabel ? ' · ' + escapeHTML(group.seasonLabel) : '';
     const head = '<div class="dup-group-head"><span class="dup-group-title">' + escapeHTML(group.name) + season + '</span>' +
       '<span class="dup-group-meta">' + escapeHTML(String(group.rows[0].type)) + ' · ' + group.rows.length + ' entries</span>' +
-      (copyCount ? '<button class="try-btn dup-group-btn" type="button" data-group="' + index + '">Remove ' + copyCount + ' duplicate cop' + (copyCount > 1 ? 'ies' : '') + '</button>' : '') +
+      (copyCount ? '<button class="try-btn dup-group-btn" type="button" data-group="' + index + '">Remove ' + copyCount + ' duplicate cop' + (copyCount > 1 ? 'ies' : 'y') + '</button>' : '') +
       '</div>';
     const rowHTML = group.rows.map(row => {
       const desc = dupFmtDate(row.watchDate) + ' · ' + (Number(row.screentime) || 0) + ' min · row ' + row.row;
@@ -1091,8 +1109,6 @@ function renderReadme() {
   const cyTopPlat = countBy(cyrData, 'platform')[0] || ['—', 0];
   const cyBestMo = Object.entries(countByMonth(cyrData)).sort((a, b) => b[1] - a[1])[0] || ['—', 0];
 
-  const today    = new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
-
   // Pre-compute dynamic classes — avoids single quotes inside template literals
   const diffBadgeClass = diff >= 0 ? 'badge badge-green' : 'badge badge-red';
   const diffSign       = diff >= 0 ? '+' : '';
@@ -1114,27 +1130,40 @@ function renderReadme() {
     .filter(r => r.watchDate && watchDateTimestamp(r.watchDate) <= Date.now())
     .sort((a, b) => watchDateTimestamp(b.watchDate) - watchDateTimestamp(a.watchDate))
     .slice(0, 6);
-  const RW_ICONS = ['🎬','📽️','🎭','🍿','📺','🎞️','🎥','🎦','🌟','✨','🎪','🎨'];
-  const recentHTML = recent.map((r, i) => {
+  // Honest hero stamp: the newest date actually watched (future-dated rows are
+  // planned, so they don't count), not whatever today happens to be.
+  const lastWatchedTs = rawData.reduce((max, r) => {
+    const t = r.watchDate ? watchDateTimestamp(r.watchDate) : 0;
+    return (t > 0 && t <= Date.now() && t > max) ? t : max;
+  }, 0);
+  const lastWatched = lastWatchedTs
+    ? new Date(lastWatchedTs).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+    : '—';
+  const recentHTML = recent.map(r => {
     const typeClass  = r.type.toLowerCase() === 'movie' ? 'rw-pill movie' : 'rw-pill show';
     const typeLabel  = r.type.toLowerCase() === 'movie' ? 'Movie' : 'Show';
-    const icon       = RW_ICONS[i % RW_ICONS.length];
     const genre      = r.genre ? '<span class="rw-genre">' + escapeHTML(r.genre) + '</span>' : '';
     const seasonStr  = r.type && r.type.toLowerCase() !== 'movie'
       ? ' S' + (r.season || '1')
       : '';
     const epsBadge   = r.episodes ? '<span class="rw-genre">' + escapeHTML(r.episodes + ' eps') + '</span>' : '';
+    const posterTitle = escapeHTML(r.name || '');
+    const ratingKey   = String(r.name || '').trim().toLowerCase();
     return '<div class="rw-card">' +
-      '<div class="rw-emoji">' + icon + '</div>' +
-      '<div class="rw-info">' +
-        '<div class="rw-name">' + escapeHTML(r.name) + escapeHTML(seasonStr) + '</div>' +
-        '<div class="rw-meta">' +
-          '<span class="' + typeClass + '">' + typeLabel + '</span>' +
-          genre +
-          epsBadge +
-          '<span class="rw-date">' + escapeHTML(fmtShortDate(r.watchDate)) + '</span>' +
+      // Poster + text sit in one span that becomes a link to the exact IMDb
+      // page once the media lookup resolves (see applyImdbLink).
+      '<span class="rw-link" data-tk="' + ratingKey + '">' +
+        '<img class="rw-poster" alt="" loading="lazy" width="54" height="80" data-poster="' + posterTitle + '">' +
+        '<div class="rw-info">' +
+          '<div class="rw-name">' + escapeHTML(r.name) + escapeHTML(seasonStr) + '</div>' +
+          '<div class="rw-meta">' +
+            '<span class="' + typeClass + '">' + typeLabel + '</span>' +
+            genre +
+            epsBadge +
+            '<span class="rw-date">' + escapeHTML(fmtShortDate(r.watchDate)) + '</span>' +
+          '</div>' +
         '</div>' +
-      '</div>' +
+      '</span>' +
     '</div>';
   }).join('');
 
@@ -1145,7 +1174,7 @@ function renderReadme() {
           <h1><em>personal media tracker</em>Content Tracking Dashboard</h1>
           <p class="readme-desc">Track and analyse my media consumption across streaming platforms. See genre trends, platform habits, and how my viewing changes over time.</p>
         </div>
-        <div class="readme-updated"><strong>${today}</strong>Last updated</div>
+        <div class="readme-updated" title="Newest watch date logged in the sheet"><strong>${lastWatched}</strong>Last watched</div>
       </div>
       <div class="readme-stats">
         <div class="readme-stat">
@@ -1173,15 +1202,15 @@ function renderReadme() {
     <div class="readme-main">
       <div>
         <div class="cards-label">What's inside</div>
-        <div class="cards-grid">
-          <a class="info-card" href="#current"><div class="ic-icon">📅</div><div class="ic-body"><h2>Current Year Numbers</h2><p>This year's stats — shows vs movies, platform breakdown, genre split and monthly viewing trend.</p></div></a>
-          <a class="info-card" href="#alltime"><div class="ic-icon">📈</div><div class="ic-body"><h2>All Time Numbers</h2><p>Complete viewing history across all years. Filter by year, platform or genre to spot long-term patterns.</p></div></a>
-          <a class="info-card" href="#data"><div class="ic-icon">🗂️</div><div class="ic-body"><h2>Data</h2><p>Full list of every title logged. Search by name, filter by type, genre, platform or month.</p></div></a>
-          <a class="info-card" href="#suggestions"><div class="ic-icon gold">🎲</div><div class="ic-body"><h2>Suggestion Generator</h2><p>Can't decide what to watch? Spin for a random pick filtered by genre or type.</p></div></a>
+        <div class="cards-grid slim">
+          <a class="info-card slim" href="#current" title="This year's stats — shows vs movies, platform breakdown, genre split and monthly viewing trend."><div class="ic-icon">📅</div><div class="ic-body"><h2>Current Year</h2></div></a>
+          <a class="info-card slim" href="#alltime" title="Complete viewing history across all years. Filter by year, platform or genre to spot long-term patterns."><div class="ic-icon">📈</div><div class="ic-body"><h2>All Time</h2></div></a>
+          <a class="info-card slim" href="#data" title="Full list of every title logged. Search by name, filter by type, genre, platform or month."><div class="ic-icon">🗂️</div><div class="ic-body"><h2>Data</h2></div></a>
+          <a class="info-card slim" href="#suggestions" title="Can't decide what to watch? Spin for a random pick filtered by genre or type."><div class="ic-icon gold">🎲</div><div class="ic-body"><h2>Ideas</h2></div></a>
         </div>
         <div class="rw-section">
           <div class="cards-label">Recently Watched</div>
-          <div class="rw-strip">${recentHTML}</div>
+          <div class="rw-strip" id="rw-strip">${recentHTML}</div>
         </div>
         <div class="recap-card">
           <div class="recap-head"><span class="recap-kicker">Your Year in Screens</span><span class="recap-year">${cy}</span></div>
@@ -1219,7 +1248,7 @@ function renderReadme() {
           <div class="yoy-title">Year on Year</div>
           <div class="yoy-row">
             <div><div class="yoy-label">This year so far</div><div class="yoy-val">${fmtHrs(cyrST)}</div></div>
-            <span class="${diffBadgeClass}">${diffBadge}</span>
+            <span class="${diffBadgeClass}" title="Screentime difference versus the same period last year">${diffBadge}</span>
           </div>
           <div class="yoy-bar-track"><div class="yoy-bar-fill" style="width:${yoyBarWidth}%"></div></div>
           <div class="yoy-note">vs ${fmtHrs(prevST)} full year ${cy - 1}</div>
@@ -1227,16 +1256,12 @@ function renderReadme() {
         <div class="fact-card">
           <div class="goal-top"><div class="fact-title" style="margin-bottom:0">Watch Goal · ${cy}</div><div class="goal-count"><strong>${fmtHrs(cyrST)}</strong> / ${goalHrs} hrs</div></div>
           <div class="goal-track"><div class="goal-fill" style="width:${goalPct}%"></div></div>
-          <div class="goal-edit">
-            <input id="goal-input" class="sf-input" type="number" aria-label="Target hours" inputmode="numeric" min="1" placeholder="Target hrs" value="${goalHrs}" ${goalLocked ? 'disabled' : ''}>
-            <button class="try-btn" id="goal-set" type="button" style="width:auto;padding:8px 12px;min-height:0" ${goalLocked ? 'disabled' : ''}>${goalLocked ? 'Locked 🔒' : 'Set'}</button>
-          </div>
+          ${goalLocked ? '' : `<div class="goal-edit">
+            <input id="goal-input" class="sf-input" type="number" aria-label="Target hours" inputmode="numeric" min="1" placeholder="Target hrs" value="${goalHrs}">
+            <button class="try-btn" id="goal-set" type="button" style="width:auto;padding:8px 12px;min-height:0">Set</button>
+          </div>`}
           <div class="goal-note">${paceNote}</div>
           ${goalLocked ? `<div class="goal-note goal-lock-note">🔒 Locked for ${cy} — unlocks to set a new target on 1 Jan.</div>` : ''}
-        </div>
-        <div class="note-card">
-          <div class="note-icon">💡</div>
-          <div class="note-body"><strong>About Difference</strong>All difference figures compare screentime to the same metric from the previous year.</div>
         </div>
       </div>
     </div>
@@ -1268,6 +1293,9 @@ function renderReadme() {
     });
   }
 
+  // Posters for the strip (same cached TMDB lookup the Data table uses).
+  const rwStrip = document.getElementById('rw-strip');
+  if (rwStrip) loadVisiblePosters(rwStrip);
 }
 
 // ── PLATFORM BARS HELPER ──────────────────────────────────────────────────
@@ -1404,7 +1432,7 @@ function updateCurrentYear() {
       <div class="${diffCardClass}">
         <div class="kpi-label">Difference YoY</div>
         <div class="${diffValClass}">${diffSign}${diffHrs} <small>hrs</small></div>
-        <div class="kpi-sub"><span class="${diffBadgeClass}">${diffBadge}</span> vs last year</div>
+        <div class="kpi-sub"><span class="${diffBadgeClass}" title="Screentime difference versus the same period last year">${diffBadge}</span> vs last year</div>
       </div>
     </div>
     <div class="charts-row">
@@ -1987,10 +2015,28 @@ function addRipple(btn, e) {
 }
 
 // ── LINE CHART ────────────────────────────────────────────────────────────
+// Chart.js can't read CSS variables, so resolve the design tokens here instead
+// of hard-coding light-theme colours. initLineChart runs on every render (and
+// on theme toggle), so the chart always matches the active theme.
+function cssVar(name, fallback) {
+  const v = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  return v || fallback;
+}
+function hexToRgba(hex, alpha) {
+  const h = String(hex).replace('#', '').trim();
+  const full = h.length === 3 ? h.split('').map(c => c + c).join('') : h;
+  const n = parseInt(full, 16);
+  if (!isFinite(n)) return 'rgba(45,106,79,' + alpha + ')';
+  return 'rgba(' + ((n >> 16) & 255) + ',' + ((n >> 8) & 255) + ',' + (n & 255) + ',' + alpha + ')';
+}
 function initLineChart(canvasId, labels, data) {
   const el = document.getElementById(canvasId);
   if (!el) return;
   if (charts[canvasId]) { try { charts[canvasId].destroy(); } catch (e) {} }
+  const lineColor = cssVar('--green', '#2d6a4f');
+  const gridColor = cssVar('--border', '#e0ede6');
+  const tickColor = cssVar('--text-soft', '#7a9e8a');
+  const pointFill = cssVar('--surface', '#ffffff');
   charts[canvasId] = new Chart(el, {
     type: 'line',
     data: {
@@ -1999,16 +2045,16 @@ function initLineChart(canvasId, labels, data) {
         data,
         fill: true,
         tension: .4,
-        borderColor: '#2d6a4f',
+        borderColor: lineColor,
         borderWidth: 2.5,
         pointRadius: 5,
-        pointBackgroundColor: '#fff',
-        pointBorderColor: '#2d6a4f',
+        pointBackgroundColor: pointFill,
+        pointBorderColor: lineColor,
         pointBorderWidth: 2.5,
         backgroundColor: ctx => {
           const g = ctx.chart.ctx.createLinearGradient(0, 0, 0, ctx.chart.height);
-          g.addColorStop(0, 'rgba(45,106,79,0.18)');
-          g.addColorStop(1, 'rgba(45,106,79,0)');
+          g.addColorStop(0, hexToRgba(lineColor, 0.18));
+          g.addColorStop(1, hexToRgba(lineColor, 0));
           return g;
         }
       }]
@@ -2029,8 +2075,8 @@ function initLineChart(canvasId, labels, data) {
         }
       },
       scales: {
-        x: { grid: { display: false }, ticks: { font: { family: 'Inter', size: 13 }, color: '#7a9e8a' } },
-        y: { grid: { color: '#e0ede6', lineWidth: .8 }, ticks: { font: { family: 'Inter', size: 13 }, color: '#7a9e8a' }, beginAtZero: true }
+        x: { grid: { display: false }, ticks: { font: { family: 'Inter', size: 13 }, color: tickColor } },
+        y: { grid: { color: gridColor, lineWidth: .8 }, ticks: { font: { family: 'Inter', size: 13 }, color: tickColor }, beginAtZero: true }
       }
     }
   });

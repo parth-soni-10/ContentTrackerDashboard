@@ -211,6 +211,14 @@ html.dark .theme-toggle .icon-moon.show { display: none; }
 .readme-main { max-width: 1440px; width: 100%; margin: 0 auto; padding: 30px 32px 48px; display: grid; grid-template-columns: 1fr 320px; gap: 28px; }
 .cards-label { font-size: 11px; line-height: 16px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: var(--text-soft); margin-bottom: 14px; }
 .cards-grid  { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+/* Slim variant — a one-line row of nav shortcuts instead of four big cards, so
+   Recently Watched and the recap sit above the fold. Descriptions move to the
+   link's title tooltip. */
+.cards-grid.slim { grid-template-columns: repeat(4, 1fr); gap: 10px; }
+.info-card.slim { padding: 10px 12px; align-items: center; gap: 10px; }
+.info-card.slim .ic-icon { width: 30px; height: 30px; border-radius: 8px; font-size: 15px; }
+.info-card.slim .ic-body { min-width: 0; }
+.info-card.slim .ic-body h2 { font-size: 14px; margin-bottom: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .info-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r); padding: 18px; text-decoration: none; color: inherit; display: flex; align-items: flex-start; gap: 14px; box-shadow: var(--shadow-sm); transition: box-shadow .2s, transform .2s, border-color .2s; cursor: pointer; animation: fadeUp .5s ease both; }
 .info-card:nth-child(1) { animation-delay: .05s }
 .info-card:nth-child(2) { animation-delay: .1s }
@@ -324,13 +332,19 @@ tbody tr:last-child td { border-bottom: none; }
 
 /* ── RECENT WATCHES ── */
 .rw-section { margin-top: 24px; }
-.rw-strip { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+/* minmax(0, 1fr) keeps the three tracks equal even when one title's badges are
+   wide — otherwise a long meta row stretches its own column. */
+.rw-strip { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
 .rw-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r); padding: 14px 16px; display: flex; align-items: center; gap: 12px; box-shadow: var(--shadow-sm); transition: box-shadow .2s, transform .2s; animation: fadeUp .5s ease both; }
 .rw-card:hover { box-shadow: 0 2px 4px rgba(20,40,32,.06), 0 16px 32px -16px rgba(20,40,32,.2); transform: translateY(-3px); }
-.rw-emoji { font-size: 22px; flex-shrink: 0; width: 36px; text-align: center; }
+/* The poster + text block starts as a span and is swapped for an <a> (class
+   name-link) once the media lookup resolves — both states share this rule. */
+.rw-link, .rw-card .name-link { flex: 1; min-width: 0; display: flex; align-items: center; gap: 12px; text-decoration: none; color: inherit; }
+.rw-poster { width: 54px; height: 80px; flex-shrink: 0; border-radius: 6px; object-fit: cover; background: linear-gradient(135deg, var(--green-pale), var(--surface-soft)); border: 1px solid var(--border); box-shadow: 0 2px 8px -3px rgba(16,35,26,.35); }
+.rw-poster.placeholder { display: flex; align-items: center; justify-content: center; font-size: 22px; }
 .rw-info { flex: 1; min-width: 0; }
 .rw-name { font-size: 14px; font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 5px; }
-.rw-meta { display: flex; align-items: center; gap: 7px; }
+.rw-meta { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 7px; }
 .rw-pill { display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 20px; font-size: 11px; font-weight: 500; }
 .rw-pill.movie { background: var(--gold-pale); color: var(--gold); }
 .rw-pill.show  { background: var(--green-pale); color: var(--green); }
@@ -444,8 +458,9 @@ html.dark .sf-submit-btn { background: linear-gradient(135deg, #2e7a56, #1b4032)
   .page-header { padding: 20px; flex-direction: column; align-items: flex-start; gap: 12px; }
   .readme-hero { padding: 28px 24px 24px; }
   .admin-page { padding-left: 20px; padding-right: 20px; }
-  .rw-strip { grid-template-columns: 1fr 1fr; }
+  .rw-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .cards-grid { grid-template-columns: 1fr 1fr; }
+  .cards-grid.slim { grid-template-columns: 1fr 1fr; }
 }
 
 /* ── MOBILE (≤600px) ── */
@@ -483,9 +498,13 @@ html.dark .sf-submit-btn { background: linear-gradient(135deg, #2e7a56, #1b4032)
   .readme-main { padding: 16px; grid-template-columns: 1fr; gap: 16px; }
   .cards-grid { grid-template-columns: 1fr; gap: 10px; }
   .info-card { padding: 14px 16px; }
+  .cards-grid.slim { grid-template-columns: 1fr 1fr; gap: 8px; }
+  .info-card.slim { padding: 10px 12px; }
+  .info-card.slim .ic-body h2 { font-size: 13px; }
   .readme-sidebar { gap: 12px; }
   .rw-strip { grid-template-columns: 1fr; gap: 8px; }
   .rw-card { padding: 12px 14px; }
+  .rw-poster { width: 46px; height: 68px; }
 
   /* KPI cards */
   .main { padding: 16px; gap: 14px; }
@@ -511,12 +530,23 @@ html.dark .sf-submit-btn { background: linear-gradient(135deg, #2e7a56, #1b4032)
   .df-divider { display: none; }
   .data-main { padding: 12px 16px 32px; }
 
-  /* Data table — horizontal scroll */
+  /* Data table — horizontal scroll, with the Name column frozen and the two
+     lowest-value columns (#, Episodes) dropped so the title stays readable
+     while you swipe through the rest. */
   #dat-table { overflow-x: auto; -webkit-overflow-scrolling: touch; border: 1px solid var(--border); border-radius: var(--r); position: relative; }
-  #dat-table::after { content: "Swipe to view more"; display: block; padding: 8px 12px; color: var(--text-soft); font-size: 11px; text-align: right; background: var(--surface-soft, var(--bg)); }
-  table { font-size: 13px; min-width: 600px; }
+  #dat-table::after { content: "Swipe to view more →"; display: block; padding: 8px 12px; color: var(--text-soft); font-size: 11px; text-align: right; background: var(--surface-soft, var(--bg)); }
+  /* overflow:hidden on the table would trap the sticky cells in a
+     non-scrolling box, so let #dat-table (which owns the scrollport) clip the
+     corners instead. */
+  table { font-size: 13px; min-width: 560px; overflow: visible; border-radius: 0; }
   thead th { padding: 10px 12px; font-size: 11px; }
   tbody td { padding: 9px 12px; }
+  thead th:nth-child(1), tbody td:nth-child(1),
+  thead th:nth-child(6), tbody td:nth-child(6) { display: none; }
+  thead th:nth-child(2), tbody td:nth-child(2) { position: sticky; left: 0; z-index: 2; background: var(--surface); box-shadow: 1px 0 0 var(--border); }
+  thead th:nth-child(2) { z-index: 3; background: var(--green); }
+  tbody tr:nth-child(even) td:nth-child(2) { background: var(--bg); }
+  tbody tr:hover td:nth-child(2) { background: var(--green-pale); }
   .data-header-row { flex-direction: column; gap: 6px; align-items: flex-start; }
   .pagination { flex-direction: column; gap: 10px; align-items: flex-start; }
   .pag-btns { width: 100%; }
