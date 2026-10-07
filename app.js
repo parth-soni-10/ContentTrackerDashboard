@@ -1260,7 +1260,7 @@ function renderReadme() {
     return '<div class="rw-card">' +
       // Poster + text sit in one span that becomes a link to the exact IMDb
       // page once the media lookup resolves (see applyImdbLink).
-      '<span class="rw-link" data-tk="' + ratingKey + '">' +
+      '<span class="rw-link" data-tk="' + escapeHTML(ratingKey) + '">' +
         '<img class="rw-poster" alt="" loading="lazy" width="54" height="80" data-poster="' + posterTitle + '">' +
         '<div class="rw-info">' +
           '<div class="rw-name">' + escapeHTML(r.name) + escapeHTML(seasonStr) + '</div>' +
@@ -1416,7 +1416,7 @@ function buildPlatBars(platCounts) {
     const fillClass = i === 0 ? 'plat-fill top' : 'plat-fill';
     const pct = (p[1] / maxVal * 100).toFixed(0);
     return `<div class="plat-row">
-      <div class="plat-name">${pe(p[0])} ${p[0]}</div>
+      <div class="plat-name">${pe(p[0])} ${escapeHTML(p[0])}</div>
       <div class="plat-track"><div class="${fillClass}" data-w="${pct}"></div></div>
       <div class="plat-count">${p[1]}</div>
     </div>`;
@@ -1585,11 +1585,11 @@ function updateCurrentYear() {
           <span class="stat-badge2">${topPlatCount}</span>
         </div>
         <div class="stat-card a2">
-          <div class="stat-info"><div class="stat-label">Top Genre</div><div class="stat-val">${topGenre[0]}</div></div>
+          <div class="stat-info"><div class="stat-label">Top Genre</div><div class="stat-val">${escapeHTML(topGenre[0])}</div></div>
           <span class="stat-badge2">${genrePct}%</span>
         </div>
         <div class="stat-card a3">
-          <div class="stat-info"><div class="stat-label">Best Month</div><div class="stat-val">${bestMo[0]}</div></div>
+          <div class="stat-info"><div class="stat-label">Best Month</div><div class="stat-val">${escapeHTML(bestMo[0])}</div></div>
           <span class="stat-badge2">${bestMo[1]} titles</span>
         </div>
         <div class="stat-card a4">
@@ -1701,15 +1701,15 @@ function updateAllTime() {
       </div>
       <div class="stat-sidebar">
         <div class="stat-card a1">
-          <div class="stat-info"><div class="stat-label">Top Platform</div><div class="stat-val">${pe(topPlat[0])} ${topPlat[0]}</div></div>
+          <div class="stat-info"><div class="stat-label">Top Platform</div><div class="stat-val">${pe(topPlat[0])} ${escapeHTML(topPlat[0])}</div></div>
           <span class="stat-badge2">${topPlat[1]} titles</span>
         </div>
         <div class="stat-card a2">
-          <div class="stat-info"><div class="stat-label">Top Genre</div><div class="stat-val">${topGenre[0]}</div></div>
+          <div class="stat-info"><div class="stat-label">Top Genre</div><div class="stat-val">${escapeHTML(topGenre[0])}</div></div>
           <span class="stat-badge2">${genrePct}%</span>
         </div>
         <div class="stat-card a3">
-          <div class="stat-info"><div class="stat-label">Best Month</div><div class="stat-val">${bestMo[0]}</div></div>
+          <div class="stat-info"><div class="stat-label">Best Month</div><div class="stat-val">${escapeHTML(bestMo[0])}</div></div>
           <span class="stat-badge2">${bestMo[1]} titles</span>
         </div>
         <div class="stat-card a4">
@@ -1982,16 +1982,16 @@ function updateDataTable() {
     // The Episodes column is dropped on phones to stop the table scrolling so
     // far, so the count rides along under the title instead of disappearing.
     var epsMobile  = (r.episodes && !isMovie) ? '<span class="meta-mobile">' + escapeHTML(r.episodes + ' eps') + '</span>' : '';
-    rowsHTML += '<td class="td-strong"><span class="name-link" data-tk="' + ratingKey + '">' +
+    rowsHTML += '<td class="td-strong"><span class="name-link" data-tk="' + escapeHTML(ratingKey) + '">' +
       '<img class="poster" alt="" loading="lazy" width="42" height="60" data-poster="' + posterTitle + '">' +
-      '<span class="title-cell">' + name + '<span class="season-note">' + seasonStr + '</span>' + epsMobile + '</span>' +
+      '<span class="title-cell">' + name + '<span class="season-note">' + escapeHTML(seasonStr) + '</span>' + epsMobile + '</span>' +
       '</span></td>';
     rowsHTML += '<td><span class="' + pillClass + '">' + typeLabel + '</span></td>';
     rowsHTML += '<td>' + genre + '</td>';
     rowsHTML += '<td>' + platEmoji + ' ' + platName + '</td>';
     rowsHTML += '<td class="td-mid">' + escapeHTML(epsStr) + '</td>';
     rowsHTML += '<td class="td-mid">' + escapeHTML(r.screentime ? r.screentime + ' mins' : '—') + '</td>';
-    rowsHTML += '<td class="rating-cell" data-rk="' + ratingKey + '">' + (isFinite(Number(r.rating)) && Number(r.rating) > 0 ? ratingStars(r.rating) : '<span class="rt-na">—</span>') + '</td>';
+    rowsHTML += '<td class="rating-cell" data-rk="' + escapeHTML(ratingKey) + '">' + (isFinite(Number(r.rating)) && Number(r.rating) > 0 ? ratingStars(r.rating) : '<span class="rt-na">—</span>') + '</td>';
     rowsHTML += '<td class="td-soft">' + escapeHTML(fmtDate(r.watchDate)) + '</td>';
     rowsHTML += '</tr>';
   }
