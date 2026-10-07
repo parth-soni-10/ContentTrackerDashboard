@@ -332,8 +332,8 @@ function bindNavigation() {
 function renderDataError() {
   document.getElementById('app').innerHTML =
     '<div class="page-header"><div class="ph-left"><h1>Couldn\'t load your watchlist</h1><p>The Google Sheet service didn\'t respond.</p></div></div>' +
-    '<div class="note-card" style="max-width:640px;margin:0 0 16px"><div class="note-icon" aria-hidden="true">⚠️</div><div class="note-body"><strong>The data service is unreachable right now.</strong> This is usually temporary. Give it a moment and try again.</div></div>' +
-    '<div class="submit-page"><button class="try-btn" id="data-retry" type="button" style="min-height:44px;padding:0 24px">↻ Retry</button></div>';
+    '<div class="note-card note-card-wide"><div class="note-icon" aria-hidden="true">⚠️</div><div class="note-body"><strong>The data service is unreachable right now.</strong> This is usually temporary. Give it a moment and try again.</div></div>' +
+    '<div class="submit-page"><button class="try-btn btn-wide" id="data-retry" type="button">↻ Retry</button></div>';
   const btn = document.getElementById('data-retry');
   if (btn) {
     btn.addEventListener('click', () => {
@@ -1330,7 +1330,7 @@ function renderReadme() {
             <div class="recap-cell"><div class="recap-val">${escapeHTML(String(cyBestMo[0]))}</div><div class="recap-lbl">best month</div></div>
             <div class="recap-cell"><div class="recap-val">${streak}</div><div class="recap-lbl">day streak</div></div>
           </div>
-          <div class="recap-bar"><div class="recap-fill" style="width:${100 - stShowsPct}%"></div></div>
+          <div class="recap-bar"><div class="recap-fill" data-w="${100 - stShowsPct}"></div></div>
           <div class="recap-foot">${100 - stShowsPct}% movies · ${stShowsPct}% shows (by time)</div>
         </div>
       </div>
@@ -1358,16 +1358,16 @@ function renderReadme() {
             <div><div class="yoy-label">${yoyRange || 'This year'} so far</div><div class="yoy-val">${fmtHrs(yoyCurST)}</div></div>
             <span class="${diffBadgeClass}" title="${yoyTip}">${diffBadge}</span>
           </div>
-          <div class="yoy-bar-track"><div class="yoy-bar-fill" style="width:${yoyBarWidth}%"></div></div>
+          <div class="yoy-bar-track"><div class="yoy-bar-fill" data-w="${yoyBarWidth}"></div></div>
           <div class="yoy-note">vs ${fmtHrs(yoyPrevST)} in the same months of ${cy - 1}</div>
           <div class="yoy-note">full ${cy - 1}: ${fmtHrs(prevST)}</div>
         </div>
         <div class="fact-card">
-          <div class="goal-top"><div class="fact-title" style="margin-bottom:0">Watch Goal · ${cy}</div><div class="goal-count"><strong>${fmtHrs(cyrST)}</strong> / ${goalHrs} hrs</div></div>
-          <div class="goal-track"><div class="goal-fill" style="width:${goalPct}%"></div></div>
+          <div class="goal-top"><div class="fact-title fact-title-flush">Watch Goal · ${cy}</div><div class="goal-count"><strong>${fmtHrs(cyrST)}</strong> / ${goalHrs} hrs</div></div>
+          <div class="goal-track"><div class="goal-fill" data-w="${goalPct}"></div></div>
           ${goalLocked ? '' : `<div class="goal-edit">
             <input id="goal-input" class="sf-input" type="number" aria-label="Target hours" inputmode="numeric" min="1" placeholder="Target hrs" value="${goalHrs}">
-            <button class="try-btn" id="goal-set" type="button" style="width:auto;padding:8px 12px;min-height:0">Set</button>
+            <button class="try-btn btn-compact" id="goal-set" type="button">Set</button>
           </div>`}
           <div class="goal-note">${paceNote}</div>
           ${goalLocked ? `<div class="goal-note goal-lock-note">🔒 Locked for ${cy} — unlocks to set a new target on 1 Jan.</div>` : ''}
@@ -1417,7 +1417,7 @@ function buildPlatBars(platCounts) {
     const pct = (p[1] / maxVal * 100).toFixed(0);
     return `<div class="plat-row">
       <div class="plat-name">${pe(p[0])} ${p[0]}</div>
-      <div class="plat-track"><div class="${fillClass}" style="width:${pct}%"></div></div>
+      <div class="plat-track"><div class="${fillClass}" data-w="${pct}"></div></div>
       <div class="plat-count">${p[1]}</div>
     </div>`;
   }).join('');
@@ -1445,9 +1445,11 @@ function optTags(items, allLabel) {
   return items.map(v => `<option value="${escapeHTML(v)}">${v === 'all' ? allLabel : escapeHTML(v)}</option>`).join('');
 }
 // Build a page-header filter control (label + select).
-function phFilter(label, id, onchange, optionsHtml) {
-  const span = 'font-size:12px;line-height:16px;text-transform:uppercase;letter-spacing:.8px;color:rgba(255,255,255,.5);margin-right:6px;font-weight:500';
-  return `<div class="ph-filter"><label for="${id}" style="${span}">${label}</label><select id="${id}" onchange="${onchange}">${optionsHtml}</select></div>`;
+// `target` is "<object>.<key>" and `rebuild` names the section to redraw;
+// both are read by the delegated dispatcher at the end of this file.
+function phFilter(label, id, target, rebuild, optionsHtml) {
+  return `<div class="ph-filter"><label class="ph-filter-label" for="${id}">${label}</label>`
+       + `<select id="${id}" data-filter="${target}" data-rebuild="${rebuild}">${optionsHtml}</select></div>`;
 }
 
 // Re-select a persisted filter value in a rebuilt <select>; if that option
@@ -1471,8 +1473,8 @@ function renderCurrentYear() {
     <div class="page-header">
       <div class="ph-left"><h1>Current Year Numbers</h1><p>${cy} · All months so far</p></div>
       <div class="ph-right">
-        ${phFilter('Platform', 'cf-plat', 'curFilters.platform=this.value;updateCurrentYear()', platOptions)}
-        ${phFilter('Genre', 'cf-genre', 'curFilters.genre=this.value;updateCurrentYear()', genreOptions)}
+        ${phFilter('Platform', 'cf-plat', 'curFilters.platform', 'currentYear', platOptions)}
+        ${phFilter('Genre', 'cf-genre', 'curFilters.genre', 'currentYear', genreOptions)}
       </div>
     </div>
     <div class="main" id="cy-main"></div>
@@ -1573,7 +1575,7 @@ function updateCurrentYear() {
       </div>
     </div>
     <div class="bottom-row">
-      <div class="chart-card" style="animation:fadeUp .5s ease .3s both">
+      <div class="chart-card chart-card-late">
         <div class="chart-title">By Genre</div>
         <div class="treemap">${buildTreemap(genCounts, totalGen)}</div>
       </div>
@@ -1592,7 +1594,7 @@ function updateCurrentYear() {
         </div>
         <div class="stat-card a4">
           <div class="stat-info"><div class="stat-label">Total Watched</div><div class="stat-val">${d.length}</div></div>
-          <div class="stat-info"><div class="stat-label" style="margin-top:2px">titles in ${cy}</div></div>
+          <div class="stat-info"><div class="stat-label stat-label-stack">titles in ${cy}</div></div>
         </div>
       </div>
     </div>`;
@@ -1619,9 +1621,9 @@ function renderAllTime() {
     <div class="page-header">
       <div class="ph-left"><h1>All Time Numbers</h1><p>Complete viewing history · all years</p></div>
       <div class="ph-right">
-        ${phFilter('Year', 'af-year', 'allFilters.year=this.value;updateAllTime()', yearOptions)}
-        ${phFilter('Platform', 'af-plat', 'allFilters.platform=this.value;updateAllTime()', platOptions)}
-        ${phFilter('Genre', 'af-genre', 'allFilters.genre=this.value;updateAllTime()', genreOptions)}
+        ${phFilter('Year', 'af-year', 'allFilters.year', 'allTime', yearOptions)}
+        ${phFilter('Platform', 'af-plat', 'allFilters.platform', 'allTime', platOptions)}
+        ${phFilter('Genre', 'af-genre', 'allFilters.genre', 'allTime', genreOptions)}
       </div>
     </div>
     <div class="main" id="at-main"></div>
@@ -1693,7 +1695,7 @@ function updateAllTime() {
       </div>
     </div>
     <div class="bottom-row">
-      <div class="chart-card" style="animation:fadeUp .5s ease .3s both">
+      <div class="chart-card chart-card-late">
         <div class="chart-title">By Genre</div>
         <div class="treemap">${buildTreemap(genCounts, totalGen)}</div>
       </div>
@@ -1712,7 +1714,7 @@ function updateAllTime() {
         </div>
         <div class="stat-card a4">
           <div class="stat-info"><div class="stat-label">Avg Per Month</div><div class="stat-val">${avgMo}</div></div>
-          <div class="stat-info"><div class="stat-label" style="margin-top:2px">titles / month</div></div>
+          <div class="stat-info"><div class="stat-label stat-label-stack">titles / month</div></div>
         </div>
       </div>
     </div>`;
@@ -1741,21 +1743,21 @@ function renderData() {
     <div class="page-header">
       <div class="ph-left"><h1>All Shows &amp; Movies</h1><p>Your complete watchlist · sorted by watch date</p></div>
       <div class="ph-right">
-        <div style="background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.18);border-radius:6px;padding:6px 14px;font-size:12px;color:rgba(255,255,255,.7)">📺 <strong id="dh-shows" style="color:#fff">—</strong> shows</div>
-        <div style="background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.18);border-radius:6px;padding:6px 14px;font-size:12px;color:rgba(255,255,255,.7)">🎬 <strong id="dh-movies" style="color:#fff">—</strong> movies</div>
-        <div style="background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.18);border-radius:6px;padding:6px 14px;font-size:12px;color:rgba(255,255,255,.7)">Total <strong id="dh-total" style="color:#fff">—</strong></div>
+        <div class="dh-pill">📺 <strong id="dh-shows">—</strong> shows</div>
+        <div class="dh-pill">🎬 <strong id="dh-movies">—</strong> movies</div>
+        <div class="dh-pill">Total <strong id="dh-total">—</strong></div>
       </div>
     </div>
     <div class="data-filters">
-      <div class="df-select"><select id="df-year" aria-label="Year"  onchange="datFilters.year=this.value;dataPageNum=1;updateDataTable()">${yearOpts}</select></div>
-      <div class="df-select"><select id="df-plat" aria-label="Platform"  onchange="datFilters.platform=this.value;dataPageNum=1;updateDataTable()">${platOpts}</select></div>
-      <div class="df-select"><select id="df-type" aria-label="Type"  onchange="datFilters.type=this.value;dataPageNum=1;updateDataTable()">${typeOpts}</select></div>
-      <div class="df-select"><select id="df-genre" aria-label="Genre" onchange="datFilters.genre=this.value;dataPageNum=1;updateDataTable()">${genreOpts}</select></div>
-      <div class="df-select"><select id="df-month" aria-label="Month" onchange="datFilters.month=this.value;dataPageNum=1;updateDataTable()">${monthOpts}</select></div>
+      <div class="df-select"><select id="df-year" aria-label="Year"  data-filter="datFilters.year" data-rebuild="dataTable" data-page-reset>${yearOpts}</select></div>
+      <div class="df-select"><select id="df-plat" aria-label="Platform"  data-filter="datFilters.platform" data-rebuild="dataTable" data-page-reset>${platOpts}</select></div>
+      <div class="df-select"><select id="df-type" aria-label="Type"  data-filter="datFilters.type" data-rebuild="dataTable" data-page-reset>${typeOpts}</select></div>
+      <div class="df-select"><select id="df-genre" aria-label="Genre" data-filter="datFilters.genre" data-rebuild="dataTable" data-page-reset>${genreOpts}</select></div>
+      <div class="df-select"><select id="df-month" aria-label="Month" data-filter="datFilters.month" data-rebuild="dataTable" data-page-reset>${monthOpts}</select></div>
       <div class="df-divider"></div>
       <div class="df-search">
         <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle cx="6.5" cy="6.5" r="5" stroke="#7a9e8a" stroke-width="1.5"/><path d="M10.5 10.5L14 14" stroke="#7a9e8a" stroke-width="1.5" stroke-linecap="round"/></svg>
-        <input id="df-search" type="text" aria-label="Search by name" placeholder="Search by name…" oninput="datFilters.search=this.value;dataPageNum=1;updateDataTable()">
+        <input id="df-search" type="text" aria-label="Search by name" placeholder="Search by name…" data-filter="datFilters.search" data-rebuild="dataTable" data-page-reset>
       </div>
     </div>
     <div class="data-main">
@@ -1980,17 +1982,17 @@ function updateDataTable() {
     // The Episodes column is dropped on phones to stop the table scrolling so
     // far, so the count rides along under the title instead of disappearing.
     var epsMobile  = (r.episodes && !isMovie) ? '<span class="meta-mobile">' + escapeHTML(r.episodes + ' eps') + '</span>' : '';
-    rowsHTML += '<td style="font-weight:500"><span class="name-link" data-tk="' + ratingKey + '">' +
+    rowsHTML += '<td class="td-strong"><span class="name-link" data-tk="' + ratingKey + '">' +
       '<img class="poster" alt="" loading="lazy" width="42" height="60" data-poster="' + posterTitle + '">' +
-      '<span class="title-cell">' + name + '<span style="color:var(--text-soft);font-weight:400">' + seasonStr + '</span>' + epsMobile + '</span>' +
+      '<span class="title-cell">' + name + '<span class="season-note">' + seasonStr + '</span>' + epsMobile + '</span>' +
       '</span></td>';
     rowsHTML += '<td><span class="' + pillClass + '">' + typeLabel + '</span></td>';
     rowsHTML += '<td>' + genre + '</td>';
     rowsHTML += '<td>' + platEmoji + ' ' + platName + '</td>';
-    rowsHTML += '<td style="color:var(--text-mid)">' + escapeHTML(epsStr) + '</td>';
-    rowsHTML += '<td style="color:var(--text-mid)">' + escapeHTML(r.screentime ? r.screentime + ' mins' : '—') + '</td>';
+    rowsHTML += '<td class="td-mid">' + escapeHTML(epsStr) + '</td>';
+    rowsHTML += '<td class="td-mid">' + escapeHTML(r.screentime ? r.screentime + ' mins' : '—') + '</td>';
     rowsHTML += '<td class="rating-cell" data-rk="' + ratingKey + '">' + (isFinite(Number(r.rating)) && Number(r.rating) > 0 ? ratingStars(r.rating) : '<span class="rt-na">—</span>') + '</td>';
-    rowsHTML += '<td style="color:var(--text-soft)">' + escapeHTML(fmtDate(r.watchDate)) + '</td>';
+    rowsHTML += '<td class="td-soft">' + escapeHTML(fmtDate(r.watchDate)) + '</td>';
     rowsHTML += '</tr>';
   }
 
@@ -2018,8 +2020,8 @@ function updateDataTable() {
     '<div class="pag-info">Showing ' + (start + 1) + '–' + Math.min(end, d.length) + ' of ' + d.length +
       '<span class="pag-page"> · page ' + dataPageNum + ' of ' + totalPages + '</span></div>' +
     '<div class="pag-btns">' +
-      '<button class="pag-btn" onclick="dataPageNum--;updateDataTable()" ' + prevDisabled + '>← Prev</button>' +
-      '<button class="pag-btn" onclick="dataPageNum++;updateDataTable()" ' + nextDisabled + '>Next →</button>' +
+      '<button class="pag-btn" data-page-step="prev" ' + prevDisabled + '>← Prev</button>' +
+      '<button class="pag-btn" data-page-step="next" ' + nextDisabled + '>Next →</button>' +
     '</div>';
 
   updateRatingStatus();
@@ -2195,13 +2197,13 @@ function renderSuggestions() {
         <div class="sugg-filters">
           <div>
             <label class="sf-label" for="sg-genre">Genre</label>
-            <select id="sg-genre" class="sf-select" onchange="updateSuggCount()">
+            <select id="sg-genre" class="sf-select" data-change="updateSuggCount">
               <option value="all">All Genres</option>${genreOptions}
             </select>
           </div>
           <div>
             <label class="sf-label" for="sg-type">Type</label>
-            <select id="sg-type" class="sf-select" onchange="updateSuggCount()">
+            <select id="sg-type" class="sf-select" data-change="updateSuggCount">
               <option value="all">All Types</option>${typeOptions}
             </select>
           </div>
@@ -2211,10 +2213,10 @@ function renderSuggestions() {
           <div class="result-name empty" id="sugg-name"><span>🎬</span>Hit spin to get a suggestion</div>
           <div class="result-meta" id="sugg-meta"></div>
         </div>
-        <button class="spin-btn" id="sugg-spin" onclick="suggSpin(event)">
+        <button class="spin-btn" id="sugg-spin" data-act="suggSpin">
           <span class="sbi">🎲</span> Spin for a Suggestion
         </button>
-        <button class="try-btn" id="sugg-try" onclick="suggTryAgain()" disabled>
+        <button class="try-btn" id="sugg-try" data-act="suggTryAgain" disabled>
           <span class="arr">↻</span> Not feeling it — try another
         </button>
         <div class="sugg-count" id="sugg-count"></div>
@@ -2474,13 +2476,13 @@ function renderSubmit() {
 
           <div class="sf-field">
             <label class="sf-lbl" for="sf-why">Why watch it?</label>
-            <textarea id="sf-why" class="sf-input sf-ta" placeholder="What makes this worth watching? Keep it short…" maxlength="200" oninput="document.getElementById('sf-chars').textContent=this.value.length"></textarea>
+            <textarea id="sf-why" class="sf-input sf-ta" placeholder="What makes this worth watching? Keep it short…" maxlength="200" data-chars="sf-chars"></textarea>
             <div class="sf-chars"><span id="sf-chars">0</span> / 200</div>
           </div>
 
           <div id="sf-msg"></div>
 
-          <button class="sf-submit-btn" onclick="submitSuggestion()">
+          <button class="sf-submit-btn" data-act="submitSuggestion">
             <span>✦</span> Submit Suggestion
           </button>
         </div>
@@ -2590,6 +2592,119 @@ async function submitSuggestion() {
 }
 
 // ── INIT ──────────────────────────────────────────────────────────────────
+
+/* ── Delegated markup handlers ────────────────────────────────────────────
+   The generated markup used to carry inline on* attributes and one style=
+   attribute. Either one forces 'unsafe-inline' into the deployed policy, and
+   with 'unsafe-inline' in script-src the policy stops restricting script
+   execution at all — so the header set could not contain a compromised response,
+   which is the only thing it exists for. Every handler is now a data attribute
+   read by the three listeners below, and the label's styling is a class
+   (.ph-filter-label in styles.css).
+
+   The pagination controls carry data-page-step, not data-page: the nav tabs
+   already use data-page for the page they point at, and a shared name meant one
+   document-level listener stepped the Data table's page counter on every tab
+   click — you would return to Data on page 1 with nothing to explain it.
+
+   Two details are load-bearing:
+     * filter objects are looked up by NAME on each dispatch rather than captured
+       in a table at load time. datFilters is reassigned wholesale by the Data
+       tab's reset, so a captured reference would silently stop applying filters
+       after a reset — and that failure would read as a broken table, not as a
+       detached object.
+     * the call mirrors the inline handler it replaced, argument for argument: an
+       on* attribute received whatever its string passed, and its `this` was the
+       element, so the event is passed first and `this` is bound to the element.
+       suggSpin reads clientX/clientY off that event to place its ripple.
+     * data-act and data-change both name a function in ACTIONS; which attribute an
+       element carries is what decides the event it fires on. */
+const ACTIONS = { suggSpin, suggTryAgain, submitSuggestion, updateSuggCount };
+
+// Read the live bindings, so a reassignment of any filter object is picked up.
+const filterByName = () => ({ curFilters, allFilters, datFilters });
+
+function rebuildSection(which) {
+  if (which === 'currentYear') updateCurrentYear();
+  else if (which === 'allTime') updateAllTime();
+  else if (which === 'dataTable') updateDataTable();
+  else if (which === 'suggCount') updateSuggCount();
+}
+
+function applyDelegated(el, event, attr) {
+  if (attr === 'data-filter') {
+    const [objName, key] = String(el.dataset.filter).split('.');
+    const target = filterByName()[objName];
+    if (!target || !(key in target)) return;
+    target[key] = el.value;
+    if (el.hasAttribute('data-page-reset')) dataPageNum = 1;
+    rebuildSection(el.dataset.rebuild);
+    return;
+  }
+  if (attr === 'data-page-step') {
+    dataPageNum += el.dataset.pageStep === 'next' ? 1 : -1;
+    updateDataTable();
+    return;
+  }
+  if (attr === 'data-chars') {
+    const out = document.getElementById(el.dataset.chars);
+    if (out) out.textContent = el.value.length;
+    return;
+  }
+  const action = el.dataset.act || el.dataset.change;
+  const fn = ACTIONS[action];
+  if (typeof fn === 'function') fn.call(el, event);
+}
+
+// One attribute list per event type, so a control only ever fires on the event
+// its inline handler used to. Without this a <select> would also be dispatched
+// from the click that precedes its change.
+const DELEGATED = {
+  click: ['data-act', 'data-page-step'],
+  change: ['data-filter', 'data-change'],
+  input: ['data-filter', 'data-chars'],
+};
+
+function onDelegated(event) {
+  for (const attr of DELEGATED[event.type] || []) {
+    const el = event.target.closest ? event.target.closest('[' + attr + ']') : null;
+    if (el) { applyDelegated(el, event, attr); return; }
+  }
+}
+document.addEventListener('click', onDelegated);
+document.addEventListener('change', onDelegated);
+document.addEventListener('input', onDelegated);
+
+/* ── Bar widths ───────────────────────────────────────────────────────────
+   The four progress fills carry a data-w percentage instead of a style=
+   attribute. style-src is 'self', so the attribute would be refused and the bar
+   would paint at zero; a custom property written through CSSOM is not covered
+   by style-src, so the same value survives the policy. The value is clamped
+   because an invalid custom property makes width revert to auto, i.e. the bar
+   would fill its whole track — the opposite of what it means.
+
+   An observer rather than a paint call at each render: the bars are emitted from
+   several template strings, and the Data / All-time tables repaint on their own
+   after a filter change, so a hand-kept list of call sites would rot the first
+   time someone adds a bar. Observer callbacks run before paint, so no flash. */
+function setBarWidth(bar) {
+  const pct = Number(bar.dataset.w);
+  bar.style.setProperty('--w', (Number.isFinite(pct) ? Math.max(0, Math.min(100, pct)) : 0) + '%');
+}
+
+function paintWidths(scope) {
+  for (const bar of scope.querySelectorAll('[data-w]')) setBarWidth(bar);
+}
+
+new MutationObserver(records => {
+  for (const record of records) {
+    for (const node of record.addedNodes) {
+      if (node.nodeType !== 1) continue;
+      if (node.hasAttribute('data-w')) setBarWidth(node);
+      paintWidths(node);
+    }
+  }
+}).observe(document.body, { childList: true, subtree: true });
 
 bindNavigation();
 initTheme();

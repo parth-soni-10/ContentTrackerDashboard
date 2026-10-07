@@ -5,13 +5,14 @@
 # or API deploy). The publish directory is the repo root, so one /* block covers
 # the page, the functions' same-origin host and every asset.
 #
-# script-src is 'self' plus 'unsafe-inline', and the inline half is the known
-# remaining gap: app.js builds markup containing on* handlers and style="…"
-# attributes, and closing that means moving them to delegated listeners and
-# classes first. What this policy already buys is real — no external script
-# origin may run (Chart.js used to come from cdnjs; it is vendored under
-# /vendor now, so re-adding a CDN tag fails closed), eval is blocked, <base>
-# cannot be hijacked, and the site cannot be framed.
+# script-src and style-src are 'self', with no 'unsafe-inline'. That is the whole
+# point of the policy: once script-src carries 'unsafe-inline' the directive stops
+# restricting script execution at all, so a response that could inject markup
+# could also run script inside the admin panel's own session. The markup used to
+# need the escape hatch — app.js built on* handlers and a style= attribute into
+# its template strings — and those are now data attributes dispatched by the
+# listeners at the end of app.js. Re-adding an inline <script>, an inline handler
+# or an inline style now fails closed, as does a CDN <script> tag.
 #
 # image.tmdb.org is required: the media lookup returns poster URLs on that host
 # and the cards, the Data table and Random Pick all paint them. Without it every
@@ -23,7 +24,7 @@
 # outright would break the no-JS path rather than improve it.
 
 /*
-  Content-Security-Policy: default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://image.tmdb.org; font-src 'self'; connect-src 'self'; base-uri 'self'; form-action 'self'; object-src 'none'; frame-ancestors 'none'
+  Content-Security-Policy: default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data: https://image.tmdb.org; font-src 'self'; connect-src 'self'; base-uri 'self'; form-action 'self'; object-src 'none'; frame-ancestors 'none'
   # frame-ancestors is the one directive a <meta> tag cannot carry, and the admin
   # panel is an authenticated page, so the legacy header is paired with it.
   X-Frame-Options: DENY

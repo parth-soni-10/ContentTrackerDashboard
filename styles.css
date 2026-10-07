@@ -116,6 +116,9 @@ html.dark .theme-toggle .icon-moon.show { display: none; }
 .ph-filter select { background: transparent; border: none; color: #fff; font-family: "Inter", sans-serif; font-size: 13px; font-weight: 500; cursor: pointer; padding-right: 4px; }
 .ph-filter select:focus-visible, .df-select select:focus-visible, .sf-select:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
 .ph-filter select option { background: var(--green); color: #fff; }
+/* Was an inline style= on every generated filter label, which is what
+   forced style-src 'unsafe-inline'. */
+.ph-filter-label { font-size: 12px; line-height: 16px; text-transform: uppercase; letter-spacing: .8px; color: rgba(255,255,255,.5); margin-right: 6px; font-weight: 500; }
 
 /* ── MAIN ── */
 .main { max-width: 1440px; width: 100%; margin: 0 auto; padding: 26px 32px 56px; display: flex; flex-direction: column; gap: 22px; }
@@ -148,7 +151,7 @@ html.dark .theme-toggle .icon-moon.show { display: none; }
 .plat-row { display: flex; align-items: center; gap: 10px; }
 .plat-name { font-size: 14px; color: var(--text); width: 140px; flex-shrink: 0; display: flex; align-items: center; gap: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .plat-track { flex: 1; height: 7px; background: var(--green-pale); border-radius: 4px; overflow: hidden; }
-.plat-fill { height: 100%; border-radius: 4px; background: var(--green-mid); transition: width 1s cubic-bezier(.4,0,.2,1); }
+.plat-fill { width: var(--w, 0%); height: 100%; border-radius: 4px; background: var(--green-mid); transition: width 1s cubic-bezier(.4,0,.2,1); }
 .plat-fill.top { background: linear-gradient(90deg, var(--green-mid), var(--gold)); }
 .plat-count { font-size: 14px; font-weight: 600; color: var(--text); width: 26px; text-align: right; flex-shrink: 0; font-variant-numeric: tabular-nums; }
 
@@ -182,7 +185,7 @@ html.dark .theme-toggle .icon-moon.show { display: none; }
 .yoy-label { font-size: 13px; color: var(--text-mid); }
 .yoy-val { font-family: "Inter", sans-serif; font-size: 18px; line-height: 24px; font-weight: 600; color: var(--text); letter-spacing: -.1px; font-variant-numeric: tabular-nums; }
 .yoy-bar-track { height: 5px; background: var(--green-pale); border-radius: 3px; overflow: hidden; margin: 6px 0 4px; }
-.yoy-bar-fill  { height: 100%; background: var(--green-mid); border-radius: 3px; transition: width .8s ease; }
+.yoy-bar-fill  { width: var(--w, 0%); height: 100%; background: var(--green-mid); border-radius: 3px; transition: width .8s ease; }
 .yoy-note { font-size: 13px; color: var(--text-mid); font-weight: 400; }
 
 /* ── README HERO ── */
@@ -635,7 +638,7 @@ html.dark .sf-submit-btn { background: linear-gradient(135deg, #2e7a56, #1b4032)
 .recap-val.recap-name { font-size: 14px; line-height: 1.25; word-break: break-word; }
 .recap-lbl { font-size: 11px; color: var(--text-soft); margin-top: 3px; text-transform: uppercase; letter-spacing: .5px; }
 .recap-bar { height: 8px; border-radius: 6px; background: var(--border); overflow: hidden; margin-top: 14px; }
-.recap-fill { height: 100%; border-radius: 6px; background: linear-gradient(90deg, var(--green-mid), var(--green)); }
+.recap-fill { width: var(--w, 0%); height: 100%; border-radius: 6px; background: linear-gradient(90deg, var(--green-mid), var(--green)); }
 .recap-foot { font-size: 12px; color: var(--text-mid); margin-top: 7px; text-align: center; }
 
 /* Timeline journal */
@@ -694,7 +697,7 @@ html.dark .tool-btn { background: var(--green-pale); }
 .goal-count { font-family: "Inter", sans-serif; font-size: 12px; color: var(--text-soft); }
 .goal-count strong { color: var(--text); font-weight: 600; }
 .goal-track { height: 10px; background: var(--green-pale); border: 1px solid var(--border-mid); border-radius: 8px; overflow: hidden; margin-top: 10px; }
-.goal-fill { height: 100%; border-radius: 8px 0 0 8px; background: linear-gradient(90deg, var(--green-mid), var(--gold)); transition: width .8s cubic-bezier(.4,0,.2,1); }
+.goal-fill { width: var(--w, 0%); height: 100%; border-radius: 8px 0 0 8px; background: linear-gradient(90deg, var(--green-mid), var(--gold)); transition: width .8s cubic-bezier(.4,0,.2,1); }
 .goal-edit { margin-top: 10px; display: flex; gap: 8px; }
 .goal-edit input { flex: 1; min-width: 0; }
 .goal-edit input:disabled { opacity: .6; cursor: not-allowed; }
@@ -707,3 +710,23 @@ html.dark .tool-btn { background: var(--green-pale); }
 .poster.placeholder { display: flex; align-items: center; justify-content: center; font-size: 18px; }
 a.name-link { color: inherit; text-decoration: none; cursor: pointer; }
 a.name-link:hover .title-cell { color: var(--green-mid); text-decoration: underline; }
+
+
+/* ── Replacements for the removed inline style attributes ─────────────
+   style-src is 'self', so a style= attribute in generated markup is refused
+   outright and the element renders unstyled — a silent, layout-only failure.
+   Each rule below is the exact declaration the attribute used to carry; the
+   four progress-bar widths moved to the --w custom property set by
+   paintWidths() in app.js. */
+.note-card-wide { max-width: 640px; margin: 0 0 16px; }
+.btn-wide  { min-height: 44px; padding: 0 24px; }
+.btn-compact { width: auto; padding: 8px 12px; min-height: 0; }
+.fact-title-flush { margin-bottom: 0; }
+.chart-card-late { animation: fadeUp .5s ease .3s both; }
+.stat-label-stack { margin-top: 2px; }
+.dh-pill { background: rgba(255,255,255,.1); border: 1px solid rgba(255,255,255,.18); border-radius: 6px; padding: 6px 14px; font-size: 12px; color: rgba(255,255,255,.7); }
+.dh-pill strong { color: #fff; }
+.td-strong { font-weight: 500; }
+.td-mid  { color: var(--text-mid); }
+.td-soft { color: var(--text-soft); }
+.season-note { color: var(--text-soft); font-weight: 400; }
