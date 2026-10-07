@@ -4,7 +4,6 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="theme-color" content="#f7faf8">
-  <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
   <meta name="google-site-verification" content="rMJwu8nMy93VQ4XmpsnjZ4ssIM8n52YLyu6-655mA6s" />
   <title>Content Tracker</title>
   <meta name="description" content="A personal media analytics dashboard: every show and movie I watch, tracked in Google Sheets with genre, platform and year-over-year trends.">
@@ -30,7 +29,10 @@
   <meta name="twitter:image" content="https://contenttrackerdashboard.netlify.app/og-image.png">
 
   <link rel="stylesheet" href="styles.css">
-  <script>try{if(localStorage.getItem('ct-theme')==='dark'){document.documentElement.classList.add('dark')}}catch(e){}</script>
+  <!-- Deliberately not deferred: this has to run before the first paint or a
+       dark-mode visitor sees a white flash. An external file rather than an
+       inline script so the CSP stays script-src 'self'. -->
+  <script src="theme-init.js"></script>
 </head>
 <body>
 <a class="skip-link" href="#app">Skip to content</a>
@@ -82,7 +84,11 @@
 
 <main id="app" tabindex="-1"></main>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js" defer></script>
+<!-- Vendored, not from a CDN: a compromised third-party response would run as
+     first-party script on a page whose admin panel can then be driven with the
+     visitor's own session. Same Chart.js 4.4.1 the CDN served — the copy
+     RBI-Weekly-Data-Dashboard already vendors, which carries the MIT banner. -->
+<script src="vendor/chart.umd.js" defer></script>
 <script src="app.js" defer></script>
 
 </body>

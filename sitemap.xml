@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- One page, so one entry. No <lastmod>: nothing in the repo records a
+     build date, and a guessed one is worse than an absent one. -->
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url>
+    <loc>https://contenttrackerdashboard.netlify.app/</loc>
+  </url>
+</urlset>

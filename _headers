@@ -1,0 +1,46 @@
+# Response headers for the Content Tracker.
+#
+# This is the whole header set: the repo has no netlify.toml, and Netlify reads
+# `_headers` in every deploy mode (a netlify.toml is ignored by a drag-and-drop
+# or API deploy). The publish directory is the repo root, so one /* block covers
+# the page, the functions' same-origin host and every asset.
+#
+# script-src is 'self' plus 'unsafe-inline', and the inline half is the known
+# remaining gap: app.js builds markup containing on* handlers and style="…"
+# attributes, and closing that means moving them to delegated listeners and
+# classes first. What this policy already buys is real — no external script
+# origin may run (Chart.js used to come from cdnjs; it is vendored under
+# /vendor now, so re-adding a CDN tag fails closed), eval is blocked, <base>
+# cannot be hijacked, and the site cannot be framed.
+#
+# image.tmdb.org is required: the media lookup returns poster URLs on that host
+# and the cards, the Data table and Random Pick all paint them. Without it every
+# poster silently degrades to its emoji placeholder — the fallback path makes
+# that look like a data problem rather than a policy one.
+#
+# form-action is 'self' rather than 'none' because the admin panel contains real
+# <form> elements; they are handled in JS, but a policy that forbids submission
+# outright would break the no-JS path rather than improve it.
+
+/*
+  Content-Security-Policy: default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://image.tmdb.org; font-src 'self'; connect-src 'self'; base-uri 'self'; form-action 'self'; object-src 'none'; frame-ancestors 'none'
+  # frame-ancestors is the one directive a <meta> tag cannot carry, and the admin
+  # panel is an authenticated page, so the legacy header is paired with it.
+  X-Frame-Options: DENY
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+  # Nothing here uses a device API.
+  Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(), usb=(), bluetooth=(), serial=(), midi=(), magnetometer=(), gyroscope=(), accelerometer=()
+
+# Caching for the static assets. None of these filenames carry a content hash,
+# so none can be `immutable` — a changed file has to reach a returning visitor.
+# Deliberately not applied to the HTML: index.html is the app, and a cached copy
+# of it is how a deploy appears not to have happened.
+/vendor/*
+  Cache-Control: public, max-age=604800, stale-while-revalidate=86400
+
+/*.svg
+  Cache-Control: public, max-age=604800, stale-while-revalidate=86400
+
+/*.png
+  Cache-Control: public, max-age=604800, stale-while-revalidate=86400

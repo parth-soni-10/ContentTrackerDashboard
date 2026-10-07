@@ -64,6 +64,50 @@ function clearFailures(ip) {
   failures.delete(ip);
 }
 
+// A write limiter for the endpoints anyone can reach without a password.
+//
+// Same in-memory, per-instance caveat as the failure window above: this raises
+// the cost of a scripted sweep, it is not a wall. It differs from the login
+// damper in one way that matters — a *successful* call counts too. The login
+// window limits guessing, so only failures matter; here the write itself is the
+// thing being limited, so counting only failures would let a script that always
+// succeeds through at full speed.
+const WRITE_WINDOW_MS = 10 * 60 * 1000; // ten minutes
+const MAX_WRITES = 8; // per client IP per window
+
+const writes = new Map(); // ip -> [write timestamps]
+
+function recentWrites(ip, now = Date.now()) {
+  const kept = (writes.get(ip) || []).filter((stamp) => now - stamp < WRITE_WINDOW_MS);
+  if (kept.length) writes.set(ip, kept);
+  else writes.delete(ip);
+  return kept;
+}
+
+// Ask before doing the work: is this IP already at the limit?
+function writeState(ip) {
+  const stamps = recentWrites(ip);
+  if (stamps.length < MAX_WRITES) return { limited: false, retryAfter: 0 };
+  const age = Date.now() - stamps[0];
+  return {
+    limited: true,
+    retryAfter: Math.max(1, Math.ceil((WRITE_WINDOW_MS - age) / 1000)),
+  };
+}
+
+function recordWrite(ip) {
+  const stamps = recentWrites(ip);
+  stamps.push(Date.now());
+  writes.set(ip, stamps);
+  if (writes.size > MAX_TRACKED_IPS) {
+    for (const key of writes.keys()) {
+      if (writes.size <= MAX_TRACKED_IPS) break;
+      writes.delete(key);
+    }
+  }
+  return stamps.length;
+}
+
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 module.exports = {
@@ -71,6 +115,9 @@ module.exports = {
   failureState,
   recordFailure,
   clearFailures,
+  writeState,
+  recordWrite,
   sleep,
   FAILURE_DELAY_MS,
+  MAX_WRITES,
 };

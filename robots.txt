@@ -1,0 +1,6 @@
+# The whole site is one page and everything published is meant to be
+# crawled; the only job here is to point at the sitemap.
+User-agent: *
+Allow: /
+
+Sitemap: https://contenttrackerdashboard.netlify.app/sitemap.xml
