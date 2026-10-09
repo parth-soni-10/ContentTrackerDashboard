@@ -2303,6 +2303,7 @@ const CAL_DAILY_KINDS = new Set(['news', 'talk show']);
 // month (a third of it) and for a year (where a fixed five would flag every
 // weekly show the moment it appeared 52 times).
 const CAL_DAILY_FLOOR = 5;
+const CAL_PREVIEW = 3;  // entries a day cell shows before its "+N more"
 
 // The filters are kept on the device, like the region below: the calendar then
 // opens on the view that was actually asked for — "Episode releases" stays
@@ -2440,6 +2441,45 @@ function calRank(item) {
   if (item.streaming) return 6;
   return CAL_DAILY_KINDS.has(String(item.kind || '').toLowerCase()) ? 8 : 7;
 }
+// What "trendy" means, in one place: where an item sits among its own kind — a
+// percentile, so "the most popular film of the window" and "the most popular show
+// of the window" are worth the same — plus a nudge for a rating, for arriving on
+// a streaming service and for being a premiere. The two sources' figures are NOT
+// one scale: TMDB's popularity is an unbounded hotness number with a long tail
+// (median 3 across a month of films) while TVmaze's show weight saturates — 38
+// different shows share a 100 in a single October — so a raw score compares TVmaze
+// against itself and buries a Friday's theatrical opening under a PBS cooking
+// show. calRank is what the day drawer is built on, because a schedule reads as
+// tiers; this is what the month's cells preview, because a picture reads as what
+// people watch.
+function calTrend(item) {
+  // The rating is a nudge, not a vote: a film a month from release often has no
+  // vote average at all (that is a 0 here), and a thin one would otherwise beat a
+  // bigger opening on its own.
+  return item.pct * 100 + item.rating * 0.5 + (item.streaming ? 5 : 0) + (item.premiere ? 10 : 0);
+}
+// Ranks each kind against itself and stores the result as `pct` on the item: the
+// strongest film of the window and the strongest show of the window both come out
+// at 1, a median one at 0.5. Equal figures share a rank, so a saturated weight
+// cannot decide anything on its own.
+function calPopularity(list) {
+  const sorted = list.slice().sort((a, b) => a.weight - b.weight);
+  // One film in the window is still the best film in the window.
+  if (sorted.length === 1) { sorted[0].pct = 1; list.forEach(item => { item.trend = calTrend(item); }); return; }
+  const last = Math.max(1, sorted.length - 1);
+  let start = 0;
+  while (start < sorted.length) {
+    let end = start;
+    while (end + 1 < sorted.length && sorted[end + 1].weight === sorted[start].weight) end++;
+    const pct = ((start + end) / 2) / last;
+    for (let i = start; i <= end; i++) sorted[i].pct = pct;
+    start = end + 1;
+  }
+  list.forEach(item => {
+    if (!Number.isFinite(item.pct)) item.pct = 0;
+    item.trend = calTrend(item);
+  });
+}
 const CAL_TIER_LABELS = ['Series premieres', '', 'Films', '', 'Season premieres', '', 'Streaming episodes', 'Broadcast episodes', 'News & talk'];
 function calLabel(item) {
   if (item.media === 'movie') return 'Film';
@@ -2466,6 +2506,10 @@ function calTrackedTitles() {
 function calSafeUrl(url) {
   return /^https?:\/\//i.test(String(url || '')) ? String(url) : '';
 }
+// The cinema "platform" the calendar's own function labels a theatre release
+// with (the Sheet's own wording for it), as opposed to a service a film
+// arrives on.
+const CAL_THEATER = 'Theater';
 // Both sources are reshaped into one item shape so the grid, the agenda and the
 // drawer can share a single renderer and a single filter.
 function calIndex(payload, win) {
@@ -2484,28 +2528,34 @@ function calIndex(payload, win) {
   (payload.movies || []).forEach(movie => {
     if (!movie.title || !movie.date) return;
     const providers = Array.isArray(movie.providers) ? movie.providers.filter(Boolean) : [];
-    movies.push({
+    // A cinema release is a platform here (the Sheet's "Theater"), but it is not
+    // a service a film *arrives on*: treating it as one would rank a film that
+    // is only in cinemas alongside the week's streaming drops.
+    const streaming = providers.some(name => name !== CAL_THEATER);
+    const film = {
       media: 'movie', id: 'm' + movie.id, title: movie.title, episode: '',
       date: movie.date, time: '', season: 0, number: 0,
-      platform: providers[0] || '', platforms: providers, streaming: providers.length > 0,
+      platform: providers[0] || '', platforms: providers, streaming: streaming,
       kind: 'Film', poster: movie.poster || null, rating: Number(movie.rating) || 0,
       weight: Math.max(0, Math.min(100, Number(movie.popularity) || 0)),
       genres: [], premiere: '', url: movie.id ? 'https://www.themoviedb.org/movie/' + movie.id : ''
-    });
-    providers.forEach(name => bump(name, true));
+    };
+    movies.push(film);
+    providers.forEach(name => bump(name, streaming && name !== CAL_THEATER));
   });
 
   (payload.episodes || []).forEach(episode => {
     if (!episode.title || !episode.date) return;
     const platform = episode.platform || '';
-    episodes.push({
+    const show = {
       media: 'episode', id: 'e' + episode.id, title: episode.title, episode: episode.episode || '',
       date: episode.date, time: episode.time || '', season: Number(episode.season) || 0, number: Number(episode.number) || 0,
       platform: platform, platforms: platform ? [platform] : [], streaming: Boolean(episode.streaming),
       kind: episode.kind || '', poster: episode.poster || null, rating: Number(episode.rating) || 0,
       weight: Number(episode.weight) || 0, genres: Array.isArray(episode.genres) ? episode.genres : [],
       premiere: episode.premiere || '', url: calSafeUrl(episode.url)
-    });
+    };
+    episodes.push(show);
     bump(platform, Boolean(episode.streaming));
   });
 
@@ -2529,6 +2579,10 @@ function calIndex(payload, win) {
   dailySeen.forEach((row, key) => {
     if (row.kind || row.dates.size >= dailyDays) daily.add(key);
   });
+
+  // Each source is ranked against itself before the two are mixed (see calTrend).
+  calPopularity(movies);
+  calPopularity(episodes);
 
   movies.concat(episodes).forEach(item => {
     (days[item.date] = days[item.date] || []).push(item);
@@ -2558,16 +2612,20 @@ function calIsDaily(item) {
   if (String(calFilters.search || '').trim()) return false;
   return daily.has(dupNormTitle(item.title));
 }
-function calMatches(item) {
-  if (calFilters.type !== 'all' && item.media !== calFilters.type) return false;
+// `opts` overrides the Show select for a single caller: the day drawer asks for
+// the whole day rather than for the month's noise dial (see calDayView).
+function calMatches(item, opts) {
+  const scope = (opts && opts.scope) || calFilters.scope;
+  const type = (opts && opts.type) || calFilters.type;
+  if (type !== 'all' && item.media !== type) return false;
   // The Show select is the noise dial. "New & notable" keeps premieres and films
   // and hides the weekly run of shows already on; "Episode releases" is its other
   // half — every episode of every show on its release day, with neither the films
   // nor the daily strips, which is the only shape in which a month reads as the
   // schedule it is; "Everything" is both sources raw.
-  if (calFilters.scope === 'episodes') {
+  if (scope === 'episodes') {
     if (item.media !== 'episode' || calIsDaily(item)) return false;
-  } else if (calFilters.scope !== 'all' && item.media === 'episode' && !item.premiere) {
+  } else if (scope !== 'all' && item.media === 'episode' && !item.premiere) {
     return false;
   }
   // An empty value counts as 'all': the platform <select> is rebuilt by the page
@@ -2577,6 +2635,16 @@ function calMatches(item) {
   const query = String(calFilters.search || '').trim().toLowerCase();
   if (query && calTitle(item).toLowerCase().indexOf(query) === -1) return false;
   return true;
+}
+// What a day you have opened is: the whole day, not the month's noise dial. The
+// scope's rules exist so a *month* does not drown — a single day is a day you
+// asked about, so they are off here and the drawer lists every show on it. What
+// the scope implies about media still holds ("Episode releases" must not start
+// listing films), and so do the type, platform and search filters, so the day
+// still answers to the toolbar.
+function calDayView() {
+  const type = calFilters.scope === 'episodes' && calFilters.type === 'all' ? 'episode' : calFilters.type;
+  return { scope: 'all', type: type };
 }
 // Filters minus the platform one: what the platform list itself should offer.
 function calMatchesWithoutPlatform(item) {
@@ -2761,6 +2829,33 @@ function calFilteredDays() {
   });
   return days;
 }
+// The notable few of a day, not its first few, and not one kind's first few: a
+// film opening that Friday and a headline premiere are both what a day is worth
+// opening for, and the two sources cannot be ranked against each other by score
+// alone (see calTrend — TVmaze's weight saturates, TMDB's popularity does not).
+// So the day's most popular film takes the first slot, its best premiere the
+// second, and the rest of the cell is the strongest of what is left. A day whose
+// films are all below the floor is a day with no film opening to speak of, and
+// the cell fills with episodes instead. The counts and the "+N more" are about
+// the whole day either way, and the drawer behind that button is the complete day.
+const CAL_FILM_FLOOR = 5;  // TMDB popularity below which nobody is looking for the film yet
+const calPreview = list => {
+  // A title TMDB lists without anyone looking for it yet — the long tail of
+  // undated-window filler — does not take a cell slot from a show, or a quiet
+  // Saturday would preview three films nobody can watch. A day of *only* those
+  // still shows them: something has to be in the cell.
+  const known = list.filter(item => item.media !== 'movie' || item.weight >= CAL_FILM_FLOOR);
+  const pool = known.length ? known : list;
+  const out = [];
+  const add = item => { if (item && out.indexOf(item) === -1) out.push(item); };
+  const byTrend = pool.slice().sort((a, b) =>
+    b.trend - a.trend || b.rating - a.rating || calRank(a) - calRank(b) || a.title.localeCompare(b.title));
+  add(byTrend.filter(item => item.media === 'movie')
+    .sort((a, b) => b.weight - a.weight || b.rating - a.rating)[0]);
+  add(byTrend.filter(item => item.premiere)[0]);
+  byTrend.forEach(add);
+  return out.slice(0, CAL_PREVIEW);
+};
 function calGridHTML(month, days, today) {
   const slots = calSlots(month);
   let cells = '';
@@ -2772,8 +2867,12 @@ function calGridHTML(month, days, today) {
     if (date < today) classes.push('past');
     if (date === today) classes.push('today');
     if (!list.length) classes.push('cal-empty');
-    const preview = list.slice(0, 3).map(item => calItemHTML(item, date)).join('');
-    const hidden = list.length - 3;
+    const shown = calPreview(list);
+    const preview = shown.map(item => calItemHTML(item, date)).join('');
+    // What the button counts is what the cell is *not* showing, which is the wide
+    // end of the day rather than a fixed three (see calPreview: a cell can choose
+    // to show fewer, and then more of the day is behind the button).
+    const hidden = list.length - shown.length;
     const more = hidden > 0
       ? '<button class="cal-more" type="button" data-act="calendarAction" data-cal="day" data-date="' + date + '">+' + hidden + ' more</button>'
       : '';
@@ -2798,11 +2897,12 @@ function calAgendaHTML(month, days) {
   if (!dates.length) return '<div class="cal-agenda"><div class="empty-state"><span>🔍</span>Nothing matches these filters in ' + escapeHTML(month.label) + '</div></div>';
   return '<div class="cal-agenda">' + dates.map(date => {
     const list = days[date];
-    const hidden = list.length - 3;
+    const shown = calPreview(list);
+    const hidden = list.length - shown.length;
     return '<div class="cal-agenda-day">' +
       '<div class="cal-agenda-head">' + escapeHTML(new Date(date + 'T00:00:00').toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })) +
         '<span class="cal-cell-count">' + list.length + '</span></div>' +
-      list.slice(0, 3).map(item => calItemHTML(item, date)).join('') +
+      shown.map(item => calItemHTML(item, date)).join('') +
       (hidden > 0 ? '<button class="cal-more" type="button" data-act="calendarAction" data-cal="day" data-date="' + date + '">+' + hidden + ' more</button>' : '') +
     '</div>';
   }).join('') + '</div>';
@@ -2826,6 +2926,9 @@ function calFilterFlagHTML() {
   else if (calFilters.scope === 'all') bits.push('Everything');
   if (calFilters.type === 'movie') bits.push('films only');
   else if (calFilters.type === 'episode') bits.push('TV only');
+  // The platform is the loudest filter of all — one service can be a tenth of a
+  // month — so the line that names the filters in force names it too.
+  if (calFilters.platform && calFilters.platform !== 'all') bits.push('on ' + calFilters.platform);
   const query = String(calFilters.search || '').trim();
   if (query) bits.push('“' + query + '”');
   return bits.length
@@ -3060,7 +3163,10 @@ function paintCalDrawer() {
     return;
   }
   const all = calState.data.days[date] || [];
-  const visible = calState.dayAll ? all : all.filter(calMatches);
+  // The day itself, not the month's noise dial (see calDayView), so opening a
+  // date really does show every show on it; "Show all" still lifts the platform,
+  // type and search filters for that one day.
+  const visible = calState.dayAll ? all : all.filter(item => calMatches(item, calDayView()));
   const counts = calDayCounts(visible);
   const hidden = all.length - visible.length;
   const title = new Date(date + 'T00:00:00').toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });

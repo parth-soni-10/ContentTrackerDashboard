@@ -22,6 +22,12 @@
 // Both halves fail independently: if one source is down the other still
 // renders and the response carries a warning the page shows.
 //
+// Third rule, and the one that decides what the page contains: a film or an
+// episode is fetched only if it is on one of the platforms the Sheet logs
+// against (see PLATFORMS) — or, for a film, released in a cinema, which the
+// Sheet calls "Theater". The filter lives here at the fetch boundary, so the
+// rest of the app never sees a title that is not watchable on those services.
+//
 // The key is read per request and the warning names the environment it was
 // missing from, because "already configured" and "configured here" are
 // different statements: a key scoped to production is absent from a deploy
@@ -35,13 +41,78 @@ const TIMEOUT_MS = 6500; // per upstream request
 const MAX_DAYS = 400; // a whole year of window, plus slack for a 366-day one
 const DATED_DAYS = 100; // windows up to this long are fetched to the day
 const MAX_DATED_PAGES = 25; // 20 a page → 500 theatrical releases, the hard cap
-const STREAMING_PAGES = 3; // 60 streaming/TV titles, by popularity
 const YEAR_PAGES = 3; // 60 by popularity: a year at a glance, not a full dump
-const PROVIDER_PAGES = 1; // the provider sweep only labels, it isn't the source of truth
-const PROVIDER_LIMIT = 12; // streaming services swept for platform labels
 const BATCH = 5; // concurrent TMDB requests
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const REGION_RE = /^[A-Z]{2}$/;
+
+// ── THE PLATFORMS THIS CALENDAR IS FOR ───────────────────────────────────
+// The calendar fetches from these platforms and nothing else — the list is the
+// Sheet's own platform vocabulary, which is what makes the page agree with what
+// gets logged. It is applied at the fetch boundary rather than in the page, so
+// the data that is dropped is never sent, never counted and never selectable:
+// a month here is what can actually be watched, not what exists.
+//
+// "Other" is not a service: it is how the Sheet logs a title that had no
+// platform, and it is also what the episode source reports when a show has no
+// network at all — so it is matched like any other spelling. "Theater" is not a
+// service either, so it is deliberately absent here: a cinema release is a
+// property of the film (its theatrical release date), and it is added to the
+// film's platforms below as that label.
+const PLATFORMS = [
+  'Amazon Prime Video',
+  'Angel Studios',
+  'Apple TV+',
+  'CBS',
+  'CineMember',
+  'Disney+',
+  'Eurosport',
+  'HBO Max',
+  'Hulu',
+  'JioCinema',
+  'Lionsgate+ Amazon Channels',
+  'Netflix',
+  'OSN+',
+  'Other',
+  'Paramount+',
+  'Peacock',
+  'Sony Liv',
+  'Universal+ Amazon Channel',
+  'YouTube',
+];
+// The other spellings the two APIs use for the same platform. Comparing names
+// with their punctuation and casing removed ('Apple TV+' and 'Apple TV Plus' are
+// one string without it) leaves only the genuine rewordings to list here: TMDB
+// says "Prime Video" where the Sheet says "Amazon Prime Video", and "Max" where
+// the Sheet still says "HBO Max".
+const PLATFORM_SPELLINGS = {
+  'Amazon Prime Video': ['Prime Video'],
+  'Apple TV+': ['Apple TV Plus', 'Apple TV'],
+  'Disney+': ['Disney Plus'],
+  'Eurosport': ['Eurosport 1', 'Eurosport 2'],
+  'HBO Max': ['Max', 'HBO'],
+  'JioCinema': ['JioHotstar', 'Jio Hotstar', 'Hotstar'],
+  'Lionsgate+ Amazon Channels': ['Lionsgate+', 'Lionsgate Plus', 'Lionsgate Play'],
+  'Paramount+': ['Paramount Plus'],
+  'Peacock': ['Peacock Premium', 'Peacock Plus'],
+  'Universal+ Amazon Channel': ['Universal+', 'Universal Plus', 'Universal+ Amazon Channel'],
+};
+const platformKey = name => String(name || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+const PLATFORM_INDEX = (() => {
+  const index = new Map();
+  PLATFORMS.forEach(name => index.set(platformKey(name), name));
+  Object.keys(PLATFORM_SPELLINGS).forEach(name =>
+    PLATFORM_SPELLINGS[name].forEach(spelling => {
+      const key = platformKey(spelling);
+      if (key && !index.has(key)) index.set(key, name);
+    })
+  );
+  return index;
+})();
+// The Sheet's spelling of a platform the APIs named differently, or '' for a
+// platform that is not on the list — which is the whole filter.
+const platformFor = name => PLATFORM_INDEX.get(platformKey(name)) || '';
+const THEATER = 'Theater';
 
 const json = (statusCode, body, headers = {}) => ({
   statusCode,
@@ -59,25 +130,21 @@ function runContext() {
   return context === 'branch-deploy' && branch ? context + ' on ' + branch : context;
 }
 
-// How much of TMDB to ask for, decided by the window itself. A dated window (a
-// month) is fetched as two passes over different release types, because one
-// query cannot be both complete and readable: 2|3 is a small, finite list for a
-// month and can be walked in date order until the window runs out, while 4|6 is
-// where the volume is — hundreds of small digital titles land on the same day,
-// which buries the month under zero-vote entries and never reaches its end. So
-// the theatre half is complete and the streaming half is the titles people have
-// heard of, by popularity. A long window cannot be listed to the day at all —
-// date-ordered pages of a year only reach its first weeks — so a year is a
-// single popularity sweep: the films anyone will hear about, in three requests.
-// That is what the page's year-at-a-glance view is for.
+// How much of TMDB to ask for, decided by the window itself. The theatre half is
+// one query — 2|3 — and a month of it is a small, finite list that can be walked
+// in release-date order until the window runs out. A year cannot be listed to the
+// day at all (date-ordered pages of a year only reach its first weeks), so a long
+// window takes the same release types ordered by popularity instead: the cinema
+// releases anyone will hear about, in three requests. That is what the page's
+// year-at-a-glance view is for. The streaming half is not a query shape at all
+// any more: it is one sweep per platform on the list (see loadMovies), so a film
+// arrives here because it is on a service the Sheet uses, not because it is
+// digital.
 function moviePlan(days) {
   if (days <= DATED_DAYS) {
-    return {
-      dated: { sort: 'release_date.asc', types: THEATRICAL_TYPES, pages: MAX_DATED_PAGES },
-      buzz: { sort: 'popularity.desc', types: STREAMING_TYPES, pages: STREAMING_PAGES },
-    };
+    return { theater: { sort: 'release_date.asc', types: THEATRICAL_TYPES, pages: MAX_DATED_PAGES } };
   }
-  return { buzz: { sort: 'popularity.desc', types: RELEASE_TYPES, pages: YEAR_PAGES } };
+  return { theater: { sort: 'popularity.desc', types: THEATRICAL_TYPES, pages: YEAR_PAGES } };
 }
 
 function spanDays(from, to) {
@@ -141,7 +208,6 @@ const round1 = value => {
 // what a calendar means by "when it arrives".
 const RELEASE_TYPES = '2|3|4|6';
 const THEATRICAL_TYPES = '2|3';
-const STREAMING_TYPES = '4|6';
 
 function tmdbUrl(path, params) {
   const url = new URL(TMDB_BASE + path);
@@ -172,97 +238,121 @@ async function loadMovies(from, to, region, warnings) {
   // window is finished once a page's own last entry is already past `to` — or
   // once a page comes back short, which is TMDB's last one. Walking in chunks of
   // BATCH and stopping there is what keeps the crowded opening days of a month
-  // from eating the whole budget before the rest of it is reached.
+  // from eating the whole budget before the rest of it is reached. A popularity-
+  // ordered walk (the year window) has no such stop: it is a fixed few pages.
   const plan = moviePlan(spanDays(from, to));
-  const datedPages = [];
-  if (plan.dated) {
-    for (let start = 1; start <= plan.dated.pages; start += BATCH) {
-      const chunk = [];
-      for (let number = start; number < Math.min(start + BATCH, plan.dated.pages + 1); number++) chunk.push(number);
-      const payloads = await mapLimit(chunk, BATCH, number => page(plan.dated, number));
-      datedPages.push(...payloads);
-      const last = payloads[payloads.length - 1];
-      const items = (last && last.results) || [];
-      if (items.length < 20 || items[items.length - 1].release_date > to) break;
-    }
+  const dateOrdered = plan.theater.sort === 'release_date.asc';
+  const theaterPages = [];
+  for (let start = 1; start <= plan.theater.pages; start += BATCH) {
+    const chunk = [];
+    for (let number = start; number < Math.min(start + BATCH, plan.theater.pages + 1); number++) chunk.push(number);
+    const payloads = await mapLimit(chunk, BATCH, number => page(plan.theater, number));
+    theaterPages.push(...payloads);
+    const last = payloads[payloads.length - 1];
+    const items = (last && last.results) || [];
+    if (items.length < 20 || (dateOrdered && items[items.length - 1].release_date > to)) break;
   }
-  const buzzPages = plan.buzz
-    ? await mapLimit(Array.from({ length: plan.buzz.pages }, (unused, i) => i + 1), BATCH, number => page(plan.buzz, number))
-    : [];
 
   const movies = new Map();
-  for (const payload of datedPages.concat(buzzPages)) {
+  for (const payload of theaterPages) {
     for (const item of (payload && payload.results) || []) {
       // The last word on membership, whichever pass found the film: a film is in
       // this calendar only if the date TMDB reports for it falls inside the
       // window, so a popularity-ordered page cannot drag next spring into
       // October.
       if (!item.release_date || item.release_date < from || item.release_date > to) continue;
-      const existing = movies.get(item.id);
-      const entry = {
+      // Everything this pass returns has a theatrical release in the window,
+      // which is what the Sheet calls "Theater".
+      movies.set(item.id, {
         id: item.id,
         title: item.title,
         date: item.release_date,
         poster: item.poster_path ? IMG_BASE + item.poster_path : null,
         rating: round1(item.vote_average),
         popularity: Math.round(Number(item.popularity) || 0),
-        providers: existing ? existing.providers : [],
+        providers: [],
+        theater: true,
+      });
+    }
+  }
+
+  // One sweep per platform on the list that this region actually carries. The
+  // discover response has no provider field, so the only way to know a film is
+  // on a service is to ask that service for its window; the answers are what
+  // make this half a list of what is watchable rather than of what is digital.
+  const providerList = await fetchJSON(tmdbUrl('/watch/providers/movie', { watch_region: region }), warnings, 'TMDB providers');
+  const seen = new Set();
+  const wanted = ((providerList && providerList.results) || [])
+    .map(provider => ({
+      label: platformFor(provider.provider_name),
+      id: provider.provider_id,
+      rank: Number((provider.display_priorities || {})[region]) || 999,
+    }))
+    // A platform can be listed twice ("Netflix" and "Netflix with ads" are two
+    // providers with one name here), so the first of them by regional prominence
+    // is the one swept.
+    .filter(provider => provider.label && provider.label !== THEATER && provider.id)
+    .sort((a, b) => a.rank - b.rank)
+    .filter(provider => {
+      if (seen.has(provider.label)) return false;
+      seen.add(provider.label);
+      return true;
+    });
+  if (!wanted.length) {
+    warn(warnings, 'TMDB films · none of your platforms (' + PLATFORMS.length + ' of them) are listed for ' + region + ' — cinema releases only');
+  }
+
+  const sweeps = await mapLimit(wanted, BATCH, provider =>
+    fetchJSON(
+      tmdbUrl('/discover/movie', {
+        ...windowParams,
+        with_release_type: RELEASE_TYPES,
+        with_watch_providers: String(provider.id),
+        with_watch_monetization_types: 'flatrate|free|ads',
+        watch_region: region,
+        sort_by: 'popularity.desc',
+        page: '1',
+      }),
+      warnings,
+      'TMDB films on ' + provider.label
+    ).then(payload => ({ provider: provider.label, payload }))
+  );
+
+  for (const sweep of sweeps) {
+    if (!sweep || !sweep.payload) continue;
+    for (const item of sweep.payload.results || []) {
+      if (!item.release_date || item.release_date < from || item.release_date > to) continue;
+      const existing = movies.get(item.id);
+      // A film only on a service is a real entry here — that is the service's
+      // own list — so it is added, not merely labelled.
+      const entry = existing || {
+        id: item.id,
+        title: item.title,
+        date: item.release_date,
+        poster: item.poster_path ? IMG_BASE + item.poster_path : null,
+        rating: round1(item.vote_average),
+        popularity: Math.round(Number(item.popularity) || 0),
+        providers: [],
+        theater: false,
       };
-      // The two passes can date the same film differently — the theatre one by
-      // its theatrical or limited date, the streaming one by its digital date —
-      // and a calendar means the first of them, so the earlier date wins. That
-      // also makes the result independent of which pass happened to find the
-      // film last.
-      if (!existing || entry.date < existing.date) movies.set(item.id, entry);
+      if (!existing) movies.set(item.id, entry);
+      // The passes can date the same film differently — the theatre one by its
+      // theatrical or limited date, a service by its digital date — and a
+      // calendar means the first of them, so the earlier date wins. That also
+      // makes the result independent of which pass happened to find it last.
+      else if (!existing.theater && item.release_date < existing.date) existing.date = item.release_date;
+      if (entry.providers.length < 3 && !entry.providers.includes(sweep.provider)) entry.providers.push(sweep.provider);
     }
   }
 
-  // Pass 2 — platform labels. The discover response has no provider field, so
-  // each of the region's most visible streaming services is asked once for the
-  // films it carries in the same window. This only labels films pass 1 already
-  // found: the window query stays the single source of truth for what is in
-  // the calendar, so a provider that answers with an odd extra row can't
-  // reshape the month.
-  if (movies.size) {
-    const providerList = await fetchJSON(tmdbUrl('/watch/providers/movie', { watch_region: region }), warnings, 'TMDB providers');
-    const wanted = ((providerList && providerList.results) || [])
-      .map(provider => ({
-        name: provider.provider_name,
-        id: provider.provider_id,
-        rank: Number((provider.display_priorities || {})[region]) || 999,
-      }))
-      .filter(provider => provider.name && provider.id)
-      .sort((a, b) => a.rank - b.rank)
-      .slice(0, PROVIDER_LIMIT);
-
-    const sweeps = await mapLimit(wanted, BATCH, provider =>
-      fetchJSON(
-        tmdbUrl('/discover/movie', {
-          ...windowParams,
-          with_release_type: RELEASE_TYPES,
-          with_watch_providers: String(provider.id),
-          with_watch_monetization_types: 'flatrate|free|ads',
-          watch_region: region,
-          sort_by: 'popularity.desc',
-          page: '1',
-        }),
-        warnings,
-        'TMDB films on ' + provider.name
-      ).then(payload => ({ provider: provider.name, payload }))
-    );
-
-    for (const sweep of sweeps) {
-      if (!sweep || !sweep.payload) continue;
-      for (const item of sweep.payload.results || []) {
-        const movie = movies.get(item.id);
-        if (movie && movie.providers.length < 3 && !movie.providers.includes(sweep.provider)) {
-          movie.providers.push(sweep.provider);
-        }
-      }
-    }
-  }
-
-  return [...movies.values()].sort((a, b) => a.date.localeCompare(b.date) || b.popularity - a.popularity);
+  // Nothing gets in that is neither in cinemas nor on one of the platforms: a
+  // film with no provider label that no theatre pass found is a title on some
+  // service this calendar is not for. Cinema releases are labelled, so the
+  // platform filter can ask for them (and the badge says how it arrives).
+  return [...movies.values()]
+    .filter(movie => movie.theater || movie.providers.length)
+    .map(movie => (movie.theater ? { ...movie, providers: movie.providers.concat(THEATER) } : movie))
+    .sort((a, b) => a.date.localeCompare(b.date) || b.popularity - a.popularity);
 }
 
 // ── EPISODES ──────────────────────────────────────────────────────────────
@@ -271,7 +361,10 @@ async function loadMovies(from, to, region, warnings) {
 function episodeRow(entry) {
   const show = (entry._embedded && entry._embedded.show) || {};
   const streaming = Boolean(show.webChannel && show.webChannel.name);
-  const platform = (streaming ? show.webChannel.name : (show.network && show.network.name) || '') || 'Other';
+  const channel = (streaming ? show.webChannel.name : (show.network && show.network.name) || '') || 'Other';
+  // The Sheet's spelling of the platform, or '' when the show airs somewhere
+  // this calendar is not for — which is how the episode half is filtered.
+  const platform = platformFor(channel);
   return {
     id: entry.id,
     title: show.name || entry.name || '',
@@ -301,7 +394,11 @@ async function loadEpisodes(from, to, warnings) {
     if (!entry || !entry.airdate || entry.airdate < from || entry.airdate > to) continue;
     if (seen.has(entry.id)) continue;
     seen.add(entry.id);
-    rows.push(episodeRow(entry));
+    const row = episodeRow(entry);
+    // A show on a network or service that is not on the list is not part of this
+    // calendar — that is the whole point of fetching from a fixed set.
+    if (!row.platform) continue;
+    rows.push(row);
   }
   // Most notable first within a day, so the calendar's per-day preview can just
   // take the head of the list: a series premiere outranks a weekly episode.
