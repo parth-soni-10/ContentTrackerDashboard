@@ -34,8 +34,8 @@ const IMG_BASE = 'https://image.tmdb.org/t/p/w185';
 const TIMEOUT_MS = 6500; // per upstream request
 const MAX_DAYS = 400; // a whole year of window, plus slack for a 366-day one
 const DATED_DAYS = 100; // windows up to this long are fetched to the day
-const MOVIE_PAGES = 8; // 20 films a page → 160 by regional release date
-const MARQUEE_PAGES = 3; // and 60 by popularity on top of them (see moviePlan)
+const MAX_DATED_PAGES = 12; // 20 a page → 240 theatrical releases, the hard cap
+const STREAMING_PAGES = 3; // 60 streaming/TV titles, by popularity
 const YEAR_PAGES = 3; // 60 by popularity: a year at a glance, not a full dump
 const PROVIDER_PAGES = 1; // the provider sweep only labels, it isn't the source of truth
 const PROVIDER_LIMIT = 12; // streaming services swept for platform labels
@@ -59,24 +59,25 @@ function runContext() {
   return context === 'branch-deploy' && branch ? context + ' on ' + branch : context;
 }
 
-// How much of TMDB to ask for, decided by the window itself. A short window is
-// fetched in regional release-date order — a calendar has to be complete — plus
-// a popularity-ordered sweep on top, because a busy month has far more releases
-// than any sane number of date-ordered pages reaches (a US October is hundreds)
-// and the films anyone has actually heard of are exactly the ones at the end of
-// that list. A long window cannot be listed to the day at all: eight
-// date-ordered pages only reach a year's first weeks, so a year is fetched by
-// popularity alone — the films anyone will hear about, in a third of the
-// requests. That is what the page's year-at-a-glance view is for.
+// How much of TMDB to ask for, decided by the window itself. A dated window (a
+// month) is fetched as two passes over different release types, because one
+// query cannot be both complete and readable: 2|3 is a small, finite list for a
+// month and can be walked in date order until the window runs out, while 4|6 is
+// where the volume is — hundreds of small digital titles land on the same day,
+// which buries the month under zero-vote entries and never reaches its end. So
+// the theatre half is complete and the streaming half is the titles people have
+// heard of, by popularity. A long window cannot be listed to the day at all —
+// date-ordered pages of a year only reach its first weeks — so a year is a
+// single popularity sweep: the films anyone will hear about, in three requests.
+// That is what the page's year-at-a-glance view is for.
 function moviePlan(days) {
   if (days <= DATED_DAYS) {
     return {
-      sort: 'release_date.asc',
-      pages: Math.max(3, Math.min(MOVIE_PAGES, Math.ceil(days / 5))),
-      marquee: MARQUEE_PAGES,
+      dated: { sort: 'release_date.asc', types: THEATRICAL_TYPES, pages: MAX_DATED_PAGES },
+      buzz: { sort: 'popularity.desc', types: STREAMING_TYPES, pages: STREAMING_PAGES },
     };
   }
-  return { sort: 'popularity.desc', pages: YEAR_PAGES };
+  return { buzz: { sort: 'popularity.desc', types: RELEASE_TYPES, pages: YEAR_PAGES } };
 }
 
 function spanDays(from, to) {
@@ -132,10 +133,15 @@ const round1 = value => {
 };
 
 // ── MOVIES ────────────────────────────────────────────────────────────────
-// Release types 2 (limited theatrical), 3 (theatrical), 4 (digital) and 6 (TV):
-// leaving out 4 would hide every straight-to-streaming release, which is most of
-// what arrives on a service without a cinema run.
+// Release types: 2 (limited theatrical), 3 (theatrical), 4 (digital), 6 (TV).
+// Leaving out 4 would hide every straight-to-streaming release, which is most of
+// what arrives on a service without a cinema run — so they are all here, just
+// asked for in two passes (see moviePlan). The order inside each pair decides
+// which date TMDB reports back for a title that has both, and earliest-first is
+// what a calendar means by "when it arrives".
 const RELEASE_TYPES = '2|3|4|6';
+const THEATRICAL_TYPES = '2|3';
+const STREAMING_TYPES = '4|6';
 
 function tmdbUrl(path, params) {
   const url = new URL(TMDB_BASE + path);
@@ -157,29 +163,35 @@ async function loadMovies(from, to, region, warnings) {
     region,
     'release_date.gte': from,
     'release_date.lte': to,
-    with_release_type: RELEASE_TYPES,
     include_adult: 'false',
   };
+  const page = (pass, number) =>
+    fetchJSON(tmdbUrl('/discover/movie', { ...windowParams, with_release_type: pass.types, sort_by: pass.sort, page: String(number) }), warnings, 'TMDB films');
 
-  // Pass 1 — the calendar itself: the window in regional release-date order,
-  // sized by what kind of window it is (see moviePlan). Pass 2 — the same window
-  // by popularity, for the marquee titles the date-ordered pages could not
-  // reach. Both are best-effort: a pass that fails only adds a warning.
+  // The dated walk (see moviePlan): pages come in release-date order, so the
+  // window is finished once a page's own last entry is already past `to` — or
+  // once a page comes back short, which is TMDB's last one. Walking in chunks of
+  // BATCH and stopping there is what keeps the crowded opening days of a month
+  // from eating the whole budget before the rest of it is reached.
   const plan = moviePlan(spanDays(from, to));
-  const pages = Array.from({ length: plan.pages }, (unused, i) => i + 1);
-  const [datePages, marqueePages] = await Promise.all([
-    mapLimit(pages, BATCH, page =>
-      fetchJSON(tmdbUrl('/discover/movie', { ...windowParams, sort_by: plan.sort, page: String(page) }), warnings, 'TMDB films')
-    ),
-    plan.marquee
-      ? mapLimit(Array.from({ length: plan.marquee }, (unused, i) => i + 1), BATCH, page =>
-          fetchJSON(tmdbUrl('/discover/movie', { ...windowParams, sort_by: 'popularity.desc', page: String(page) }), warnings, 'TMDB films')
-        )
-      : Promise.resolve([]),
-  ]);
+  const datedPages = [];
+  if (plan.dated) {
+    for (let start = 1; start <= plan.dated.pages; start += BATCH) {
+      const chunk = [];
+      for (let number = start; number < Math.min(start + BATCH, plan.dated.pages + 1); number++) chunk.push(number);
+      const payloads = await mapLimit(chunk, BATCH, number => page(plan.dated, number));
+      datedPages.push(...payloads);
+      const last = payloads[payloads.length - 1];
+      const items = (last && last.results) || [];
+      if (items.length < 20 || items[items.length - 1].release_date > to) break;
+    }
+  }
+  const buzzPages = plan.buzz
+    ? await mapLimit(Array.from({ length: plan.buzz.pages }, (unused, i) => i + 1), BATCH, number => page(plan.buzz, number))
+    : [];
 
   const movies = new Map();
-  for (const payload of datePages.concat(marqueePages)) {
+  for (const payload of datedPages.concat(buzzPages)) {
     for (const item of (payload && payload.results) || []) {
       // The last word on membership, whichever pass found the film: a film is in
       // this calendar only if the date TMDB reports for it falls inside the
@@ -220,6 +232,7 @@ async function loadMovies(from, to, region, warnings) {
       fetchJSON(
         tmdbUrl('/discover/movie', {
           ...windowParams,
+          with_release_type: RELEASE_TYPES,
           with_watch_providers: String(provider.id),
           with_watch_monetization_types: 'flatrate|free|ads',
           watch_region: region,
