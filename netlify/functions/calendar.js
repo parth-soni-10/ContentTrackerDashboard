@@ -34,7 +34,7 @@ const IMG_BASE = 'https://image.tmdb.org/t/p/w185';
 const TIMEOUT_MS = 6500; // per upstream request
 const MAX_DAYS = 400; // a whole year of window, plus slack for a 366-day one
 const DATED_DAYS = 100; // windows up to this long are fetched to the day
-const MAX_DATED_PAGES = 12; // 20 a page → 240 theatrical releases, the hard cap
+const MAX_DATED_PAGES = 25; // 20 a page → 500 theatrical releases, the hard cap
 const STREAMING_PAGES = 3; // 60 streaming/TV titles, by popularity
 const YEAR_PAGES = 3; // 60 by popularity: a year at a glance, not a full dump
 const PROVIDER_PAGES = 1; // the provider sweep only labels, it isn't the source of truth
@@ -198,15 +198,22 @@ async function loadMovies(from, to, region, warnings) {
       // window, so a popularity-ordered page cannot drag next spring into
       // October.
       if (!item.release_date || item.release_date < from || item.release_date > to) continue;
-      movies.set(item.id, {
+      const existing = movies.get(item.id);
+      const entry = {
         id: item.id,
         title: item.title,
         date: item.release_date,
         poster: item.poster_path ? IMG_BASE + item.poster_path : null,
         rating: round1(item.vote_average),
         popularity: Math.round(Number(item.popularity) || 0),
-        providers: [],
-      });
+        providers: existing ? existing.providers : [],
+      };
+      // The two passes can date the same film differently — the theatre one by
+      // its theatrical or limited date, the streaming one by its digital date —
+      // and a calendar means the first of them, so the earlier date wins. That
+      // also makes the result independent of which pass happened to find the
+      // film last.
+      if (!existing || entry.date < existing.date) movies.set(item.id, entry);
     }
   }
 
