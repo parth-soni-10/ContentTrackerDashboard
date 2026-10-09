@@ -35,6 +35,7 @@ const TIMEOUT_MS = 6500; // per upstream request
 const MAX_DAYS = 400; // a whole year of window, plus slack for a 366-day one
 const DATED_DAYS = 100; // windows up to this long are fetched to the day
 const MOVIE_PAGES = 8; // 20 films a page → 160 by regional release date
+const MARQUEE_PAGES = 3; // and 60 by popularity on top of them (see moviePlan)
 const YEAR_PAGES = 3; // 60 by popularity: a year at a glance, not a full dump
 const PROVIDER_PAGES = 1; // the provider sweep only labels, it isn't the source of truth
 const PROVIDER_LIMIT = 12; // streaming services swept for platform labels
@@ -59,14 +60,21 @@ function runContext() {
 }
 
 // How much of TMDB to ask for, decided by the window itself. A short window is
-// fetched exhaustively in release-date order — a calendar has to be complete.
-// A long one cannot be: eight date-ordered pages only reach the first weeks of a
-// year, so a year is fetched by popularity instead — the films anyone will
-// actually hear about, in a third of the requests. That is what the page's
-// year-at-a-glance view is for.
+// fetched in regional release-date order — a calendar has to be complete — plus
+// a popularity-ordered sweep on top, because a busy month has far more releases
+// than any sane number of date-ordered pages reaches (a US October is hundreds)
+// and the films anyone has actually heard of are exactly the ones at the end of
+// that list. A long window cannot be listed to the day at all: eight
+// date-ordered pages only reach a year's first weeks, so a year is fetched by
+// popularity alone — the films anyone will hear about, in a third of the
+// requests. That is what the page's year-at-a-glance view is for.
 function moviePlan(days) {
   if (days <= DATED_DAYS) {
-    return { sort: 'primary_release_date.asc', pages: Math.max(3, Math.min(MOVIE_PAGES, Math.ceil(days / 9))) };
+    return {
+      sort: 'release_date.asc',
+      pages: Math.max(3, Math.min(MOVIE_PAGES, Math.ceil(days / 5))),
+      marquee: MARQUEE_PAGES,
+    };
   }
   return { sort: 'popularity.desc', pages: YEAR_PAGES };
 }
@@ -136,27 +144,47 @@ function tmdbUrl(path, params) {
 }
 
 async function loadMovies(from, to, region, warnings) {
+  // The regional window. `release_date.gte/lte` — not `primary_release_date.*` —
+  // is the pair TMDB documents as the region-aware one: with region and
+  // with_release_type the date it returns is the film's own date for those
+  // release types in that region. Pairing a region with primary_release_date.*
+  // is the trap this shipped with: the filter stays global (every region gets an
+  // identical list), while the date reported back is the regional one, which for
+  // a window starting today came back as the window's own first day — a month of
+  // real releases replaced by 80 undated titles, none of them the films actually
+  // opening. The re-check below is what keeps that class of surprise visible.
   const windowParams = {
     region,
-    'primary_release_date.gte': from,
-    'primary_release_date.lte': to,
+    'release_date.gte': from,
+    'release_date.lte': to,
     with_release_type: RELEASE_TYPES,
     include_adult: 'false',
   };
 
-  // Pass 1 — the calendar itself: the window, ordered and sized by what kind of
-  // window it is (see moviePlan).
+  // Pass 1 — the calendar itself: the window in regional release-date order,
+  // sized by what kind of window it is (see moviePlan). Pass 2 — the same window
+  // by popularity, for the marquee titles the date-ordered pages could not
+  // reach. Both are best-effort: a pass that fails only adds a warning.
   const plan = moviePlan(spanDays(from, to));
   const pages = Array.from({ length: plan.pages }, (unused, i) => i + 1);
-  const datePages = await mapLimit(pages, BATCH, page =>
-    fetchJSON(tmdbUrl('/discover/movie', { ...windowParams, sort_by: plan.sort, page: String(page) }), warnings, 'TMDB films')
-  );
+  const [datePages, marqueePages] = await Promise.all([
+    mapLimit(pages, BATCH, page =>
+      fetchJSON(tmdbUrl('/discover/movie', { ...windowParams, sort_by: plan.sort, page: String(page) }), warnings, 'TMDB films')
+    ),
+    plan.marquee
+      ? mapLimit(Array.from({ length: plan.marquee }, (unused, i) => i + 1), BATCH, page =>
+          fetchJSON(tmdbUrl('/discover/movie', { ...windowParams, sort_by: 'popularity.desc', page: String(page) }), warnings, 'TMDB films')
+        )
+      : Promise.resolve([]),
+  ]);
 
   const movies = new Map();
-  for (const payload of datePages) {
+  for (const payload of datePages.concat(marqueePages)) {
     for (const item of (payload && payload.results) || []) {
-      // TMDB already filtered by the regional date; re-checking keeps a film
-      // that only lists a different region's date out of the wrong month.
+      // The last word on membership, whichever pass found the film: a film is in
+      // this calendar only if the date TMDB reports for it falls inside the
+      // window, so a popularity-ordered page cannot drag next spring into
+      // October.
       if (!item.release_date || item.release_date < from || item.release_date > to) continue;
       movies.set(item.id, {
         id: item.id,
