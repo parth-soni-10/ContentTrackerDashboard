@@ -499,6 +499,9 @@ html.dark .cal-month-tab.active:hover { color: #07130d; }
 html.dark .cal-today-tag { background: var(--green-mid); color: #07130d; }
 html.dark .cal-drawer-top { background: linear-gradient(115deg, #123526, #1d4a36); }
 .cal-month-sum { font-size: 13px; color: var(--text-soft); }
+/* The filter in force, said out loud. The calendar opens with whatever was
+   chosen last, so a short month must not read as an empty one. */
+.cal-flag { display: inline-block; margin-right: 2px; padding: 1px 8px; border-radius: 999px; font-size: 11px; font-weight: 700; letter-spacing: .02em; color: var(--green-mid); background: var(--green-pale); border: 1px solid var(--border-mid); vertical-align: 1px; }
 .cal-month-sum strong { color: var(--text-mid); font-weight: 600; font-variant-numeric: tabular-nums; }
 /* "updated 14:32" — the auto-update made visible. */
 .cal-updated { color: var(--text-soft); font-variant-numeric: tabular-nums; white-space: nowrap; }

@@ -2304,7 +2304,40 @@ const CAL_DAILY_KINDS = new Set(['news', 'talk show']);
 // weekly show the moment it appeared 52 times).
 const CAL_DAILY_FLOOR = 5;
 
-let calFilters = { scope: 'new', type: 'all', platform: 'all', search: '' };
+// The filters are kept on the device, like the region below: the calendar then
+// opens on the view that was actually asked for — "Episode releases" stays
+// applied through a reload, a new tab or a later visit — instead of falling back
+// to the default, which reads as missing data rather than as a filter.
+const CAL_FILTERS_KEY = 'ct-cal-filters';
+const CAL_SCOPES = ['new', 'episodes', 'all'];
+const CAL_TYPES = ['all', 'movie', 'episode'];
+function calStoredFilters() {
+  const fallback = { scope: 'new', type: 'all', platform: 'all', search: '' };
+  try {
+    const saved = JSON.parse(localStorage.getItem(CAL_FILTERS_KEY) || 'null');
+    if (!saved || typeof saved !== 'object') return fallback;
+    return {
+      scope: CAL_SCOPES.indexOf(saved.scope) === -1 ? fallback.scope : saved.scope,
+      type: CAL_TYPES.indexOf(saved.type) === -1 ? fallback.type : saved.type,
+      platform: typeof saved.platform === 'string' && saved.platform ? saved.platform.slice(0, 60) : 'all',
+      search: typeof saved.search === 'string' ? saved.search.slice(0, 60) : ''
+    };
+  } catch (e) { return fallback; }
+}
+function calSaveFilters() {
+  // An empty platform is what a rebuilt <select> reads back as, and it means
+  // 'all' to calMatches — so store it that way rather than as a blank that a
+  // later load would have to make sense of.
+  try {
+    localStorage.setItem(CAL_FILTERS_KEY, JSON.stringify({
+      scope: calFilters.scope,
+      type: calFilters.type,
+      platform: calFilters.platform || 'all',
+      search: calFilters.search
+    }));
+  } catch (e) { /* private mode */ }
+}
+let calFilters = calStoredFilters();
 // Movies release on a per-country schedule, so the region decides what the film
 // half of the calendar contains. Default to the browser's own region when it is
 // one we offer, so a non-US visitor sees their own release dates first.
@@ -2784,6 +2817,21 @@ function calUpdatedHTML() {
 function calSummaryHTML(parts) {
   return parts.filter(Boolean).join(' · ');
 }
+// Which filters are in force, named in the summary line. The view opens on
+// whatever was chosen last, so a month that is short because of a filter has to
+// say so rather than looking like a month with nothing in it.
+function calFilterFlagHTML() {
+  const bits = [];
+  if (calFilters.scope === 'episodes') bits.push('Episode releases');
+  else if (calFilters.scope === 'all') bits.push('Everything');
+  if (calFilters.type === 'movie') bits.push('films only');
+  else if (calFilters.type === 'episode') bits.push('TV only');
+  const query = String(calFilters.search || '').trim();
+  if (query) bits.push('“' + query + '”');
+  return bits.length
+    ? '<span class="cal-flag" title="The filters this view is showing">' + escapeHTML(bits.join(' · ')) + '</span>'
+    : '';
+}
 // The two scopes are the two shapes of the same question: this year one month at
 // a time, next year as a whole. Their years come from the clock, so the labels
 // roll over on 1 January without a deploy.
@@ -2814,7 +2862,7 @@ function calMonthBarHTML(days) {
   const monthDays = Object.keys(days).filter(date => date >= month.first && date <= month.last);
   const counts = calDayCounts(monthDays.flatMap(date => days[date]));
   const summary = calState.status === 'ready'
-    ? calSummaryHTML(calCountParts(counts, true).concat(['in ' + escapeHTML(month.label)])) + calUpdatedHTML()
+    ? calSummaryHTML([calFilterFlagHTML()].concat(calCountParts(counts, true), ['in ' + escapeHTML(month.label)])) + calUpdatedHTML()
     : '';
   return '<div class="cal-month-bar"><div class="cal-month-tabs" role="tablist" aria-label="Month">' + tabs + '</div>' +
     '<div class="cal-month-sum" id="cal-summary">' + summary + '</div></div>';
@@ -2823,7 +2871,7 @@ function calYearSummaryHTML(days) {
   const win = calNextYearWindow();
   const counts = calDayCounts(Object.keys(days).filter(date => date >= win.from && date <= win.to).flatMap(date => days[date]));
   const summary = calState.status === 'ready'
-    ? calSummaryHTML(calCountParts(counts, true).concat(['dated so far in ' + win.year])) + calUpdatedHTML()
+    ? calSummaryHTML([calFilterFlagHTML()].concat(calCountParts(counts, true), ['dated so far in ' + win.year])) + calUpdatedHTML()
     : '';
   return '<div class="cal-month-bar"><div class="cal-month-sum" id="cal-summary">' + summary + '</div></div>';
 }
@@ -3623,6 +3671,9 @@ function applyDelegated(el, event, attr) {
     target[key] = el.value;
     if (el.hasAttribute('data-page-reset')) dataPageNum = 1;
     rebuildSection(el.dataset.rebuild);
+    // The calendar keeps its filters across visits, so a change has to reach the
+    // device it was made on.
+    if (objName === 'calFilters') calSaveFilters();
     return;
   }
   if (attr === 'data-page-step') {
