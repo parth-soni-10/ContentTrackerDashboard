@@ -28,6 +28,7 @@ let dataPerPage = PER_PAGE;   // user-selectable rows per page (25 / 50 / 100 / 
 let suggLastPick = null;
 let adminAuthenticated = false;
 let adminEditRow = null;
+let adminForceAdd = false;   // set by the duplicate warning's "Add anyway"
 let reloading = false;
 let loadFailed = false;
 let loadRetried = false;
@@ -572,9 +573,13 @@ function destroyCharts() {
 
 function navigateTo(page) {
   destroyCharts();
+  // The calendar keeps work outside the page container: its day drawer lives on
+  // <body>, and its auto-update timers would otherwise keep polling from a page
+  // nobody is looking at.
+  if (page !== 'calendar') { calDropDrawer(); calStopAuto(); }
   document.querySelectorAll('.nav-tab').forEach(t => t.classList.toggle('active', t.dataset.page === page));
   document.getElementById('app').innerHTML = '';
-  const pages = { readme: renderReadme, current: renderCurrentYear, alltime: renderAllTime, data: renderData, timeline: renderTimeline, suggestions: renderSuggestions, submit: renderSubmit, admin: renderAdmin };
+  const pages = { readme: renderReadme, current: renderCurrentYear, alltime: renderAllTime, data: renderData, timeline: renderTimeline, calendar: renderCalendar, suggestions: renderSuggestions, submit: renderSubmit, admin: renderAdmin };
   (pages[page] || renderReadme)();
   document.getElementById('app').focus({ preventScroll: true });
   window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -830,21 +835,83 @@ function expireAdminSession(reason) {
   if (box && reason) box.innerHTML = `<div class="sf-error">${escapeHTML(reason)} Please sign in again.</div>`;
 }
 
-// Returns the first existing entry that exactly matches a create payload
-// (name, season, watch date and screentime), or null. Mirrors the server-side
-// duplicate guard so mistakes are caught before they reach the network.
-function findDuplicateEntry(payload) {
-  const name = String(payload.name || '').trim().toLowerCase();
-  if (!name) return null;
-  const season = String(payload.season || '').trim().toLowerCase();
-  const date = String(payload.watchDate || '').trim();
+// ── ADD-TIME DUPLICATE CHECK ──────────────────────────────────────────────
+// The gate every create passes through before it is allowed anywhere near the
+// network. Two tiers, because the tracker deliberately allows a rewatch:
+//   * exact  — same title, kind, season, watch date AND screentime: certainly
+//              the same row logged twice, so the add is refused outright and no
+//              override is offered.
+//   * exists — same title, kind and season but not an exact repeat (another
+//              date, or the same date saved with different details): the title
+//              is already in the list, so the add stops and says so either way;
+//              "Add anyway" is the deliberate override for the genuine rewatch
+//              that the Duplicate Checker below also declines to call an error.
+// Title, season and date all go through the same keys the checker uses
+// (dupNormTitle/dupSeasonKey/dupDateKey), so "S2", "Season 2" and "2" agree and
+// casing or spacing can never hide a match. The check this replaced demanded an
+// identical screentime, compared seasons as raw text and ignored the media
+// type: it missed "S2" vs "2", let a same-named movie and series collide, and
+// waved through a rewatch without a word.
+function adminDuplicateCheck(payload) {
+  const found = { exact: [], exists: [] };
+  const name = dupNormTitle(payload.name);
+  if (!name) return found;
+  const kind = dupKind(payload.type);
+  const season = dupSeasonKey(payload.season);
+  const date = dupDateKey(payload.watchDate);
   const screentime = Number(payload.screentime) || 0;
-  return rawData.find(item =>
-    String(item.name || '').trim().toLowerCase() === name &&
-    String(item.season || '').trim().toLowerCase() === season &&
-    String(item.watchDate || '').trim() === date &&
-    (Number(item.screentime) || 0) === screentime
-  ) || null;
+  rawData.forEach(item => {
+    if (dupNormTitle(item.name) !== name) return;
+    if (dupKind(item.type) !== kind) return;
+    if (dupSeasonKey(item.season) !== season) return;
+    if (dupDateKey(item.watchDate) === date && (Number(item.screentime) || 0) === screentime) found.exact.push(item);
+    else found.exists.push(item);
+  });
+  return found;
+}
+
+function adminDuplicateRow(item) {
+  const bits = [];
+  if (item.watchDate) bits.push('watched ' + dupFmtDate(item.watchDate));
+  if (item.episodes) bits.push(item.episodes + ' eps');
+  if (item.screentime) bits.push(item.screentime + ' mins');
+  if (item.platform) bits.push(item.platform);
+  return '<div class="admin-dup-line"><strong>Row ' + escapeHTML(String(item.row)) + '</strong>' +
+    '<span>' + escapeHTML(bits.join(' · ') || 'existing entry') + '</span></div>';
+}
+
+// The warning that stands in for the save: what already exists, and — only when
+// the match is a same-title-different-date one — the deliberate override.
+function renderAdminDuplicateWarning(payload, found) {
+  const msg = document.getElementById('admin-entry-msg');
+  if (!msg) return;
+  const season = dupSeasonKey(payload.season);
+  const kind = dupKind(payload.type) === 'movie' ? 'Movie' : 'Series/Show';
+  const what = escapeHTML(String(payload.name || '').trim()) +
+    ' <span class="admin-dup-kind">(' + escapeHTML(kind) + (season ? ' · Season ' + escapeHTML(season) : '') + ')</span>';
+  const rows = found.exact.concat(found.exists).map(adminDuplicateRow).join('');
+  // The "exists" tier is everything that is not an exact repeat, so name the two
+  // cases it can be: a different date (a rewatch) or the same date saved with
+  // different details (a second viewing) — never claim a date difference that
+  // isn't there.
+  const sameDate = !found.exact.length && dupDateKey(payload.watchDate) &&
+    found.exists.every(item => dupDateKey(item.watchDate) === dupDateKey(payload.watchDate));
+  const tail = found.exact.length
+    ? 'This exact entry — same watch date and screentime — is already saved. Find it in the search below to edit or delete it.'
+    : (sameDate
+      ? 'Already saved on this date with different details, so this may be a second viewing. Add it anyway to log it again.'
+      : 'Logged on a different date, so this may be a rewatch. Add it anyway to log it again.');
+  msg.innerHTML = '<div class="sf-error admin-dup-stop"><strong>Already in your watchlist — nothing was added.</strong>' +
+    '<div class="admin-dup-what">' + what + '</div>' + rows +
+    '<div class="admin-dup-tail">' + tail + '</div>' +
+    (found.exact.length ? '' : '<button class="try-btn admin-dup-force" id="admin-dup-force" type="button">Add anyway</button>') +
+    '</div>';
+  const force = document.getElementById('admin-dup-force');
+  if (force) force.addEventListener('click', () => {
+    adminForceAdd = true;
+    const form = document.getElementById('admin-entry-form');
+    if (form) form.requestSubmit();
+  });
 }
 
 // ── DUPLICATE CHECKER ────────────────────────────────────────────────────
@@ -1065,6 +1132,9 @@ async function submitAdminEntry(event) {
   const msg = document.getElementById('admin-entry-msg');
   const button = form.querySelector('button[type="submit"]');
   const isUpdate = adminEditRow !== null;
+  // Read the override once and clear it, so the next attempt checks again.
+  const forced = adminForceAdd;
+  adminForceAdd = false;
   const payload = Object.fromEntries(new FormData(form));
   ['genre', 'platform'].forEach(key => {
     const select = document.getElementById('admin-' + key);
@@ -1074,13 +1144,23 @@ async function submitAdminEntry(event) {
   if (isUpdate) {
     payload.action = 'update';
     payload.row = adminEditRow;
-  } else if (rawData.length) {
-    // Guard against the double-submit / retry pattern that previously created
-    // duplicate rows: an entry identical to one already in the sheet is
-    // almost certainly a mistake, so stop it before it reaches the network.
-    const dup = findDuplicateEntry(payload);
-    if (dup) {
-      msg.innerHTML = `<div class="sf-error">This exact entry already exists (row ${dup.row}${dup.watchDate ? ', watched ' + escapeHTML(dup.watchDate) : ''}). Nothing was submitted. Find it in the search below and use <strong>Delete</strong> if it was added by mistake.</div>`;
+  } else if (!forced) {
+    // The duplicate check comes first and is the gate: a title already in the
+    // list stops the add and says so, and only a row that is genuinely new (or
+    // an explicit "Add anyway" rewatch) reaches the service.
+    //
+    // An empty rawData would make that check a silent no-op, so the sheet is
+    // read first — and a sheet that still cannot be read stops the add instead
+    // of letting an unchecked entry through. (skipRerender keeps the repaint from
+    // throwing away what is typed in the form.)
+    if (!rawData.length) await loadData(true);
+    if (!rawData.length) {
+      msg.innerHTML = '<div class="sf-error">Could not read the sheet to check for duplicates, so nothing was added. Check the connection and try again.</div>';
+      return;
+    }
+    const duplicate = adminDuplicateCheck(payload);
+    if (duplicate.exact.length || duplicate.exists.length) {
+      renderAdminDuplicateWarning(payload, duplicate);
       return;
     }
   }
@@ -2175,6 +2255,909 @@ function bindTimelineNav() {
   });
 }
 
+// ── RELEASE CALENDAR ──────────────────────────────────────────────────────
+// A rolling release calendar. Films come from TMDB (the same key tmdb-search.js
+// already uses, so there is nothing new to configure) and episodes from TVmaze,
+// whose /schedule/full endpoint answers with the whole future schedule in one
+// request — broadcast *and* streaming, every country.
+//
+// Rolling means nothing about it is fixed at build time:
+//   * **This year** is month by month, from the current month to December. The
+//     months come from the clock, so a finished month drops out of the strip and
+//     a new one joins it at midnight with no deploy.
+//   * **Next year** is one year-at-a-glance view: twelve sections, one per month,
+//     of what is already dated. That is a genuinely different thing to fetch —
+//     a year cannot be listed to the day (the function switches to a
+//     popularity-ordered window for it, see moviePlan) — which is why the two
+//     scopes are two windows rather than one long one.
+//   * It refreshes itself: a 20-minute background poll, a refetch when the tab
+//     comes back into view, and a midnight rollover that moves "today", drops
+//     the month that just ended and rolls the two year tabs over on 1 January.
+//     The function's own CDN cache (max-age 900) is what the background poll
+//     mostly reads, and Refresh passes ?fresh= to ask for a URL the CDN has
+//     never seen.
+//
+// One more thing worth knowing: "everything" is a real number here. Once daily
+// news and talk shows count, TVmaze lists ~300 entries a day, so the default
+// view is premieres + films and the day drawer is where the complete list lives.
+const CALENDAR_URL = '/.netlify/functions/calendar';
+const CAL_TTL_MS = 20 * 60 * 1000;    // how long a loaded window stays fresh
+const CAL_AUTO_MS = 20 * 60 * 1000;   // and how often the open one is refetched
+const CAL_CACHE_MAX = 4;              // windows kept in memory (this year + the year ahead)
+const CAL_REGIONS = [
+  ['US', 'United States'], ['GB', 'United Kingdom'], ['IN', 'India'], ['CA', 'Canada'],
+  ['AU', 'Australia'], ['DE', 'Germany'], ['FR', 'France'], ['NL', 'Netherlands'],
+  ['ES', 'Spain'], ['IT', 'Italy'], ['BR', 'Brazil'], ['MX', 'Mexico'], ['JP', 'Japan'],
+  ['KR', 'South Korea'], ['SE', 'Sweden'], ['NO', 'Norway'], ['DK', 'Denmark'],
+  ['PL', 'Poland'], ['PT', 'Portugal'], ['IE', 'Ireland'], ['NZ', 'New Zealand'],
+  ['ZA', 'South Africa'], ['AE', 'United Arab Emirates'], ['SG', 'Singapore']
+];
+// Monday-first, matching the en-GB dates used everywhere else in the app.
+const CAL_WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+const CAL_PLATFORM_FLOOR = 8;    // entries a platform needs before it earns a filter option
+const CAL_PLATFORM_CAP = 30;
+const CAL_DAILY_KINDS = new Set(['news', 'talk show']);
+// The floor for what counts as a strip that airs every day. The "Episode
+// releases" scope leaves those out (see calIndex), and the number of days it
+// takes is scaled by the length of the window, so the same rule holds for a
+// month (a third of it) and for a year (where a fixed five would flag every
+// weekly show the moment it appeared 52 times).
+const CAL_DAILY_FLOOR = 5;
+
+let calFilters = { scope: 'new', type: 'all', platform: 'all', search: '' };
+// Movies release on a per-country schedule, so the region decides what the film
+// half of the calendar contains. Default to the browser's own region when it is
+// one we offer, so a non-US visitor sees their own release dates first.
+let calRegion = (() => {
+  try {
+    const saved = localStorage.getItem('ct-cal-region');
+    if (saved && CAL_REGIONS.some(region => region[0] === saved)) return saved;
+  } catch (e) { /* private mode — fall through to the locale guess */ }
+  const guess = String(String(navigator.language || '').split('-')[1] || '').toUpperCase();
+  return CAL_REGIONS.some(region => region[0] === guess) ? guess : 'US';
+})();
+let calState = {
+  cache: new Map(),   // window key -> { data, loadedAt, updatedAt } — one entry per built window
+  key: '',            // the window key currently painted
+  data: null,         // { days, movies, episodes, platforms, warnings, generatedAt }
+  loadedAt: 0,
+  updated: '',        // "14:32" — when the painted window was last fetched
+  status: 'idle',     // idle | loading | ready | error
+  error: '',
+  notice: '',         // a background refresh that failed, while a window is on screen
+  scope: 'year',      // 'year' = this year month by month | 'next' = next year at a glance
+  month: 0,           // index into calYearMonths() for the 'year' scope
+  dateKey: '',        // today, so the minute tick can notice midnight
+  expanded: new Set(),// year-view months opened with "Show all"
+  openDay: '',        // ISO date of the open day drawer, '' when closed
+  dayAll: false,      // the drawer is showing the day's full list ignored by filters
+  opener: null,       // element to hand focus back to when the drawer closes
+  platformsKey: '',
+  platformOptions: []
+};
+let calTracked = new Set();
+let calTimers = [];
+
+function calISO(date) {
+  return date.getFullYear() + '-' + String(date.getMonth() + 1).padStart(2, '0') + '-' + String(date.getDate()).padStart(2, '0');
+}
+// Whole days in an inclusive ISO range — the denominator for "is this a daily
+// strip" and nothing else.
+function calDayCount(from, to) {
+  const start = Date.parse(from + 'T00:00:00Z');
+  const end = Date.parse(to + 'T00:00:00Z');
+  return Number.isFinite(start) && Number.isFinite(end) ? Math.max(1, Math.round((end - start) / 86400000) + 1) : 1;
+}
+function calMonthAt(year, month) {
+  return {
+    year: year,
+    month: month,
+    label: MONTHS[month] + ' ' + year,
+    short: MONTHS[month].slice(0, 3),
+    first: calISO(new Date(year, month, 1)),
+    last: calISO(new Date(year, month + 1, 0))
+  };
+}
+// Every month of this year that is still to come — the current one through
+// December. Past months are not offered at all: this is a release calendar, not
+// a history page, and a month that has ended can only ever be empty.
+function calYearMonths(now) {
+  now = now || new Date();
+  const months = [];
+  for (let month = now.getMonth(); month < 12; month++) months.push(calMonthAt(now.getFullYear(), month));
+  return months;
+}
+function calNextYearWindow(now) {
+  now = now || new Date();
+  const year = now.getFullYear() + 1;
+  return { year: year, from: calISO(new Date(year, 0, 1)), to: calISO(new Date(year, 11, 31)) };
+}
+// The one window the current view is asking for. The current month starts today
+// (its earlier days are deliberately left out) while a month still to come is
+// asked for whole, and next year is asked for whole by definition.
+function calScopeWindow() {
+  const now = new Date();
+  const today = calISO(now);
+  if (calState.scope === 'next') return calNextYearWindow(now);
+  const months = calYearMonths(now);
+  const month = months[Math.min(calState.month, months.length - 1)] || months[0];
+  return { month: month, from: month.first < today ? today : month.first, to: month.last };
+}
+function calWindowKey(win) {
+  return win.from + '|' + win.to + '|' + calRegion;
+}
+// One slot per grid cell: leading blanks so the 1st lands under its weekday,
+// then every day of the month.
+function calSlots(month) {
+  const lead = (new Date(month.year, month.month, 1).getDay() + 6) % 7;
+  const days = new Date(month.year, month.month + 1, 0).getDate();
+  const slots = [];
+  for (let i = 0; i < lead; i++) slots.push('');
+  for (let day = 1; day <= days; day++) slots.push(month.first.slice(0, 8) + String(day).padStart(2, '0'));
+  return slots;
+}
+// Within a day the most interesting things lead: a new series first, then a
+// film, then a returning season, then the weekly run of shows already on. Daily
+// news rounds out the tail — which is what "every single thing" honestly looks
+// like once a schedule stops flattering itself.
+function calRank(item) {
+  if (item.media === 'movie') return item.platforms.length ? 2 : 3;
+  if (item.premiere === 'series') return item.streaming ? 0 : 1;
+  if (item.premiere === 'season') return item.streaming ? 4 : 5;
+  if (item.streaming) return 6;
+  return CAL_DAILY_KINDS.has(String(item.kind || '').toLowerCase()) ? 8 : 7;
+}
+const CAL_TIER_LABELS = ['Series premieres', '', 'Films', '', 'Season premieres', '', 'Streaming episodes', 'Broadcast episodes', 'News & talk'];
+function calLabel(item) {
+  if (item.media === 'movie') return 'Film';
+  if (item.premiere === 'series') return 'Series premiere';
+  if (item.premiere === 'season') return 'S' + (item.season || 1) + ' premiere';
+  if (!item.number) return 'New episode';
+  return 'S' + (item.season || 0) + 'E' + item.number;
+}
+function calTitle(item) { return item.title + ' ' + (item.episode || ''); }
+// Titles the watchlist already knows about — a calendar entry you have logged
+// is worth marking, and the sheet's "Homeland All Seasons" has to match the
+// show the calendar lists bare.
+function calTrackedTitles() {
+  const set = new Set();
+  rawData.forEach(row => {
+    const name = dupNormTitle(row.name);
+    if (!name) return;
+    set.add(name);
+    const bare = dupNormTitle(String(row.name || '').replace(/\s+(all seasons|season\s*\d+|s\s*\d+)$/i, ''));
+    if (bare) set.add(bare);
+  });
+  return set;
+}
+function calSafeUrl(url) {
+  return /^https?:\/\//i.test(String(url || '')) ? String(url) : '';
+}
+// Both sources are reshaped into one item shape so the grid, the agenda and the
+// drawer can share a single renderer and a single filter.
+function calIndex(payload, win) {
+  const days = {};
+  const platformCounts = new Map();
+  const movies = [];
+  const episodes = [];
+  const bump = (name, streaming) => {
+    if (!name) return;
+    const row = platformCounts.get(name) || { name: name, streaming: false, count: 0 };
+    row.count++;
+    row.streaming = row.streaming || streaming;
+    platformCounts.set(name, row);
+  };
+
+  (payload.movies || []).forEach(movie => {
+    if (!movie.title || !movie.date) return;
+    const providers = Array.isArray(movie.providers) ? movie.providers.filter(Boolean) : [];
+    movies.push({
+      media: 'movie', id: 'm' + movie.id, title: movie.title, episode: '',
+      date: movie.date, time: '', season: 0, number: 0,
+      platform: providers[0] || '', platforms: providers, streaming: providers.length > 0,
+      kind: 'Film', poster: movie.poster || null, rating: Number(movie.rating) || 0,
+      weight: Math.max(0, Math.min(100, Number(movie.popularity) || 0)),
+      genres: [], premiere: '', url: movie.id ? 'https://www.themoviedb.org/movie/' + movie.id : ''
+    });
+    providers.forEach(name => bump(name, true));
+  });
+
+  (payload.episodes || []).forEach(episode => {
+    if (!episode.title || !episode.date) return;
+    const platform = episode.platform || '';
+    episodes.push({
+      media: 'episode', id: 'e' + episode.id, title: episode.title, episode: episode.episode || '',
+      date: episode.date, time: episode.time || '', season: Number(episode.season) || 0, number: Number(episode.number) || 0,
+      platform: platform, platforms: platform ? [platform] : [], streaming: Boolean(episode.streaming),
+      kind: episode.kind || '', poster: episode.poster || null, rating: Number(episode.rating) || 0,
+      weight: Number(episode.weight) || 0, genres: Array.isArray(episode.genres) ? episode.genres : [],
+      premiere: episode.premiere || '', url: calSafeUrl(episode.url)
+    });
+    bump(platform, Boolean(episode.streaming));
+  });
+
+  // The strips that air every single day — a soap, a news bulletin, a talk show —
+  // are what turns a month of episodes into an unreadable wall, so the "Episode
+  // releases" scope leaves them out. Nothing here is hard-coded: a title whose
+  // episodes land on more than a third of the window's days is running daily (a
+  // weekly show can only reach a seventh of them), and a kind TVmaze already
+  // calls news or talk is one from its first episode.
+  const dailyDays = Math.max(CAL_DAILY_FLOOR, Math.round(calDayCount(win.from, win.to) / 3));
+  const dailySeen = new Map();
+  episodes.forEach(item => {
+    const key = dupNormTitle(item.title);
+    if (!key) return;
+    const row = dailySeen.get(key) || { dates: new Set(), kind: false };
+    row.dates.add(item.date);
+    row.kind = row.kind || CAL_DAILY_KINDS.has(String(item.kind || '').toLowerCase());
+    dailySeen.set(key, row);
+  });
+  const daily = new Set();
+  dailySeen.forEach((row, key) => {
+    if (row.kind || row.dates.size >= dailyDays) daily.add(key);
+  });
+
+  movies.concat(episodes).forEach(item => {
+    (days[item.date] = days[item.date] || []).push(item);
+  });
+  Object.keys(days).forEach(date => {
+    days[date].sort((a, b) => calRank(a) - calRank(b) || b.weight - a.weight || a.title.localeCompare(b.title));
+  });
+
+  return {
+    days: days,
+    movies: movies,
+    episodes: episodes,
+    daily: daily,
+    // Streaming services first (that is what a release calendar is usually
+    // asked about), then the busiest networks.
+    platforms: [...platformCounts.values()].sort((a, b) => Number(b.streaming) - Number(a.streaming) || b.count - a.count || a.name.localeCompare(b.name)),
+    warnings: Array.isArray(payload.warnings) ? payload.warnings : [],
+    generatedAt: payload.generatedAt || ''
+  };
+}
+// A strip that airs every day is not what "which episode of which show is on
+// today" is asking about. A premiere still comes through, and so does anything
+// searched for by name — typing the title *is* the request for it.
+function calIsDaily(item) {
+  const daily = calState.data && calState.data.daily;
+  if (!daily || item.premiere) return false;
+  if (String(calFilters.search || '').trim()) return false;
+  return daily.has(dupNormTitle(item.title));
+}
+function calMatches(item) {
+  if (calFilters.type !== 'all' && item.media !== calFilters.type) return false;
+  // The Show select is the noise dial. "New & notable" keeps premieres and films
+  // and hides the weekly run of shows already on; "Episode releases" is its other
+  // half — every episode of every show on its release day, with neither the films
+  // nor the daily strips, which is the only shape in which a month reads as the
+  // schedule it is; "Everything" is both sources raw.
+  if (calFilters.scope === 'episodes') {
+    if (item.media !== 'episode' || calIsDaily(item)) return false;
+  } else if (calFilters.scope !== 'all' && item.media === 'episode' && !item.premiere) {
+    return false;
+  }
+  // An empty value counts as 'all': the platform <select> is rebuilt by the page
+  // render, and for the moment before its options are repopulated a select can
+  // read back as '' — which must not filter the calendar down to nothing.
+  if (calFilters.platform && calFilters.platform !== 'all' && item.platforms.indexOf(calFilters.platform) === -1) return false;
+  const query = String(calFilters.search || '').trim().toLowerCase();
+  if (query && calTitle(item).toLowerCase().indexOf(query) === -1) return false;
+  return true;
+}
+// Filters minus the platform one: what the platform list itself should offer.
+function calMatchesWithoutPlatform(item) {
+  const saved = calFilters.platform;
+  calFilters.platform = 'all';
+  const ok = calMatches(item);
+  calFilters.platform = saved;
+  return ok;
+}
+
+// ── CALENDAR DATA ────────────────────────────────────────────────────────
+// One window is on screen at a time and each one is remembered by key, so
+// moving between this year's months (or out to next year and back) only fetches
+// what it has never seen.
+function calAdopt(entry, key) {
+  calState.data = entry.data;
+  calState.key = key;
+  calState.loadedAt = entry.loadedAt;
+  calState.updated = entry.updatedAt;
+  calState.status = 'ready';
+  calState.error = '';
+  // The platform <select> belongs to the payload, so a new payload rebuilds it.
+  calState.platformsKey = '';
+}
+// Drops windows the clock has made obsolete — a month that has ended can never
+// be asked for again — and caps what is left, so browsing a year cannot grow the
+// map without bound.
+function calPruneCache(today) {
+  calState.cache.forEach((entry, key) => {
+    if (key.split('|')[1] < today) calState.cache.delete(key);
+  });
+  while (calState.cache.size > CAL_CACHE_MAX) {
+    let oldestKey = '';
+    let oldestAt = Infinity;
+    calState.cache.forEach((entry, key) => {
+      if (entry.loadedAt < oldestAt) { oldestAt = entry.loadedAt; oldestKey = key; }
+    });
+    if (!oldestKey) break;
+    calState.cache.delete(oldestKey);
+  }
+}
+// mode '' — paint the window from cache if it is still fresh, else fetch it.
+//     'refresh' — always fetch (the background poll, the tab coming back).
+//     'fresh' — always fetch, with ?fresh=, which is the only way to bypass the
+//               Netlify CDN's own 15-minute copy of the response.
+async function loadCalendar(mode) {
+  const win = calScopeWindow();
+  const key = calWindowKey(win);
+  const cached = calState.cache.get(key);
+  const hard = mode === 'refresh' || mode === 'fresh';
+  if (!hard && cached && Date.now() - cached.loadedAt < CAL_TTL_MS) {
+    calAdopt(cached, key);
+    updateCalendar();
+    return;
+  }
+  // A copy the page already has — stale, or the window still on screen — is
+  // painted straight away and quietly replaced when the fetch lands, so moving
+  // between months never flashes a loader for data that is right there.
+  if (cached) calAdopt(cached, key);
+  const painting = Boolean(calState.data && calState.key === key);
+  if (!painting) {
+    calState.data = null;
+    calState.status = 'loading';
+    calState.error = '';
+  }
+  calState.notice = '';
+  updateCalendar();
+  try {
+    const query = new URLSearchParams({ from: win.from, to: win.to, region: calRegion });
+    if (mode === 'fresh') query.set('fresh', String(Date.now()));
+    const response = await fetch(CALENDAR_URL + '?' + query.toString(), { headers: { accept: 'application/json' }, credentials: 'same-origin' });
+    if (!response.ok) throw new Error('Calendar service returned ' + response.status);
+    const payload = await response.json();
+    const entry = {
+      data: calIndex(payload, win),
+      loadedAt: Date.now(),
+      updatedAt: new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })
+    };
+    calState.cache.set(key, entry);
+    calPruneCache(calISO(new Date()));
+    calAdopt(entry, key);
+  } catch (error) {
+    // A refresh that fails keeps the window that is already on screen and says
+    // so; only a failure with nothing to show is an error state.
+    if (painting) {
+      calState.notice = 'Could not refresh right now — showing the last load.';
+    } else {
+      calState.status = 'error';
+      calState.error = error && error.message ? error.message : 'Unable to load the calendar';
+    }
+  }
+  updateCalendar();
+}
+
+// ── AUTO-UPDATE ──────────────────────────────────────────────────────────
+// A rolling calendar is the clock's, not a deploy's: this notices midnight (the
+// "today" marker moves, the month that ended leaves the strip, 1 January rolls
+// the two year tabs over) and refetches the open window on a timer. The timers
+// are torn down when the tab is left.
+function calStopAuto() {
+  calTimers.forEach(clearInterval);
+  calTimers = [];
+}
+function calTick() {
+  const today = calISO(new Date());
+  if (today === calState.dateKey) return false;
+  calState.dateKey = today;
+  calState.expanded.clear();
+  loadCalendar('refresh');
+  return true;
+}
+function calStartAuto() {
+  calStopAuto();
+  calState.dateKey = calISO(new Date());
+  calTimers.push(setInterval(calTick, 60000));
+  calTimers.push(setInterval(() => { if (!document.hidden) loadCalendar('refresh'); }, CAL_AUTO_MS));
+}
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden || !document.getElementById('cal-main')) return;
+  calTick();
+  if (Date.now() - calState.loadedAt > CAL_AUTO_MS) loadCalendar('refresh');
+});
+
+// ── CALENDAR RENDER ──────────────────────────────────────────────────────
+function calPosters(scope) {
+  if (!scope) return;
+  // The src is set after the error handler is attached, so a poster that fails
+  // (or that the CSP refuses) degrades to the same placeholder the rest of the
+  // app shows instead of a broken-image icon.
+  scope.querySelectorAll('img.cal-thumb[data-src]').forEach(img => {
+    img.onerror = () => posterFallback(img);
+    img.src = img.dataset.src;
+  });
+}
+function calThumbHTML(item) {
+  if (item.poster) return '<img class="cal-thumb" alt="" loading="lazy" data-src="' + escapeHTML(item.poster) + '">';
+  return '<span class="cal-thumb placeholder" aria-hidden="true">' + (item.media === 'movie' ? '🎬' : '📺') + '</span>';
+}
+function calItemHTML(item, date) {
+  const tag = item.media === 'episode' || item.platform
+    ? '<span class="cal-tag' + (item.premiere ? ' new' : '') + '">' + escapeHTML(calLabel(item)) + '</span>'
+    : '';
+  const platform = item.platform ? '<span class="cal-plat">' + escapeHTML(item.platform) + '</span>' : '';
+  const seen = calTracked.has(dupNormTitle(item.title)) ? '<span class="cal-tag seen" title="Already in your watchlist">✓</span>' : '';
+  return '<button class="cal-item" type="button" data-act="calendarAction" data-cal="day" data-date="' + date + '"' +
+      ' title="' + escapeHTML(calTitle(item).trim()) + '">' +
+      calThumbHTML(item) +
+      '<span class="cal-item-text"><span class="cal-item-title">' + escapeHTML(item.title) + '</span>' +
+      '<span class="cal-item-meta">' + tag + seen + platform + '</span></span>' +
+    '</button>';
+}
+// "1 episodes" is how a count reads when nobody pluralised it.
+const calWord = (count, word) => word + (count === 1 ? '' : 's');
+// Counts read as a list of what is actually in the view: a calendar filtered to
+// episodes has no business announcing "0 films" beside its episodes. When every
+// count is zero the zeros are shown anyway — the drawer's empty line wants a
+// number to sit next to.
+function calCountParts(counts, bold) {
+  const part = (count, word) => (bold ? '<strong>' + count + '</strong>' : count) + ' ' + calWord(count, word);
+  const parts = [];
+  if (counts.films) parts.push(part(counts.films, 'film'));
+  if (counts.episodes) parts.push(part(counts.episodes, 'episode'));
+  if (counts.premieres) parts.push(part(counts.premieres, 'premiere'));
+  return parts.length ? parts : [part(0, 'release')];
+}
+function calDayCounts(list) {
+  let films = 0, premieres = 0;
+  list.forEach(item => {
+    if (item.media === 'movie') films++;
+    if (item.premiere) premieres++;
+  });
+  return { films: films, episodes: list.length - films, premieres: premieres };
+}
+// Filtered items for every day in the window: the single source the grid, the
+// agenda and the counts all read from, so they can never disagree.
+function calFilteredDays() {
+  const days = {};
+  if (!calState.data) return days;
+  Object.keys(calState.data.days).forEach(date => {
+    const list = calState.data.days[date].filter(calMatches);
+    if (list.length) days[date] = list;
+  });
+  return days;
+}
+function calGridHTML(month, days, today) {
+  const slots = calSlots(month);
+  let cells = '';
+  slots.forEach(date => {
+    if (!date) { cells += '<div class="cal-cell cal-blank" aria-hidden="true"></div>'; return; }
+    const list = days[date] || [];
+    const dayNum = Number(date.slice(8));
+    const classes = ['cal-cell'];
+    if (date < today) classes.push('past');
+    if (date === today) classes.push('today');
+    if (!list.length) classes.push('cal-empty');
+    const preview = list.slice(0, 3).map(item => calItemHTML(item, date)).join('');
+    const hidden = list.length - 3;
+    const more = hidden > 0
+      ? '<button class="cal-more" type="button" data-act="calendarAction" data-cal="day" data-date="' + date + '">+' + hidden + ' more</button>'
+      : '';
+    const head = '<div class="cal-cell-top"><span class="cal-daynum">' + dayNum + '</span>' +
+      (date === today ? '<span class="cal-today-tag">today</span>' : '') +
+      (list.length ? '<span class="cal-cell-count" title="' + list.length + ' releases">' + list.length + '</span>' : '') +
+      '</div>';
+    const label = date === today ? 'Today, ' + list.length + ' releases' : new Date(date + 'T00:00:00').toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' }) + ', ' + list.length + ' releases';
+    cells += '<div class="' + classes.join(' ') + '" role="group" aria-label="' + escapeHTML(label) + '">' +
+      head + '<div class="cal-cell-body">' + preview + '</div>' + more + '</div>';
+  });
+  const head = '<div class="cal-grid-head">' + CAL_WEEKDAYS.map(day => '<span>' + day + '</span>').join('') + '</div>';
+  return '<div class="cal-grid">' + head + '<div class="cal-grid-body">' + cells + '</div></div>';
+}
+// Phones get an agenda instead of a seven-column grid — a month of narrow cells
+// is unreadable at 375px, and this view also naturally skips empty days.
+function calAgendaHTML(month, days) {
+  const dates = Object.keys(days).filter(date => date >= month.first && date <= month.last).sort();
+  // Wrapped in .cal-agenda even when empty: that class is what keeps this
+  // message off desktop, where the grid's own note (.cal-none) says the same
+  // thing under a month that still shows its shape.
+  if (!dates.length) return '<div class="cal-agenda"><div class="empty-state"><span>🔍</span>Nothing matches these filters in ' + escapeHTML(month.label) + '</div></div>';
+  return '<div class="cal-agenda">' + dates.map(date => {
+    const list = days[date];
+    const hidden = list.length - 3;
+    return '<div class="cal-agenda-day">' +
+      '<div class="cal-agenda-head">' + escapeHTML(new Date(date + 'T00:00:00').toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })) +
+        '<span class="cal-cell-count">' + list.length + '</span></div>' +
+      list.slice(0, 3).map(item => calItemHTML(item, date)).join('') +
+      (hidden > 0 ? '<button class="cal-more" type="button" data-act="calendarAction" data-cal="day" data-date="' + date + '">+' + hidden + ' more</button>' : '') +
+    '</div>';
+  }).join('') + '</div>';
+}
+// "updated 14:32" is the visible half of the auto-update: the page fetches
+// itself on a timer, so it should be possible to see when it last did.
+function calUpdatedHTML() {
+  if (!calState.updated || calState.status !== 'ready') return '';
+  return ' · <span class="cal-updated" title="The calendar refreshes itself every ' + Math.round(CAL_AUTO_MS / 60000) +
+    ' minutes while this tab is open">updated ' + escapeHTML(calState.updated) + '</span>';
+}
+function calSummaryHTML(parts) {
+  return parts.filter(Boolean).join(' · ');
+}
+// The two scopes are the two shapes of the same question: this year one month at
+// a time, next year as a whole. Their years come from the clock, so the labels
+// roll over on 1 January without a deploy.
+function calScopeBarHTML() {
+  const now = new Date();
+  const tab = (scope, year, note) => {
+    const active = calState.scope === scope;
+    return '<button class="cal-scope-tab' + (active ? ' active' : '') + '" type="button" role="tab" aria-selected="' + String(active) + '"' +
+      ' data-act="calendarAction" data-cal="scope" data-scope="' + scope + '">' +
+      '<span class="cal-scope-year">' + year + '</span><span class="cal-scope-note">' + note + '</span></button>';
+  };
+  return '<div class="cal-scopes" role="tablist" aria-label="Year">' +
+    tab('year', String(now.getFullYear()), 'month by month') +
+    tab('next', String(now.getFullYear() + 1), 'the year ahead') +
+    '</div>';
+}
+// Month tabs are bare month names: they are all inside the year named by the
+// scope tab above them, and twelve "October 2026"s do not fit a strip.
+function calMonthBarHTML(days) {
+  const months = calYearMonths();
+  const tabs = months.map((month, index) => {
+    const active = index === calState.month;
+    return '<button class="cal-month-tab' + (active ? ' active' : '') + '" type="button" role="tab" aria-selected="' + String(active) + '"' +
+      ' aria-label="' + escapeHTML(month.label) + '" data-act="calendarAction" data-cal="month" data-index="' + index + '">' +
+      escapeHTML(month.short) + '</button>';
+  }).join('');
+  const month = months[Math.min(calState.month, months.length - 1)] || months[0];
+  const monthDays = Object.keys(days).filter(date => date >= month.first && date <= month.last);
+  const counts = calDayCounts(monthDays.flatMap(date => days[date]));
+  const summary = calState.status === 'ready'
+    ? calSummaryHTML(calCountParts(counts, true).concat(['in ' + escapeHTML(month.label)])) + calUpdatedHTML()
+    : '';
+  return '<div class="cal-month-bar"><div class="cal-month-tabs" role="tablist" aria-label="Month">' + tabs + '</div>' +
+    '<div class="cal-month-sum" id="cal-summary">' + summary + '</div></div>';
+}
+function calYearSummaryHTML(days) {
+  const win = calNextYearWindow();
+  const counts = calDayCounts(Object.keys(days).filter(date => date >= win.from && date <= win.to).flatMap(date => days[date]));
+  const summary = calState.status === 'ready'
+    ? calSummaryHTML(calCountParts(counts, true).concat(['dated so far in ' + win.year])) + calUpdatedHTML()
+    : '';
+  return '<div class="cal-month-bar"><div class="cal-month-sum" id="cal-summary">' + summary + '</div></div>';
+}
+
+// ── NEXT YEAR, AT A GLANCE ───────────────────────────────────────────────
+// One section per month of next year, in the order things arrive. Most of a year
+// nobody has finished announcing is white space, so an empty month says so
+// rather than rendering nothing, and a month with more than a handful of entries
+// opens in place ("Show all") because the payload already holds them.
+const CAL_YEAR_PREVIEW = 4;
+function calYearRowHTML(item, date) {
+  const label = new Date(date + 'T00:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+  return '<div class="cal-year-row"><span class="cal-year-date">' + escapeHTML(label) + '</span>' + calItemHTML(item, date) + '</div>';
+}
+function calYearHTML(days) {
+  const win = calNextYearWindow();
+  const sections = [];
+  for (let month = 0; month < 12; month++) {
+    const info = calMonthAt(win.year, month);
+    const pick = source => Object.keys(source)
+      .filter(date => date >= info.first && date <= info.last)
+      .sort()
+      .flatMap(date => source[date].map(item => ({ item: item, date: date })));
+    const list = pick(days);
+    const unfiltered = pick(calState.data.days);
+    const counts = calDayCounts(list.map(entry => entry.item));
+    const open = calState.expanded.has(month);
+    const shown = open ? list : list.slice(0, CAL_YEAR_PREVIEW);
+    const hidden = list.length - shown.length;
+    // "nothing announced yet" is a claim about the year, so it may only be made
+    // when the month really has nothing — a month hidden by the filters says so
+    // instead, the same way the month view's .cal-none does.
+    const meta = list.length
+      ? calCountParts(counts, false).join(' · ')
+      : (unfiltered.length ? 'nothing matches these filters' : 'nothing announced yet');
+    const toggle = (label, text) => '<button class="cal-more" type="button" data-act="calendarAction" data-cal="expand" data-month="' + month + '">' + label + '</button>';
+    sections.push('<section class="cal-year-month' + (list.length ? '' : ' empty') + '">' +
+      '<div class="cal-year-head"><h3>' + escapeHTML(MONTHS[month]) + '</h3>' +
+        '<span class="cal-year-meta">' + escapeHTML(meta) + '</span></div>' +
+      (shown.length ? '<div class="cal-year-items">' + shown.map(entry => calYearRowHTML(entry.item, entry.date)).join('') + '</div>' : '') +
+      (hidden > 0 ? toggle('Show all ' + list.length, 'more') : '') +
+      (open && list.length > CAL_YEAR_PREVIEW ? toggle('Show less', 'less') : '') +
+    '</section>');
+  }
+  return '<div class="cal-year">' + sections.join('') + '</div>';
+}
+function calLoadLabel() {
+  if (calState.scope === 'next') return 'Fetching everything dated for ' + calNextYearWindow().year + '…';
+  const months = calYearMonths();
+  const month = months[Math.min(calState.month, months.length - 1)] || months[0];
+  return 'Fetching ' + month.label + '…';
+}
+// "Episode releases" and "Films only" cannot both hold, and the pair would paint
+// an empty month that reads as a data problem. The film option is disabled while
+// the episode scope is on, and a choice left over from before falls back.
+function calSyncTypeSelect() {
+  const select = document.getElementById('cal-type');
+  if (!select) return;
+  const films = select.querySelector('option[value="movie"]');
+  const episodesScope = calFilters.scope === 'episodes';
+  if (films) films.disabled = episodesScope;
+  if (episodesScope && calFilters.type === 'movie') {
+    calFilters.type = 'all';
+    select.value = 'all';
+  }
+}
+function updateCalendar() {
+  const main = document.getElementById('cal-main');
+  if (!main) return;
+  calSyncTypeSelect();
+
+  if (calState.status === 'loading' && !calState.data) {
+    main.innerHTML = '<div class="cal-loading"><div class="loader-bar"><div class="loader-fill"></div></div>' +
+      '<p>' + escapeHTML(calLoadLabel()) + '</p></div>';
+    return;
+  }
+  if (calState.status === 'error' && !calState.data) {
+    main.innerHTML = '<div class="note-card note-card-wide"><div class="note-icon" aria-hidden="true">⚠️</div>' +
+      '<div class="note-body"><strong>Couldn\'t load the release calendar.</strong>' + escapeHTML(calState.error) + '</div></div>' +
+      '<div class="cal-retry"><button class="try-btn" type="button" data-act="calendarAction" data-cal="retry">↻ Try again</button></div>';
+    return;
+  }
+
+  calTracked = calTrackedTitles();
+  const data = calState.data;
+  if (!data) return;
+  const today = calISO(new Date());
+  const months = calYearMonths();
+  const month = months[Math.min(calState.month, months.length - 1)] || months[0];
+  const days = calFilteredDays();
+
+  const bar = document.getElementById('cal-months');
+  if (bar) bar.innerHTML = calScopeBarHTML() + (calState.scope === 'year' ? calMonthBarHTML(days) : calYearSummaryHTML(days));
+  // When the month strip has to scroll (phones), the selected month is the one
+  // that matters — and after a rebuild it can be sitting off-screen behind the
+  // strip's own scroll position.
+  const tabs = document.querySelector('.cal-month-tabs');
+  const activeTab = tabs && tabs.querySelector('.cal-month-tab.active');
+  if (tabs && activeTab && tabs.scrollWidth > tabs.clientWidth + 4) activeTab.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+
+  // The two pills follow the view: the selected month this year, the whole of
+  // next year. The summary line above them says which period it is.
+  const period = calState.scope === 'year'
+    ? { from: month.first, to: month.last }
+    : { from: calNextYearWindow().from, to: calNextYearWindow().to };
+  const counts = calDayCounts(Object.keys(days).filter(date => date >= period.from && date <= period.to).flatMap(date => days[date]));
+  const mCount = document.getElementById('cal-mcount');
+  const eCount = document.getElementById('cal-ecount');
+  if (mCount) mCount.textContent = counts.films;
+  if (eCount) eCount.textContent = counts.episodes;
+
+  // The platform filter's options follow what is actually in the window (minus
+  // the platform filter itself), so choosing one can't empty its own list.
+  const offered = new Set();
+  Object.keys(data.days).forEach(date => {
+    data.days[date].forEach(item => { if (calMatchesWithoutPlatform(item)) offered.add(item.platform); });
+  });
+  const options = data.platforms
+    .filter(platform => platform.name && offered.has(platform.name) && platform.count >= CAL_PLATFORM_FLOOR)
+    .slice(0, CAL_PLATFORM_CAP);
+  const platformKey = options.map(platform => platform.name).join('|');
+  if (platformKey !== calState.platformsKey) {
+    calState.platformsKey = platformKey;
+    const select = document.getElementById('cal-plat');
+    if (select) {
+      select.innerHTML = '<option value="all">All platforms</option>' + options
+        .map(platform => '<option value="' + escapeHTML(platform.name) + '">' + escapeHTML(platform.name) + ' · ' + platform.count + '</option>').join('');
+      select.value = options.some(platform => platform.name === calFilters.platform) ? calFilters.platform : 'all';
+      calFilters.platform = select.value;
+    }
+  }
+
+  const warnings = data.warnings.length
+    ? '<div class="cal-warn"><strong>Partially loaded</strong>' + escapeHTML(data.warnings.join(' · ')) + '</div>'
+    : '';
+  const notice = calState.notice ? '<div class="cal-notice">' + escapeHTML(calState.notice) + '</div>' : '';
+  if (calState.scope === 'next') {
+    main.innerHTML = warnings + notice + calYearHTML(days);
+  } else {
+    const monthDays = Object.keys(days).filter(date => date >= month.first && date <= month.last);
+    const none = monthDays.length ? '' : '<div class="cal-none">Nothing matches these filters in ' + escapeHTML(month.label) + ' — try “Everything” or a different platform.</div>';
+    main.innerHTML = warnings + notice + calGridHTML(month, days, today) + calAgendaHTML(month, days) + none;
+  }
+  calPosters(main);
+  paintCalDrawer();
+}
+
+// ── DAY DRAWER ───────────────────────────────────────────────────────────
+// The complete list for one day. The grid can only ever show three entries a
+// cell, so this is where "every single thing" is actually readable.
+function calRowHTML(item) {
+  const url = calSafeUrl(item.url);
+  const meta = [];
+  if (item.media === 'episode') meta.push(escapeHTML(calLabel(item)));
+  if (item.platform) meta.push(escapeHTML(item.platform));
+  if (item.time) meta.push(escapeHTML(item.time));
+  if (item.kind) meta.push(escapeHTML(item.kind));
+  const genres = item.genres.length ? '<span class="cal-row-genres">' + escapeHTML(item.genres.join(' · ')) + '</span>' : '';
+  const rating = item.rating > 0 ? '<span class="cal-row-rating">' + ratingStars(item.rating) + '</span>' : '';
+  const seen = calTracked.has(dupNormTitle(item.title)) ? '<span class="cal-tag seen" title="Already in your watchlist">✓ in your list</span>' : '';
+  return '<div class="cal-row">' + calThumbHTML(item) +
+    '<div class="cal-row-main">' +
+      '<div class="cal-row-title">' + escapeHTML(item.title) + seen + '</div>' +
+      (item.episode ? '<div class="cal-row-ep">' + escapeHTML(item.episode) + '</div>' : '') +
+      '<div class="cal-row-meta"><span>' + meta.join(' · ') + '</span>' + genres + rating + '</div>' +
+    '</div>' +
+    (url ? '<a class="cal-row-link" href="' + escapeHTML(url) + '" target="_blank" rel="noopener" title="Open the source page">↗</a>' : '') +
+  '</div>';
+}
+function calDrawerRowsHTML(list) {
+  let lastTier = -1;
+  return list.map(item => {
+    const tier = calRank(item);
+    const heading = tier !== lastTier && CAL_TIER_LABELS[tier]
+      ? '<div class="cal-row-head">' + escapeHTML(CAL_TIER_LABELS[tier]) + '</div>' : '';
+    lastTier = tier;
+    return heading + calRowHTML(item);
+  }).join('');
+}
+function paintCalDrawer() {
+  const existing = document.getElementById('cal-drawer');
+  if (existing) existing.remove();
+  const date = calState.openDay;
+  if (!date || !calState.data) {
+    document.documentElement.classList.remove('cal-lock');
+    return;
+  }
+  const all = calState.data.days[date] || [];
+  const visible = calState.dayAll ? all : all.filter(calMatches);
+  const counts = calDayCounts(visible);
+  const hidden = all.length - visible.length;
+  const title = new Date(date + 'T00:00:00').toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+  const summary = calCountParts(counts, false).join(' · ');
+  const wrap = document.createElement('div');
+  wrap.id = 'cal-drawer';
+  wrap.className = 'cal-drawer';
+  wrap.innerHTML =
+    '<div class="cal-drawer-scrim" data-act="calendarAction" data-cal="close"></div>' +
+    '<div class="cal-drawer-panel" role="dialog" aria-modal="true" aria-labelledby="cal-drawer-title" tabindex="-1">' +
+      '<div class="cal-drawer-top">' +
+        '<div><div class="cal-drawer-title" id="cal-drawer-title">' + escapeHTML(title) + '</div>' +
+        '<div class="cal-drawer-sub">' + escapeHTML(summary) + '</div></div>' +
+        '<button class="cal-drawer-close" type="button" data-act="calendarAction" data-cal="close" aria-label="Close">✕</button>' +
+      '</div>' +
+      (hidden > 0 ? '<div class="cal-drawer-note">' + hidden + ' more release' + (hidden === 1 ? '' : 's') + ' here hidden by your filters.' +
+        '<button class="cal-drawer-showall" type="button" data-act="calendarAction" data-cal="showall">Show all ' + all.length + '</button></div>' : '') +
+      '<div class="cal-drawer-body">' + (visible.length ? calDrawerRowsHTML(visible) : '<div class="cal-row-empty">Nothing here matches the current filters.</div>') + '</div>' +
+    '</div>';
+  document.body.appendChild(wrap);
+  document.documentElement.classList.add('cal-lock');
+  calPosters(wrap);
+  const panel = wrap.querySelector('.cal-drawer-panel');
+  if (panel) panel.focus();
+}
+// The drawer is appended to <body>, so navigating away has to take it with it.
+function calDropDrawer() {
+  const el = document.getElementById('cal-drawer');
+  if (el) el.remove();
+  document.documentElement.classList.remove('cal-lock');
+  calState.openDay = '';
+  calState.dayAll = false;
+}
+function calOpenDay(date, opener) {
+  calState.openDay = date;
+  calState.dayAll = false;
+  calState.opener = opener || null;
+  paintCalDrawer();
+}
+function calCloseDay() {
+  const opener = calState.opener;
+  calState.opener = null;
+  calDropDrawer();
+  paintCalDrawer();
+  // The grid is not rebuilt while the drawer is open, so the button that opened
+  // it is still in the document and can take focus back.
+  if (opener && document.contains(opener) && typeof opener.focus === 'function') opener.focus();
+}
+// data-act="calendarAction" entry point, dispatched through ACTIONS so the
+// markup stays free of inline handlers (see the CSP note at the end of app.js).
+function calendarAction(event) {
+  const el = this;
+  const what = el.dataset.cal;
+  if (what === 'day') { calOpenDay(el.dataset.date, el); return; }
+  if (what === 'close') { calCloseDay(); return; }
+  if (what === 'showall') { calState.dayAll = true; paintCalDrawer(); return; }
+  if (what === 'scope') {
+    const scope = el.dataset.scope === 'next' ? 'next' : 'year';
+    if (scope === calState.scope) return;
+    calState.scope = scope;
+    calState.expanded.clear();
+    loadCalendar('');
+    return;
+  }
+  if (what === 'month') {
+    const index = Number(el.dataset.index) || 0;
+    if (index === calState.month) return;
+    calState.month = index;
+    loadCalendar('');
+    return;
+  }
+  if (what === 'expand') {
+    const month = Number(el.dataset.month);
+    if (calState.expanded.has(month)) calState.expanded.delete(month);
+    else calState.expanded.add(month);
+    updateCalendar();
+    return;
+  }
+  if (what === 'refresh' || what === 'retry') { loadCalendar('fresh'); return; }
+}
+document.addEventListener('keydown', event => {
+  if (event.key === 'Escape' && calState.openDay) calCloseDay();
+});
+
+function renderCalendar() {
+  calState.opener = null;
+  const regionOptions = CAL_REGIONS.map(region => '<option value="' + region[0] + '">' + escapeHTML(region[1]) + '</option>').join('');
+  document.getElementById('app').innerHTML =
+    '<div class="page-header">' +
+      '<div class="ph-left"><h1>Release Calendar</h1><p>Rolling: this year month by month, next year at a glance · films from TMDB, episodes from TVmaze</p></div>' +
+      '<div class="ph-right">' +
+        '<div class="dh-pill">🎬 <strong id="cal-mcount">—</strong> films</div>' +
+        '<div class="dh-pill">📺 <strong id="cal-ecount">—</strong> episodes</div>' +
+      '</div>' +
+    '</div>' +
+    '<div class="data-filters cal-filters">' +
+      '<div class="df-select"><select id="cal-scope" aria-label="Show" data-filter="calFilters.scope" data-rebuild="calendar">' +
+        '<option value="new">New &amp; notable</option>' +
+        '<option value="episodes" title="Every episode releasing, films and the strips that air every day left out">Episode releases</option>' +
+        '<option value="all">Everything</option></select></div>' +
+      '<div class="df-select"><select id="cal-type" aria-label="Type" data-filter="calFilters.type" data-rebuild="calendar">' +
+        '<option value="all">Films &amp; TV</option><option value="movie">Films only</option><option value="episode">TV only</option></select></div>' +
+      '<div class="df-select"><select id="cal-plat" aria-label="Platform" data-filter="calFilters.platform" data-rebuild="calendar">' +
+        '<option value="all">All platforms</option></select></div>' +
+      '<div class="df-select"><select id="cal-region" aria-label="Film release region">' + regionOptions + '</select></div>' +
+      '<div class="df-divider"></div>' +
+      '<div class="df-search">' +
+        '<svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle cx="6.5" cy="6.5" r="5" stroke="#7a9e8a" stroke-width="1.5"/><path d="M10.5 10.5L14 14" stroke="#7a9e8a" stroke-width="1.5" stroke-linecap="round"/></svg>' +
+        '<input id="cal-search" type="text" aria-label="Search titles" placeholder="Search titles…" data-filter="calFilters.search" data-rebuild="calendar">' +
+      '</div>' +
+      '<button class="tool-btn" type="button" data-act="calendarAction" data-cal="refresh" title="Fetch the calendar again, bypassing the cache">↻ Refresh</button>' +
+    '</div>' +
+    '<div id="cal-months"></div>' +
+    '<div class="cal-main" id="cal-main"></div>' +
+    '<div class="footer">Release data: <a href="https://www.tvmaze.com" target="_blank" rel="noopener">TVmaze</a> (CC BY-SA) and <a href="https://www.themoviedb.org" target="_blank" rel="noopener">TMDB</a></div>';
+
+  // The selects are rebuilt by the page render, so a filter kept across a tab
+  // switch has to be put back into them.
+  const keep = (id, value) => { const el = document.getElementById(id); if (el) el.value = value; };
+  keep('cal-scope', calFilters.scope);
+  keep('cal-type', calFilters.type);
+  keep('cal-plat', calFilters.platform);
+  const search = document.getElementById('cal-search');
+  if (search) search.value = calFilters.search;
+  const region = document.getElementById('cal-region');
+  if (region) {
+    region.value = calRegion;
+    region.addEventListener('change', () => {
+      calRegion = region.value;
+      try { localStorage.setItem('ct-cal-region', calRegion); } catch (e) {}
+      // A region is a different window key, so this is a first load for it — and
+      // the CDN may already hold the same region from another device, which
+      // ?fresh= is what gets past.
+      loadCalendar('fresh');
+    });
+  }
+  // This render has just written a fresh platform <select> holding only its
+  // "All platforms" option, so the options cache must be dropped or
+  // updateCalendar() would decide the list is already current and leave the
+  // dropdown empty for the rest of the visit.
+  calState.platformsKey = '';
+  calStartAuto();
+  loadCalendar('');
+}
+
 // ── SUGGESTIONS ───────────────────────────────────────────────────────────
 // Uniform pick excluding the current suggestion so re-spins try someone new.
 function pickFrom(pool, excludeName) {
@@ -2619,16 +3602,17 @@ async function submitSuggestion() {
        suggSpin reads clientX/clientY off that event to place its ripple.
      * data-act and data-change both name a function in ACTIONS; which attribute an
        element carries is what decides the event it fires on. */
-const ACTIONS = { suggSpin, suggTryAgain, submitSuggestion, updateSuggCount };
+const ACTIONS = { suggSpin, suggTryAgain, submitSuggestion, updateSuggCount, calendarAction };
 
 // Read the live bindings, so a reassignment of any filter object is picked up.
-const filterByName = () => ({ curFilters, allFilters, datFilters });
+const filterByName = () => ({ curFilters, allFilters, datFilters, calFilters });
 
 function rebuildSection(which) {
   if (which === 'currentYear') updateCurrentYear();
   else if (which === 'allTime') updateAllTime();
   else if (which === 'dataTable') updateDataTable();
   else if (which === 'suggCount') updateSuggCount();
+  else if (which === 'calendar') updateCalendar();
 }
 
 function applyDelegated(el, event, attr) {

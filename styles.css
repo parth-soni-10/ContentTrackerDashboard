@@ -427,6 +427,24 @@ html.dark .rm-badge.genre { background: #24382c; color: var(--text-mid); }
 .dup-tag.keep { color: var(--green); background: var(--green-pale); }
 .dup-tag.copy { color: #c0392b; background: rgba(224, 80, 77, 0.1); }
 
+/* Add-time duplicate warning — the block that stands in for a save that was
+   stopped. It sits where the success message would have been, so it reuses
+   .sf-error and adds the structure: what was matched, which rows already hold
+   it, and (for a rewatch) the deliberate override. */
+.admin-dup-stop { line-height: 1.55; }
+.admin-dup-stop > strong { display: block; font-size: 14px; }
+.admin-dup-what { margin: 7px 0 9px; font-size: 14.5px; font-weight: 600; color: var(--text); }
+.admin-dup-kind { font-size: 12.5px; font-weight: 500; color: var(--text-mid); }
+.admin-dup-line { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 7px 10px; margin-bottom: 5px; background: var(--surface); border: 1px solid var(--border); border-radius: 7px; font-size: 12.5px; color: var(--text-mid); }
+.admin-dup-line strong { font-weight: 600; color: var(--text); white-space: nowrap; }
+.admin-dup-line span { text-align: right; }
+/* The detail line is information rather than alarm, so it takes the body's
+   mid tone instead of the .sf-error red — 4.6:1 was the red's ceiling on the
+   pale background. The border is themed like the other destructive buttons. */
+.admin-dup-tail { margin-top: 9px; font-size: 13px; color: var(--text-mid); }
+.admin-dup-force { width: auto; margin-top: 10px; padding: 8px 14px; min-height: 0; color: var(--red); border-color: var(--border-mid); }
+.admin-dup-force:hover:not(:disabled) { color: var(--red); background: rgba(224, 80, 77, .08); border-color: var(--red); }
+
 /* ── SUBMIT PAGE ── */
 .submit-page { padding: 28px 32px 48px; display: grid; grid-template-columns: 1fr 320px; gap: 24px; }
 .submit-form-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r); padding: 28px 22px; box-shadow: var(--shadow-sm); }
@@ -462,6 +480,140 @@ html.dark .sf-submit-btn { background: linear-gradient(135deg, #2e7a56, #1b4032)
 .sr-stat-l { font-size: 14px; color: var(--text-mid); }
 .sr-stat-r { font-family: "Inter", sans-serif; font-size: 18px; line-height: 24px; font-weight: 600; color: var(--text); letter-spacing: -.1px; font-variant-numeric: tabular-nums; }
 
+/* ── RELEASE CALENDAR ── */
+/* Month tabs + the grid. Cells are surface cards like the rest of the app, and
+   everything colours from the tokens, so dark mode needs no extra rules beyond
+   the two the palette can't express (the active tab's white-on-green and the
+   scrim). */
+.cal-month-bar { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; padding: 18px 32px 0; }
+.cal-month-tabs { display: inline-flex; gap: 3px; padding: 3px; background: var(--surface); border: 1px solid var(--border-mid); border-radius: 10px; box-shadow: var(--shadow-sm); }
+.cal-month-tab { border: 0; background: transparent; font: inherit; font-size: 13px; font-weight: 600; color: var(--text-soft); padding: 7px 16px; border-radius: 8px; cursor: pointer; transition: background-color .18s, color .18s; }
+.cal-month-tab:hover { color: var(--green); background: var(--green-pale); }
+.cal-month-tab.active { background: var(--green); color: #fff; box-shadow: 0 2px 8px rgba(36,92,66,.28); }
+.cal-month-tab.active:hover { color: #fff; }
+/* In dark mode --green is a LIGHT green, so white-on-green would be the one
+   unreadable thing on the page; these three carry dark text instead, and the
+   drawer header keeps a dark gradient the way .page-header does. */
+html.dark .cal-month-tab.active { background: var(--green-mid); color: #07130d; }
+html.dark .cal-month-tab.active:hover { color: #07130d; }
+html.dark .cal-today-tag { background: var(--green-mid); color: #07130d; }
+html.dark .cal-drawer-top { background: linear-gradient(115deg, #123526, #1d4a36); }
+.cal-month-sum { font-size: 13px; color: var(--text-soft); }
+.cal-month-sum strong { color: var(--text-mid); font-weight: 600; font-variant-numeric: tabular-nums; }
+/* "updated 14:32" — the auto-update made visible. */
+.cal-updated { color: var(--text-soft); font-variant-numeric: tabular-nums; white-space: nowrap; }
+/* A background refresh that failed, while the last good window is still up: an
+   aside, not an alarm — the data on screen is real, only its age is. */
+.cal-notice { margin-bottom: 14px; padding: 9px 14px; background: var(--surface); border: 1px solid var(--border); border-left: 3px solid var(--gold); border-radius: 8px; font-size: 12.5px; color: var(--text-mid); }
+
+/* ── YEAR SCOPES ── */
+/* This year is browsed month by month, next year as a whole. The tabs are above
+   the month strip because they decide what the strip even is. */
+.cal-scopes { display: flex; gap: 8px; flex-wrap: wrap; padding: 18px 32px 0; }
+.cal-scopes + .cal-month-bar { padding-top: 12px; }
+.cal-scope-tab { display: inline-flex; align-items: baseline; gap: 8px; padding: 9px 16px; background: var(--surface); border: 1px solid var(--border-mid); border-radius: 10px; font: inherit; cursor: pointer; box-shadow: var(--shadow-sm); transition: border-color .18s, background-color .18s, color .18s; }
+.cal-scope-tab .cal-scope-year { font-size: 14px; font-weight: 700; color: var(--text); font-variant-numeric: tabular-nums; }
+.cal-scope-tab .cal-scope-note { font-size: 11.5px; color: var(--text-soft); }
+.cal-scope-tab:hover { border-color: var(--green-mid); }
+.cal-scope-tab.active { border-color: var(--green); background: var(--green-pale); }
+.cal-scope-tab.active .cal-scope-year, .cal-scope-tab.active .cal-scope-note { color: var(--green); }
+html.dark .cal-scope-tab.active { background: rgba(64, 145, 108, .18); }
+/* Twelve month names never fit a strip; they scroll, and the active one is kept
+   in view by the render. */
+.cal-month-tabs { max-width: 100%; overflow-x: auto; scrollbar-width: none; }
+.cal-month-tabs::-webkit-scrollbar { display: none; }
+
+/* ── NEXT YEAR AT A GLANCE ── */
+.cal-year { display: grid; grid-template-columns: repeat(auto-fill, minmax(330px, 1fr)); gap: 14px; }
+.cal-year-month { padding: 12px 14px 10px; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow-sm); }
+/* A month with nothing dated yet is genuine white space, so it reads as such. */
+.cal-year-month.empty { background: transparent; border-style: dashed; box-shadow: none; }
+.cal-year-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin-bottom: 9px; }
+.cal-year-head h3 { font-size: 14px; font-weight: 700; color: var(--text); }
+.cal-year-meta { font-size: 11.5px; color: var(--text-soft); text-align: right; }
+.cal-year-items { display: flex; flex-direction: column; gap: 5px; }
+.cal-year-row { display: grid; grid-template-columns: 48px minmax(0, 1fr); align-items: center; gap: 8px; }
+.cal-year-date { font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .4px; color: var(--text-soft); font-variant-numeric: tabular-nums; }
+.cal-year-row .cal-item { padding: 2px 4px; }
+
+.cal-main { padding: 18px 32px 40px; }
+.cal-loading { padding: 64px 0 72px; text-align: center; font-size: 13px; color: var(--text-soft); }
+.cal-loading .loader-bar { margin: 0 auto 16px; background: var(--green-pale); }
+.cal-loading .loader-fill { background: linear-gradient(90deg, var(--green-mid), var(--green)); }
+.cal-warn { display: flex; flex-direction: column; gap: 2px; background: var(--gold-pale); border: 1px solid #f0d5b8; border-radius: 10px; padding: 10px 14px; margin-bottom: 14px; font-size: 12.5px; color: var(--text-mid); }
+.cal-warn strong { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .9px; color: var(--gold); }
+html.dark .cal-warn { border-color: #4a3a24; }
+.cal-retry { display: flex; justify-content: center; padding: 18px 0 8px; }
+.cal-retry .try-btn { max-width: 220px; }
+.cal-none { text-align: center; font-size: 13px; color: var(--text-soft); padding: 16px 0 4px; }
+
+.cal-grid-head { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 10px; margin-bottom: 8px; }
+.cal-grid-head span { text-align: center; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: var(--text-soft); }
+.cal-grid-body { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 10px; }
+.cal-cell { display: flex; flex-direction: column; gap: 6px; min-height: 152px; padding: 8px 8px 6px; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow-sm); }
+.cal-cell.cal-blank { background: transparent; border: 0; box-shadow: none; }
+/* Days before today are dimmed rather than filled: the window starts today, so
+   this is a release calendar, not a history page. */
+.cal-cell.past { opacity: .45; background: var(--surface-soft); box-shadow: none; }
+.cal-cell.today { border-color: var(--green-mid); box-shadow: 0 0 0 2px rgba(64,145,108,.15), var(--shadow-sm); }
+.cal-cell-top { display: flex; align-items: center; gap: 6px; min-height: 18px; }
+.cal-daynum { font-size: 13px; font-weight: 700; color: var(--text); font-variant-numeric: tabular-nums; }
+.cal-cell.past .cal-daynum, .cal-cell.cal-empty .cal-daynum { font-weight: 600; color: var(--text-soft); }
+.cal-today-tag { font-size: 9.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .6px; color: #fff; background: var(--green-mid); border-radius: 20px; padding: 1px 7px; }
+.cal-cell-count { margin-left: auto; font-size: 10px; font-weight: 700; color: var(--text-soft); background: var(--bg); border: 1px solid var(--border); border-radius: 20px; padding: 1px 7px; font-variant-numeric: tabular-nums; }
+.cal-cell-body { flex: 1; display: flex; flex-direction: column; gap: 4px; }
+
+.cal-item { display: flex; align-items: center; gap: 7px; width: 100%; padding: 3px; background: transparent; border: 0; border-radius: 8px; font: inherit; text-align: left; cursor: pointer; transition: background-color .15s; }
+.cal-item:hover { background: var(--green-pale); }
+.cal-thumb { width: 26px; height: 38px; flex-shrink: 0; border-radius: 4px; object-fit: cover; background: linear-gradient(135deg, var(--green-pale), var(--surface-soft)); border: 1px solid var(--border); }
+.cal-thumb.placeholder { display: flex; align-items: center; justify-content: center; font-size: 13px; }
+.cal-item-text { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.cal-item-title { font-size: 12px; font-weight: 600; line-height: 1.25; color: var(--text); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.cal-item-meta { display: flex; align-items: center; flex-wrap: wrap; gap: 3px; }
+.cal-tag { padding: 1px 6px; border-radius: 20px; border: 1px solid var(--border); background: var(--bg); font-size: 9.5px; font-weight: 600; color: var(--text-soft); white-space: nowrap; }
+.cal-tag.new { border-color: transparent; background: var(--gold-pale); color: var(--gold); }
+.cal-tag.seen { border-color: transparent; background: var(--green-pale); color: var(--green); }
+.cal-plat { max-width: 100%; font-size: 10px; color: var(--text-soft); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cal-more { width: 100%; padding: 3px 0; border: 0; border-radius: 6px; background: transparent; font: inherit; font-size: 11px; font-weight: 600; color: var(--green); text-align: center; cursor: pointer; }
+.cal-more:hover { background: var(--green-pale); }
+
+/* The agenda is the ≤600px view (see the mobile block) — the DOM is always
+   there, but only phones show it. */
+.cal-agenda { display: none; }
+.cal-agenda-day { margin-bottom: 10px; padding: 10px; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow-sm); }
+.cal-agenda-head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .6px; color: var(--text-mid); }
+.cal-agenda-head .cal-cell-count { margin-left: auto; }
+
+/* ── DAY DRAWER ── */
+.cal-drawer { position: fixed; inset: 0; z-index: 200; display: flex; justify-content: flex-end; }
+.cal-drawer-scrim { position: absolute; inset: 0; background: rgba(8,18,12,.5); animation: calFade .18s ease both; }
+.cal-drawer-panel { position: relative; display: flex; flex-direction: column; width: min(560px, 100%); height: 100%; max-height: 100%; background: var(--surface); border-left: 1px solid var(--border); box-shadow: -18px 0 48px rgba(8,18,12,.28); animation: calSlide .22s cubic-bezier(.22,.8,.3,1) both; }
+.cal-drawer-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 18px 20px 14px; background: linear-gradient(115deg, #1d4f38, var(--green)); }
+.cal-drawer-title { font-size: 16px; font-weight: 700; letter-spacing: -.2px; color: #fff; }
+.cal-drawer-sub { margin-top: 3px; font-size: 12.5px; color: rgba(255,255,255,.86); }
+.cal-drawer-close { flex-shrink: 0; width: 34px; height: 34px; border: 1px solid rgba(255,255,255,.3); border-radius: 9px; background: rgba(255,255,255,.12); color: #fff; font-size: 15px; cursor: pointer; }
+.cal-drawer-close:hover { background: rgba(255,255,255,.22); }
+.cal-drawer-note { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; padding: 10px 20px; background: var(--gold-pale); border-bottom: 1px solid var(--border); font-size: 12.5px; color: var(--text-mid); }
+.cal-drawer-showall { padding: 5px 10px; border: 1px solid var(--border-mid); border-radius: 8px; background: var(--surface); font: inherit; font-size: 12px; font-weight: 600; color: var(--green); cursor: pointer; }
+.cal-drawer-body { flex: 1; overflow-y: auto; padding-bottom: 26px; }
+.cal-row { display: flex; align-items: center; gap: 11px; padding: 9px 20px; border-bottom: 1px solid var(--border); }
+.cal-row:hover { background: var(--surface-soft); }
+.cal-row .cal-thumb { width: 34px; height: 50px; }
+.cal-row-main { flex: 1; min-width: 0; }
+.cal-row-title { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; font-size: 13.5px; font-weight: 600; color: var(--text); }
+.cal-row-ep { margin-top: 2px; font-size: 12px; color: var(--text-soft); }
+.cal-row-meta { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-top: 3px; font-size: 11.5px; color: var(--text-soft); }
+.cal-row-rating { display: inline-flex; align-items: center; gap: 4px; }
+.cal-row-link { flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; border: 1px solid var(--border-mid); border-radius: 9px; color: var(--green); font-size: 14px; text-decoration: none; }
+.cal-row-link:hover { background: var(--green-pale); }
+/* Sticky tier headings, so a 300-entry day stays navigable. */
+.cal-row-head { position: sticky; top: 0; z-index: 1; padding: 14px 20px 6px; background: var(--surface); border-bottom: 1px solid var(--border); font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: var(--text-soft); }
+.cal-row-empty { padding: 24px 20px; font-size: 13px; color: var(--text-soft); }
+@keyframes calFade { from { opacity: 0 } to { opacity: 1 } }
+@keyframes calSlide { from { transform: translateX(24px); opacity: .4 } to { transform: translateX(0); opacity: 1 } }
+/* The drawer is a modal sheet: nothing behind it should scroll. */
+html.cal-lock, html.cal-lock body { overflow: hidden; }
+
 /* ── RESPONSIVE ── */
 /* ── TABLET (≤900px) ── */
 @media (max-width: 900px) {
@@ -482,6 +634,25 @@ html.dark .sf-submit-btn { background: linear-gradient(135deg, #2e7a56, #1b4032)
               mask-image: linear-gradient(to right, #000 calc(100% - 16px), transparent); }
   .nav-tabs::-webkit-scrollbar { display: none; }
   .data-filters { padding: 12px 20px; }
+  /* Calendar — seven columns between 601px and 900px are ~90px wide each, so
+     the platform line and the bigger poster give way to keep titles readable. */
+  .cal-main { padding: 14px 20px 32px; }
+  /* Room for a year's worth of month tabs: they wrap onto a second row here
+     rather than scrolling, because a hidden month is a month nobody finds. */
+  .cal-scopes { padding: 14px 20px 0; }
+  .cal-month-bar { padding: 14px 20px 0; }
+  .cal-month-tabs { flex-wrap: wrap; }
+  .cal-grid-head, .cal-grid-body { gap: 6px; }
+  .cal-cell { min-height: 128px; padding: 6px 6px 4px; }
+  /* Seven columns are ~73px each at 601px, and a nowrap "Series premiere" tag is
+     81px — wide enough to push the whole document sideways. The tags come out of
+     the cell entirely here, which leaves the poster and a two-line title, and
+     the day drawer (whose rows have the width for it) keeps the detail. The
+     agenda below 600px is a different container and keeps its meta. */
+  .cal-cell .cal-item-meta { display: none; }
+  /* Day number + "today" + count is wider than a 73px cell, so the header row
+     wraps instead of spilling out of it. */
+  .cal-cell-top { flex-wrap: wrap; row-gap: 3px; }
   .page-header { padding: 20px; flex-direction: column; align-items: flex-start; gap: 12px; }
   .readme-hero { padding: 28px 24px 24px; }
   .admin-page { padding-left: 20px; padding-right: 20px; }
@@ -567,6 +738,29 @@ html.dark .sf-submit-btn { background: linear-gradient(135deg, #2e7a56, #1b4032)
 
   /* Data filters — wrap into rows */
   .data-filters { flex-wrap: wrap; padding: 12px 16px; gap: 8px; }
+  /* Calendar — a seven-column grid is unreadable at 375px, so phones get the
+     agenda instead: one row per release, empty days skipped entirely. */
+  .cal-grid { display: none; }
+  .cal-agenda { display: block; }
+  /* The agenda carries the message on phones; the desktop note would repeat it. */
+  .cal-none { display: none; }
+  .cal-main { padding: 12px 16px 28px; }
+  /* A phone cannot wrap twelve months without eating half the screen, so the
+     strip scrolls and the render keeps the selected month in view. */
+  .cal-scopes { padding: 12px 16px 0; }
+  .cal-scope-tab { padding: 8px 12px; }
+  .cal-month-bar { padding: 12px 16px 0; gap: 8px; flex-direction: column; align-items: stretch; }
+  .cal-month-tabs { flex-wrap: nowrap; width: 100%; }
+  .cal-month-tab { padding: 7px 12px; font-size: 12.5px; }
+  .cal-month-sum { font-size: 12px; }
+  .cal-year { grid-template-columns: 1fr; }
+  .cal-item .cal-thumb { width: 30px; height: 44px; }
+  .cal-item-title { font-size: 13px; -webkit-line-clamp: 3; }
+  .cal-drawer-panel { width: 100%; border-left: 0; }
+  .cal-drawer-top { padding: 14px 16px 12px; }
+  .cal-drawer-note { padding: 9px 16px; }
+  .cal-row { padding: 9px 16px; }
+  .cal-row-head { padding: 12px 16px 5px; }
   .df-select { flex: 1 1 100%; min-width: 100%; min-height: 36px; }
   .data-reset { align-self: flex-start; }
   .df-search { width: 100%; min-width: unset; }

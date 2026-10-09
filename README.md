@@ -12,8 +12,9 @@ It reads **live from a Google Sheet**, so whenever I log a new title it shows up
 - **Data** — the whole watchlist as a searchable table (filter by year, platform, genre, and more)
 - **Suggestion Generator** — can't decide what to watch? Pick a genre, hit **Spin**, and it lands on a random pick from the list
 - **Timeline** — everything laid out in date order
+- **Calendar** — a rolling release calendar: this year month by month, next year as a whole, with every film release in your region plus every episode TVmaze knows about. It filters by platform, region and type, and **Episode releases** turns the month into the episode schedule itself — each show's episodes on the day they land, films and the daily news/talk strips left out. Any day opens for the complete list, and it refreshes itself — new months and new years appear on their own
 - **Suggestions & Submit** — easy ways to request or add a new title
-- **Admin** — a password-protected area for managing the watchlist
+- **Admin** — a password-protected area for managing the watchlist, where a title you already logged is caught before it is added twice
 
 ## How it works
 
@@ -26,12 +27,16 @@ The site reaches the spreadsheet through two environment variables on Netlify:
 - `SPREADSHEET_ID` — the long string between `/d/` and `/edit` in the spreadsheet's URL
 - `GOOGLE_SERVICE_ACCOUNT_JSON` — the entire contents of a Google service-account key file (the whole JSON blob, braces included)
 
+And one more for the pictures and the release calendar:
+
+- `TMDB_API_KEY` — a free [TMDB](https://developer.themoviedb.org/docs/getting-started) API key, used for poster art and ratings in the admin lookup and for the **film** half of the Calendar page. Give it a value for **every deploy context** (production, branch deploys, deploy previews) — a value set for production only leaves a preview film-less and poster-less, with the Calendar saying so. When you run the functions locally, it needs a value there too (a `.env` file with `TMDB_API_KEY=…` is what `netlify dev` reads).
+
 Creating the service account takes about ten minutes, once:
 
 1. In the **Google Cloud Console**, create a project and enable the **Google Sheets API**.
 2. Create a **service account** under APIs & Services → Credentials, then add a JSON key and download it.
 3. In the spreadsheet, click **Share** and add the service account's email address as an **Editor**.
-4. In **Netlify** → Site settings → Environment variables, add the two variables above, then redeploy (or just push).
+4. In **Netlify** → Site settings → Environment variables, add the variables above — each with the same value for all deploy contexts and local development — then redeploy (or just push).
 
 That is the whole setup. After it's done the code talks to the sheet directly — **no Apps Script is used, so nothing ever needs a manual redeploy again** (the old Apps Script deployment, if present, can be deleted: spreadsheet → Extensions → Apps Script → Deploy → Manage deployments → ⋮ → Delete).
 
@@ -43,7 +48,7 @@ No setup needed. Serve this folder with any simple static server and open it in 
 python -m http.server
 ```
 
-The live data comes from the sheet, so it needs an internet connection.
+The live data comes from the sheet, so it needs an internet connection. The functions are what talk to it, so a bare static server serves the page shell and nothing else — run them through the Netlify CLI (`netlify dev`) if you want data locally, with the environment variables above available to it.
 
 ## Built with
 

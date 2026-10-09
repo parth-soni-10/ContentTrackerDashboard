@@ -1,2 +1,8 @@
 /.freebuff
 /brag-output/
+
+# Local secrets. A key in here is what lets the functions be exercised by hand
+# (netlify dev reads .env, as does any local runner), so the file has to exist —
+# and it must never be committable, or the first `git add -A` publishes it.
+/.env
+/.env.local

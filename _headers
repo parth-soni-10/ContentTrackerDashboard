@@ -19,12 +19,16 @@
 # poster silently degrades to its emoji placeholder — the fallback path makes
 # that look like a data problem rather than a policy one.
 #
+# static.tvmaze.com is required by the Release Calendar: the episode half of
+# that page is TVmaze data and carries TVmaze posters. Same failure mode — the
+# thumbs would fall back to an emoji and read as missing data.
+#
 # form-action is 'self' rather than 'none' because the admin panel contains real
 # <form> elements; they are handled in JS, but a policy that forbids submission
 # outright would break the no-JS path rather than improve it.
 
 /*
-  Content-Security-Policy: default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data: https://image.tmdb.org; font-src 'self'; connect-src 'self'; base-uri 'self'; form-action 'self'; object-src 'none'; frame-ancestors 'none'
+  Content-Security-Policy: default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data: https://image.tmdb.org https://static.tvmaze.com; font-src 'self'; connect-src 'self'; base-uri 'self'; form-action 'self'; object-src 'none'; frame-ancestors 'none'
   # frame-ancestors is the one directive a <meta> tag cannot carry, and the admin
   # panel is an authenticated page, so the legacy header is paired with it.
   X-Frame-Options: DENY
