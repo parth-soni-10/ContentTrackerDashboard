@@ -3111,7 +3111,7 @@ function renderCalendar() {
     '<div class="data-filters cal-filters">' +
       '<div class="df-select"><select id="cal-scope" aria-label="Show" data-filter="calFilters.scope" data-rebuild="calendar">' +
         '<option value="new">New &amp; notable</option>' +
-        '<option value="episodes" title="Every episode releasing, films and the strips that air every day left out">Episode releases</option>' +
+        '<option value="episodes" title="Every episode releasing. Left out: films, news and talk shows, and anything that airs every day">Episode releases</option>' +
         '<option value="all">Everything</option></select></div>' +
       '<div class="df-select"><select id="cal-type" aria-label="Type" data-filter="calFilters.type" data-rebuild="calendar">' +
         '<option value="all">Films &amp; TV</option><option value="movie">Films only</option><option value="episode">TV only</option></select></div>' +
