@@ -87,6 +87,12 @@ const PLATFORMS = [
 // the Sheet still says "HBO Max".
 const PLATFORM_SPELLINGS = {
   'Amazon Prime Video': ['Prime Video'],
+  // CBS is the one platform here that is a *network* the watchlist logs and also a
+  // regional service the API lists, so it is the one name TMDB may qualify by
+  // country — paired rather than left to look like a second service, which would
+  // drop every film on it at the fetch boundary. Comparing without punctuation
+  // means this one spelling covers both "CBS US" and "CBS (US)".
+  'CBS': ['CBS US'],
   'Apple TV+': ['Apple TV Plus', 'Apple TV'],
   'Disney+': ['Disney Plus'],
   'Eurosport': ['Eurosport 1', 'Eurosport 2'],

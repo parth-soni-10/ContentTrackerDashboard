@@ -17,8 +17,9 @@ jobs:
         with:
           node-version: '20'
 
-      # No build step, no package.json: the repo root IS the publish directory,
-      # so "does it still parse" is the whole of a static check.
+      # No build step and no build script — package.json is there for the two
+      # database dependencies only — so "does it still parse" is the whole of a
+      # static check.
       - name: Syntax-check the app and every function
         run: |
           set -e

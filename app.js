@@ -328,11 +328,11 @@ function bindNavigation() {
 // and want to refresh rawData WITHOUT tearing down the DOM and losing form
 // state / messages.
 // Painted when the very first data fetch fails, so a transient upstream hiccup
-// (the sheet service can be slow to wake) doesn't masquerade as an empty
+// (the data service can be slow to wake) doesn't masquerade as an empty
 // dashboard. Retry button + one automatic retry attempt.
 function renderDataError() {
   document.getElementById('app').innerHTML =
-    '<div class="page-header"><div class="ph-left"><h1>Couldn\'t load your watchlist</h1><p>The Google Sheet service didn\'t respond.</p></div></div>' +
+    '<div class="page-header"><div class="ph-left"><h1>Couldn\'t load your watchlist</h1><p>The watchlist service didn\'t respond.</p></div></div>' +
     '<div class="note-card note-card-wide"><div class="note-icon" aria-hidden="true">⚠️</div><div class="note-body"><strong>The data service is unreachable right now.</strong> This is usually temporary. Give it a moment and try again.</div></div>' +
     '<div class="submit-page"><button class="try-btn btn-wide" id="data-retry" type="button">↻ Retry</button></div>';
   const btn = document.getElementById('data-retry');
@@ -646,12 +646,12 @@ function renderAdminForm() {
     <div class="submit-page"><div class="submit-left"><div class="submit-form-card">
       <h2 class="submit-heading" id="admin-form-heading">New Watchlist Entry</h2><p class="submit-sub" id="admin-form-sub">Saved through the protected admin service.</p>
       <form id="admin-entry-form">
-        <div class="sf-field"><label class="sf-lbl" for="admin-name">Name <span class="sf-req">*</span></label><div class="admin-name-row"><input id="admin-name" name="name" class="sf-input" maxlength="160" required><button id="admin-check-name" class="try-btn admin-check-btn" type="button">Check sheet</button><button id="admin-autofill" class="try-btn admin-autofill-btn" type="button">Autofill</button></div><div id="admin-name-result" class="admin-name-result" aria-live="polite"></div></div>
+        <div class="sf-field"><label class="sf-lbl" for="admin-name">Name <span class="sf-req">*</span></label><div class="admin-name-row"><input id="admin-name" name="name" class="sf-input" maxlength="160" required><button id="admin-check-name" class="try-btn admin-check-btn" type="button">Check watchlist</button><button id="admin-autofill" class="try-btn admin-autofill-btn" type="button">Autofill</button></div><div id="admin-name-result" class="admin-name-result" aria-live="polite"></div></div>
         <div class="sf-row"><div class="sf-field"><label class="sf-lbl" for="admin-type">Type <span class="sf-req">*</span></label><select id="admin-type" name="type" class="sf-input"><option>Movie</option><option>Series/Show</option></select></div><div class="sf-field"><label class="sf-lbl" for="admin-season">Season</label><input id="admin-season" name="season" class="sf-input" maxlength="20"></div></div>
         <div class="sf-row"><div class="sf-field"><label class="sf-lbl" for="admin-genre">Genre</label><select id="admin-genre" name="genre" class="sf-input"><option value="">Select genre</option>${genreOpts}<option value="Other">Other</option></select><input id="admin-genre-custom" class="sf-input sf-custom-value" type="text" maxlength="80" placeholder="Enter a genre" aria-label="Custom genre" hidden></div><div class="sf-field"><label class="sf-lbl" for="admin-platform">Platform</label><select id="admin-platform" name="platform" class="sf-input"><option value="">Select platform</option>${platOpts}<option value="Other">Other</option></select><input id="admin-platform-custom" class="sf-input sf-custom-value" type="text" maxlength="160" placeholder="Enter a platform" aria-label="Custom platform" hidden></div></div>
         <div class="sf-row"><div class="sf-field"><label class="sf-lbl" for="admin-episodes">Episodes</label><input id="admin-episodes" name="episodes" class="sf-input" type="number" min="0" max="9999" inputmode="numeric"></div><div class="sf-field"><label class="sf-lbl" for="admin-screentime">Screentime (mins)</label><input id="admin-screentime" name="screentime" class="sf-input" type="number" min="0" max="100000" inputmode="numeric"></div></div>
         <div class="sf-field"><label class="sf-lbl" for="admin-date">Watch Date</label><input id="admin-date" name="watchDate" class="sf-input" type="date"></div>
-        <div id="admin-edit-bar" class="admin-edit-bar" hidden><span>Editing row <strong id="admin-edit-row"></strong></span><button class="try-btn admin-edit-cancel" id="admin-cancel-edit" type="button">Cancel edit</button></div>
+        <div id="admin-edit-bar" class="admin-edit-bar" hidden><span>Editing entry <strong id="admin-edit-row"></strong></span><button class="try-btn admin-edit-cancel" id="admin-cancel-edit" type="button">Cancel edit</button></div>
         <div id="admin-entry-msg" aria-live="polite"></div><button class="sf-submit-btn" type="submit" id="admin-submit-btn">Add to Watchlist</button>
       </form>
     </div>
@@ -665,7 +665,7 @@ function renderAdminForm() {
       <h2 class="submit-heading">Duplicate Checker</h2>
       <p class="submit-sub">Automatically scans the tracker for entries that look like the same thing was logged twice. Runs every time this page opens.</p>
       <div id="admin-dup-results" class="admin-dup-results" aria-live="polite"></div>
-    </div></div><div class="submit-right"><div class="note-card"><div class="note-icon" aria-hidden="true">💡</div><div class="note-body"><strong>Protected entry</strong>The password is checked server-side and is never sent to Google Sheets.</div></div><button class="try-btn" id="admin-lock" type="button">Lock Admin</button></div></div>`;
+    </div></div><div class="submit-right"><div class="note-card"><div class="note-icon" aria-hidden="true">💡</div><div class="note-body"><strong>Protected entry</strong>The password is checked server-side and never leaves this site.</div></div><button class="try-btn" id="admin-lock" type="button">Lock Admin</button></div></div>`;
   document.getElementById('admin-entry-form').addEventListener('submit', submitAdminEntry);
   ['genre', 'platform'].forEach(key => {
     const select = document.getElementById('admin-' + key);
@@ -747,7 +747,7 @@ function startAdminEdit(rowNumber) {
   document.getElementById('admin-date').value = toISOFromDisplay(item.watchDate);
 
   document.getElementById('admin-form-heading').textContent = 'Edit Entry';
-  document.getElementById('admin-form-sub').textContent = 'Update row ' + rowNumber + '. Changes are saved to the Google Sheet.';
+  document.getElementById('admin-form-sub').textContent = 'Editing entry #' + rowNumber + '. Changes are saved to the watchlist.';
   document.getElementById('admin-edit-row').textContent = rowNumber;
   document.getElementById('admin-edit-bar').hidden = false;
   document.getElementById('admin-submit-btn').textContent = 'Update Entry';
@@ -777,7 +777,7 @@ async function deleteAdminEntry(rowNumber, button) {
     const result = await requestAdminDelete(rowNumber);
     if (result === null) return; // session expired — the login screen is already up
     // Reload the whole page so the deletion is reflected everywhere.
-    msg().innerHTML = `<div class="sf-success">Entry deleted${result.rowNumber ? ' (row ' + escapeHTML(result.rowNumber) + ')' : ''}. Reloading…</div>`;
+    msg().innerHTML = `<div class="sf-success">Entry deleted${result.rowNumber ? ' (#' + escapeHTML(result.rowNumber) + ')' : ''}. Reloading…</div>`;
     reloading = true;
     setTimeout(() => reloadFresh(), 900);
   } catch (error) {
@@ -990,9 +990,9 @@ function renderDuplicateScan() {
       (copyCount ? '<button class="try-btn dup-group-btn" type="button" data-group="' + index + '">Remove ' + copyCount + ' duplicate cop' + (copyCount > 1 ? 'ies' : 'y') + '</button>' : '') +
       '</div>';
     const rowHTML = group.rows.map(row => {
-      const desc = dupFmtDate(row.watchDate) + ' · ' + (Number(row.screentime) || 0) + ' min · row ' + row.row;
+      const desc = dupFmtDate(row.watchDate) + ' · ' + (Number(row.screentime) || 0) + ' min · #' + row.row;
       const tag = row._dupCopy
-        ? '<span class="dup-tag copy">duplicate of row ' + row._dupOf + '</span>'
+        ? '<span class="dup-tag copy">duplicate of #' + row._dupOf + '</span>'
         : (hasCopies ? '<span class="dup-tag keep">keep</span>' : '');
       const del = row._dupCopy
         ? '<button class="try-btn admin-del-btn dup-del-btn" type="button" data-row="' + row.row + '">Remove</button>'
@@ -1062,7 +1062,7 @@ async function checkAdminName() {
   result.textContent = '';
   try {
     if (!rawData.length) await loadData(true);
-    if (loadFailed) throw new Error('sheet unreachable');
+    if (loadFailed) throw new Error('watchlist unreachable');
     const query = name.toLowerCase();
     const matches = rawData.filter(item => item.name.toLowerCase().includes(query));
     if (!matches.length) {
@@ -1077,14 +1077,14 @@ async function checkAdminName() {
         const meta = [type, season, year].filter(Boolean).join(' · ');
         return `<div class="admin-match"><strong>Match ${index + 1}</strong><span>${meta || 'Existing entry'}</span></div>`;
       }).join('');
-      result.innerHTML = `<div>Found ${matches.length} matching entr${matches.length === 1 ? 'y' : 'ies'} in the sheet.</div>${details}`;
+      result.innerHTML = `<div>Found ${matches.length} matching entr${matches.length === 1 ? 'y' : 'ies'} in the watchlist.</div>${details}`;
     }
   } catch {
     result.className = 'admin-name-result found';
-    result.textContent = 'Could not check the sheet. Try again.';
+    result.textContent = 'Could not check the watchlist. Try again.';
   } finally {
     button.disabled = false;
-    button.textContent = 'Check sheet';
+    button.textContent = 'Check watchlist';
   }
 }
 
@@ -1149,13 +1149,13 @@ async function submitAdminEntry(event) {
     // list stops the add and says so, and only a row that is genuinely new (or
     // an explicit "Add anyway" rewatch) reaches the service.
     //
-    // An empty rawData would make that check a silent no-op, so the sheet is
-    // read first — and a sheet that still cannot be read stops the add instead
+    // An empty rawData would make that check a silent no-op, so the watchlist is
+    // read first — and a store that still cannot be read stops the add instead
     // of letting an unchecked entry through. (skipRerender keeps the repaint from
     // throwing away what is typed in the form.)
     if (!rawData.length) await loadData(true);
     if (!rawData.length) {
-      msg.innerHTML = '<div class="sf-error">Could not read the sheet to check for duplicates, so nothing was added. Check the connection and try again.</div>';
+      msg.innerHTML = '<div class="sf-error">Could not read the watchlist to check for duplicates, so nothing was added. Check the connection and try again.</div>';
       return;
     }
     const duplicate = adminDuplicateCheck(payload);
@@ -1180,7 +1180,7 @@ async function submitAdminEntry(event) {
     }
     // Leave edit mode, then reload the whole page so the entry shows up everywhere.
     adminEditRow = null;
-    const where = result.rowNumber ? ` (row ${escapeHTML(String(result.rowNumber))})` : '';
+    const where = result.rowNumber ? ` (#${escapeHTML(String(result.rowNumber))})` : '';
     document.getElementById('admin-entry-msg').innerHTML = result.duplicate
       ? `<div class="sf-success">That entry was already saved${where}. Nothing was added again. Reloading…</div>`
       : `<div class="sf-success">Entry ${isUpdate ? 'updated' : 'added'} successfully${where}. Reloading…</div>`;
@@ -1454,7 +1454,7 @@ function renderReadme() {
         </div>
       </div>
     </div>
-    <div class="footer">Data loaded live from Google Sheets · ${total} titles</div>`;
+    <div class="footer">Data loaded live · ${total} titles</div>`;
 
   const goalSet = document.getElementById('goal-set');
   if (goalSet) {
@@ -1679,7 +1679,7 @@ function updateCurrentYear() {
       </div>
     </div>`;
 
-  document.getElementById('cy-footer').textContent = `Last updated live from Google Sheets · ${cy} data`;
+  document.getElementById('cy-footer').textContent = `Last updated live · ${cy} data`;
 
   const moData   = countByMonth(d);
   const moLabels = MONTHS.filter(m => moData[m] > 0);
@@ -2230,7 +2230,7 @@ function renderTimeline() {
   document.getElementById('app').innerHTML =
     '<div class="page-header"><div class="ph-left"><h1>Timeline</h1><p>Your watch history, month by month</p></div></div>' +
     '<div class="timeline">' + jumpBar + sections + '</div>' +
-    '<div class="footer">Data loaded live from Google Sheets · ' + rawData.length + ' titles</div>';
+    '<div class="footer">Data loaded live · ' + rawData.length + ' titles</div>';
 
   bindTimelineNav();
 }
@@ -2294,7 +2294,12 @@ const CAL_REGIONS = [
 ];
 // Monday-first, matching the en-GB dates used everywhere else in the app.
 const CAL_WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-const CAL_PLATFORM_FLOOR = 8;    // entries a platform needs before it earns a filter option
+// No floor on the platform list. A threshold used to hide any platform with
+// fewer than eight releases in the window, which is not a list of the quiet ones
+// — the whole-year view is thin by nature — but of the ones you cannot ask for:
+// CBS, Hulu, Netflix, Disney+ and HBO Max all fell off it there. Every platform
+// with a release in the loaded window earns an option instead; the cap only
+// bounds a runaway list.
 const CAL_PLATFORM_CAP = 30;
 const CAL_DAILY_KINDS = new Set(['news', 'talk show']);
 // The floor for what counts as a strip that airs every day. The "Episode
@@ -2617,7 +2622,19 @@ function calIsDaily(item) {
 function calMatches(item, opts) {
   const scope = (opts && opts.scope) || calFilters.scope;
   const type = (opts && opts.type) || calFilters.type;
+  // An empty value counts as 'all': the platform <select> is rebuilt by the page
+  // render, and for the moment before its options are repopulated a select can
+  // read back as '' — which must not filter the calendar down to nothing. `opts`
+  // can name a platform instead, which is how the platform list judges a
+  // candidate without switching the live filter.
+  const platform = (opts && opts.platform !== undefined) ? opts.platform : calFilters.platform;
   if (type !== 'all' && item.media !== type) return false;
+  const onPlatform = Boolean(platform && platform !== 'all') && (item.platforms || []).indexOf(platform) !== -1;
+  // Asking for a platform is asking for that platform's releases — the same call
+  // a search makes, and the reason choosing Netflix must not answer with a CBS
+  // month. Its own episodes come through even when they are not premieres; the
+  // nightly strips still do not, which is what "Everything" is for.
+  const askedFor = onPlatform && !calIsDaily(item);
   // The Show select is the noise dial. "New & notable" keeps premieres and films
   // and hides the weekly run of shows already on; "Episode releases" is its other
   // half — every episode of every show on its release day, with neither the films
@@ -2625,13 +2642,10 @@ function calMatches(item, opts) {
   // schedule it is; "Everything" is both sources raw.
   if (scope === 'episodes') {
     if (item.media !== 'episode' || calIsDaily(item)) return false;
-  } else if (scope !== 'all' && item.media === 'episode' && !item.premiere) {
+  } else if (scope !== 'all' && !askedFor && item.media === 'episode' && !item.premiere) {
     return false;
   }
-  // An empty value counts as 'all': the platform <select> is rebuilt by the page
-  // render, and for the moment before its options are repopulated a select can
-  // read back as '' — which must not filter the calendar down to nothing.
-  if (calFilters.platform && calFilters.platform !== 'all' && item.platforms.indexOf(calFilters.platform) === -1) return false;
+  if (platform && platform !== 'all' && !onPlatform) return false;
   const query = String(calFilters.search || '').trim().toLowerCase();
   if (query && calTitle(item).toLowerCase().indexOf(query) === -1) return false;
   return true;
@@ -2645,14 +2659,6 @@ function calMatches(item, opts) {
 function calDayView() {
   const type = calFilters.scope === 'episodes' && calFilters.type === 'all' ? 'episode' : calFilters.type;
   return { scope: 'all', type: type };
-}
-// Filters minus the platform one: what the platform list itself should offer.
-function calMatchesWithoutPlatform(item) {
-  const saved = calFilters.platform;
-  calFilters.platform = 'all';
-  const ok = calMatches(item);
-  calFilters.platform = saved;
-  return ok;
 }
 
 // ── CALENDAR DATA ────────────────────────────────────────────────────────
@@ -3086,14 +3092,23 @@ function updateCalendar() {
   if (mCount) mCount.textContent = counts.films;
   if (eCount) eCount.textContent = counts.episodes;
 
-  // The platform filter's options follow what is actually in the window (minus
-  // the platform filter itself), so choosing one can't empty its own list.
+  // The platform filter's options come from the loaded window: every platform
+  // with a release in it (see the note on CAL_PLATFORM_CAP), which is what keeps
+  // the services you watch choosable in a thin month or a year at a glance. Each
+  // candidate is judged as though it were the chosen one — `platform:` in `opts`
+  // — so an option can never paint an empty calendar, and the selection in force
+  // is always kept, so a remembered filter is never silently reset to "All
+  // platforms" by a window that happens not to carry it.
   const offered = new Set();
   Object.keys(data.days).forEach(date => {
-    data.days[date].forEach(item => { if (calMatchesWithoutPlatform(item)) offered.add(item.platform); });
+    data.days[date].forEach(item => {
+      (item.platforms || (item.platform ? [item.platform] : [])).forEach(name => {
+        if (calMatches(item, { platform: name })) offered.add(name);
+      });
+    });
   });
   const options = data.platforms
-    .filter(platform => platform.name && offered.has(platform.name) && platform.count >= CAL_PLATFORM_FLOOR)
+    .filter(platform => platform.name && (offered.has(platform.name) || platform.name === calFilters.platform))
     .slice(0, CAL_PLATFORM_CAP);
   const platformKey = options.map(platform => platform.name).join('|');
   if (platformKey !== calState.platformsKey) {
@@ -3578,7 +3593,7 @@ function renderSubmit() {
       <div class="submit-left">
         <div class="submit-form-card">
           <h2 class="submit-heading">New Suggestion</h2>
-          <p class="submit-sub">Fill in the details below — all submissions are saved directly to the Google Sheet.</p>
+          <p class="submit-sub">Fill in the details below — all submissions are saved straight to the list.</p>
 
           <div class="sf-field">
             <label class="sf-lbl" for="sf-title">Title <span class="sf-req">*</span></label>
@@ -3633,7 +3648,7 @@ function renderSubmit() {
         </div>
         <div class="note-card">
           <div class="note-icon">💡</div>
-          <div class="note-body"><strong>How it works</strong>Submissions go straight into my Google Sheet — they won't automatically appear in the main tracker, they're a wishlist to pick from.</div>
+          <div class="note-body"><strong>How it works</strong>Submissions go straight into my suggestions list — they won't automatically appear in the main tracker, they're a wishlist to pick from.</div>
         </div>
       </div>
     </div>`;
@@ -3712,7 +3727,7 @@ async function submitSuggestion() {
       return;
     }
 
-    msg.innerHTML = '<div class="sf-success">✓ Suggestion submitted! It\'s now in the Google Sheet.</div>';
+    msg.innerHTML = '<div class="sf-success">✓ Suggestion submitted! It\'s now in the suggestions list.</div>';
     // Clear form
     ['sf-title','sf-why'].forEach(id => document.getElementById(id).value = '');
     ['sf-genre','sf-plat'].forEach(id => document.getElementById(id).selectedIndex = 0);

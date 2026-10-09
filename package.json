@@ -1,0 +1,14 @@
+{
+  "name": "content-tracker-dashboard",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Personal media analytics dashboard: the watchlist lives in Postgres, the page and the functions ship from this repo.",
+  "license": "MIT",
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@netlify/database": "^2.0.1",
+    "pg": "^8.23.1"
+  }
+}

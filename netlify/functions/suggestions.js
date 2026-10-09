@@ -1,4 +1,4 @@
-const sheets = require('./lib/sheets');
+const db = require('./lib/db');
 const { clientIp, writeState, recordWrite } = require('./lib/throttle');
 
 const json = (statusCode, body, headers = {}) => ({
@@ -11,12 +11,12 @@ const clean = (value, max) => String(value || '').trim().slice(0, max);
 
 exports.handler = async event => {
   if (event.httpMethod !== 'POST') return json(405, { error: 'Method not allowed' });
-  if (!sheets.sheetsEnabled()) return json(500, { error: 'Suggestion service is not configured' });
+  if (!db.dbEnabled()) return json(500, { error: 'Suggestion service is not configured' });
 
   // This endpoint is world-writable by design — it is how a visitor asks for a
   // title — so the limit is on volume per client, not on access. Throttling only
   // failures here would be useless: a script whose writes succeed would never be
-  // slowed down, and the Suggestions sheet is the thing being polluted.
+  // slowed down, and the suggestions table is the thing being polluted.
   const ip = clientIp(event);
   const limit = writeState(ip);
   if (limit.limited) {
@@ -34,7 +34,7 @@ exports.handler = async event => {
   if (!title) return json(400, { error: 'Title is required' });
 
   try {
-    await sheets.appendPlainRow('Suggestions', [
+    await db.appendSuggestion([
       title,
       clean(body.Type || body.type, 30),
       clean(body.Genre || body.genre, 80),
@@ -42,12 +42,12 @@ exports.handler = async event => {
       clean(body.Note || body.note, 200),
       clean(body.Date || body.date, 40)
     ]);
-    // Counted only after the sheet accepted it: a transient Sheets failure
+    // Counted only after the database accepted it: a transient write failure
     // should not push an honest visitor toward the limit.
     recordWrite(ip);
     return json(200, { status: 'ok' });
   } catch (error) {
-    console.error('Sheets API suggestion failed:', error);
+    console.error('Suggestion write failed:', error);
     return json(502, { error: error.message || 'Unable to submit suggestion' });
   }
 };

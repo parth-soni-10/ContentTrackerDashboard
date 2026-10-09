@@ -1,5 +1,5 @@
-const crypto = require('crypto');
-const sheets = require('./lib/sheets');
+const db = require('./lib/db');
+const { validSession } = require('./lib/session');
 
 const json = (statusCode, body) => ({
   statusCode,
@@ -8,30 +8,17 @@ const json = (statusCode, body) => ({
 });
 
 const clean = (value, max) => String(value || '').trim().slice(0, max);
-const sign = value => crypto.createHmac('sha256', process.env.ADMIN_SESSION_SECRET).update(value).digest('base64url');
 
-function validSession(event) {
-  const cookies = event.headers?.cookie || event.headers?.Cookie || '';
-  const token = cookies.split(';').map(value => value.trim()).find(value => value.startsWith('ct_admin='))?.slice(9);
-  if (!token) return false;
-  const [payload, signature] = token.split('.');
-  if (!payload || !signature || !process.env.ADMIN_SESSION_SECRET) return false;
-  const expected = sign(payload);
-  const left = Buffer.from(signature);
-  const right = Buffer.from(expected);
-  if (left.length !== right.length || !crypto.timingSafeEqual(left, right)) return false;
-  try {
-    const data = JSON.parse(Buffer.from(payload, 'base64url').toString());
-    return data.sub === 'admin' && data.exp > Date.now();
-  } catch { return false; }
-}
-
-async function handleDirect(body, action, rowNumber) {
+async function handleDirect(body, action, id) {
   try {
     if (action === 'delete') {
-      if (!Number.isInteger(rowNumber)) return json(400, { error: 'A valid row number is required' });
-      await sheets.deleteRowNumber('Data', rowNumber);
-      return json(200, { rowNumber });
+      if (!Number.isInteger(id)) return json(400, { error: 'A valid entry id is required' });
+      const deleted = await db.deleteEntry(id);
+      // An id that matches nothing means the entry moved or was already removed
+      // — in the sheet that could not happen, because the write addressed a
+      // physical row; here it is worth saying so instead of reporting success.
+      if (!deleted) return json(404, { error: 'That entry no longer exists', code: 'ENTRY_MISSING' });
+      return json(200, { rowNumber: deleted });
     }
     const entry = {
       name: clean(body.name, 160),
@@ -47,37 +34,34 @@ async function handleDirect(body, action, rowNumber) {
       return json(400, { error: 'Name and a valid type are required' });
     }
     const isUpdate = action === 'update';
-    if (isUpdate && !Number.isInteger(rowNumber)) return json(400, { error: 'A valid row number is required' });
+    if (isUpdate && !Number.isInteger(id)) return json(400, { error: 'A valid entry id is required' });
 
-    const { rows } = await sheets.readSheet('Data');
     if (isUpdate) {
-      await sheets.updateEntryRow('Data', rowNumber, entry);
-    } else {
-      // An exact duplicate (name, season, watch date, screentime) is reported
-      // instead of written a second time.
-      const existing = sheets.findDuplicateRow(rows, entry);
-      if (existing) {
-        return json(200, { duplicate: true, rowNumber: existing });
-      }
-      rowNumber = await sheets.appendEntryRow('Data', entry);
+      const updated = await db.updateEntry(id, entry);
+      if (!updated) return json(404, { error: 'That entry no longer exists', code: 'ENTRY_MISSING' });
+      return json(200, { duplicate: false, rowNumber: updated });
     }
-    return json(200, { duplicate: false, rowNumber });
+    // The duplicate check runs inside the insert, under a lock on the title, so
+    // the same watch cannot be logged twice by two submissions arriving together.
+    const created = await db.createEntry(entry);
+    if (created.duplicate) return json(200, { duplicate: true, rowNumber: created.duplicate });
+    return json(200, { duplicate: false, rowNumber: created.id });
   } catch (error) {
-    console.error('Sheets API write failed:', error);
-    return json(502, { error: error.message || 'Unable to save entry', code: 'SHEETS_API_ERROR' });
+    console.error('Entry write failed:', error);
+    return json(502, { error: error.message || 'Unable to save entry', code: 'DB_ERROR' });
   }
 }
 
 exports.handler = async event => {
   if (event.httpMethod !== 'POST') return json(405, { error: 'Method not allowed' });
   if (!validSession(event)) return json(401, { error: 'Admin session required', code: 'SESSION_INVALID' });
-  if (!sheets.sheetsEnabled()) return json(500, { error: 'Admin service is not configured', code: 'CONFIG_MISSING' });
+  if (!db.dbEnabled()) return json(500, { error: 'Admin service is not configured', code: 'CONFIG_MISSING' });
 
   let body;
   try { body = JSON.parse(event.body || '{}'); } catch { return json(400, { error: 'Invalid request body' }); }
 
-  // The same endpoint serves creating, updating and deleting entries; update
-  // and delete also carry a row number.
+  // The same endpoint serves creating, updating and deleting entries; update and
+  // delete also carry the id of the entry they act on (the page's `row` field).
   const action = body.action === 'delete' ? 'delete' : (body.action === 'update' ? 'update' : 'create');
   return handleDirect(body, action, Number(body.row));
 };
