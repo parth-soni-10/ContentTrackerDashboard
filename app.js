@@ -2638,6 +2638,82 @@ function calTrackedTitles() {
 function calSafeUrl(url) {
   return /^https?:\/\//i.test(String(url || '')) ? String(url) : '';
 }
+// ── IMDb LINKS ───────────────────────────────────────────────────────────
+// A calendar title links to its own IMDb page rather than to the API the row
+// came from: IMDb is the page you were going to look at anyway. An episode
+// arrives with its page already (the function carries it for free out of the
+// payload it fetches), a film does not — TMDB's list endpoints have no `imdb_id`
+// — so a film's page is resolved on the click, remembered on the device, and a
+// title with no page to be had falls back to an IMDb search for its name. A
+// click therefore never lands on TVmaze or TMDB.
+const IMDB_CACHE_KEY = 'ct-imdb';
+const IMDB_CACHE_MAX = 400;
+function imdbLookupCache() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(IMDB_CACHE_KEY) || '{}');
+    return raw && typeof raw === 'object' ? raw : {};
+  } catch (e) { return {}; }
+}
+function imdbLookupRemember(tmdbId, url) {
+  try {
+    const cache = imdbLookupCache();
+    cache[tmdbId] = url || '';
+    const keys = Object.keys(cache);
+    if (keys.length > IMDB_CACHE_MAX) keys.slice(0, keys.length - IMDB_CACHE_MAX).forEach(key => delete cache[key]);
+    localStorage.setItem(IMDB_CACHE_KEY, JSON.stringify(cache));
+  } catch (e) { /* private mode — the click just resolves again next time */ }
+}
+function imdbTmdbId(item) {
+  return item && item.media === 'movie' && /^m\d+$/.test(String(item.id)) ? String(item.id).slice(1) : '';
+}
+function imdbSearchUrl(item) {
+  const year = item.media === 'movie' ? String(item.date || '').slice(0, 4) : '';
+  return 'https://www.imdb.com/find/?q=' + encodeURIComponent([item.title, year].filter(Boolean).join(' ')) + '&s=tt';
+}
+// What the link should point at right now: its own page when that is known,
+// otherwise a search a click can still improve on.
+function calImdbHref(item) {
+  if (item.imdb) return item.imdb;
+  const tmdbId = imdbTmdbId(item);
+  if (tmdbId) {
+    const known = imdbLookupCache()[tmdbId];
+    if (known) return known;
+  }
+  return imdbSearchUrl(item);
+}
+// True while a film's own page is still unknown — the case worth intercepting.
+function calImdbPending(item) {
+  if (item.imdb) return false;
+  const tmdbId = imdbTmdbId(item);
+  return Boolean(tmdbId) && !imdbLookupCache()[tmdbId];
+}
+// Opens IMDb for a title, resolving a film's page first when it is not known yet.
+// The tab is opened *inside the click*, before the request goes out: a
+// window.open that waits for a response is exactly what browsers block as a
+// popup, and the wait here is one cached lookup.
+async function calOpenImdb(item) {
+  const fallback = imdbSearchUrl(item);
+  if (item.imdb) { window.open(item.imdb, '_blank', 'noopener'); return; }
+  const tmdbId = imdbTmdbId(item);
+  if (!tmdbId) { window.open(fallback, '_blank', 'noopener'); return; }
+  const known = imdbLookupCache()[tmdbId];
+  if (known) { window.open(known, '_blank', 'noopener'); return; }
+  const win = window.open('', '_blank');
+  if (!win) { window.location.href = fallback; return; }   // popup blocked: use this tab
+  try { win.opener = null; } catch (e) { /* very old browsers */ }
+  let url = fallback;
+  try {
+    const response = await fetch('/.netlify/functions/imdb-id?id=' + encodeURIComponent(tmdbId));
+    if (response.ok) {
+      const data = await response.json();
+      // A null answer is remembered too: a film the source has no IMDb id for
+      // must not be looked up again on every single click.
+      imdbLookupRemember(tmdbId, data && data.imdb ? data.imdb : '');
+      if (data && data.imdb) url = data.imdb;
+    }
+  } catch (error) { /* the search page is the fallback */ }
+  win.location.href = url;
+}
 // The cinema "platform" the calendar's own function labels a theatre release
 // with (the Sheet's own wording for it), as opposed to a service a film
 // arrives on.
@@ -2670,7 +2746,11 @@ function calIndex(payload, win) {
       platform: providers[0] || '', platforms: providers, streaming: streaming,
       kind: 'Film', poster: movie.poster || null, rating: Number(movie.rating) || 0,
       weight: Math.max(0, Math.min(100, Number(movie.popularity) || 0)),
-      genres: [], premiere: '', url: movie.id ? 'https://www.themoviedb.org/movie/' + movie.id : ''
+      genres: [], premiere: '', url: movie.id ? 'https://www.themoviedb.org/movie/' + movie.id : '',
+      // A film's IMDb page is not in TMDB's list response (see imdb-id.js), so it
+      // is resolved when the title is clicked — `id` carries the TMDB id the
+      // lookup needs.
+      imdb: ''
     };
     movies.push(film);
     providers.forEach(name => bump(name, streaming && name !== CAL_THEATER));
@@ -2685,7 +2765,10 @@ function calIndex(payload, win) {
       platform: platform, platforms: platform ? [platform] : [], streaming: Boolean(episode.streaming),
       kind: episode.kind || '', poster: episode.poster || null, rating: Number(episode.rating) || 0,
       weight: Number(episode.weight) || 0, genres: Array.isArray(episode.genres) ? episode.genres : [],
-      premiere: episode.premiere || '', url: calSafeUrl(episode.url)
+      premiere: episode.premiere || '', url: calSafeUrl(episode.url),
+      // Carried by the calendar function for free; empty for the shows the source
+      // has no IMDb id for, which then open an IMDb search instead.
+      imdb: calSafeUrl(episode.imdb)
     };
     episodes.push(show);
     bump(platform, Boolean(episode.streaming));
@@ -3283,7 +3366,16 @@ function updateCalendar() {
 // The complete list for one day. The grid can only ever show three entries a
 // cell, so this is where "every single thing" is actually readable.
 function calRowHTML(item) {
-  const url = calSafeUrl(item.url);
+  // Both links — the title and the ↗ affordance — go to IMDb, so a release has
+  // one destination and no way to land on a source API by accident. A film's own
+  // page is not known until it is clicked (see calOpenImdb), so its anchors carry
+  // the lookup instead of a final URL: the href is an IMDb search of the title,
+  // which is where a click lands if the exact page cannot be resolved.
+  const imdb = escapeHTML(calImdbHref(item));
+  const pending = calImdbPending(item)
+    ? ' data-act="calendarAction" data-cal="imdb" data-tmdb="' + escapeHTML(imdbTmdbId(item)) +
+      '" data-title="' + escapeHTML(item.title) + '" data-date="' + escapeHTML(item.date || '') + '"'
+    : '';
   const meta = [];
   if (item.media === 'episode') meta.push(escapeHTML(calLabel(item)));
   if (item.platform) meta.push(escapeHTML(item.platform));
@@ -3294,11 +3386,13 @@ function calRowHTML(item) {
   const seen = calTracked.has(dupNormTitle(item.title)) ? '<span class="cal-tag seen" title="Already in your watchlist">✓ in your list</span>' : '';
   return '<div class="cal-row">' + calThumbHTML(item) +
     '<div class="cal-row-main">' +
-      '<div class="cal-row-title">' + escapeHTML(item.title) + seen + '</div>' +
+      '<div class="cal-row-title">' +
+        '<a class="cal-row-imdb" href="' + imdb + '" target="_blank" rel="noopener" title="Open on IMDb"' + pending + '>' + escapeHTML(item.title) + '</a>' + seen +
+      '</div>' +
       (item.episode ? '<div class="cal-row-ep">' + escapeHTML(item.episode) + '</div>' : '') +
       '<div class="cal-row-meta"><span>' + meta.join(' · ') + '</span>' + genres + rating + '</div>' +
     '</div>' +
-    (url ? '<a class="cal-row-link" href="' + escapeHTML(url) + '" target="_blank" rel="noopener" title="Open the source page">↗</a>' : '') +
+    '<a class="cal-row-link" href="' + imdb + '" target="_blank" rel="noopener" title="Open on IMDb"' + pending + '>↗</a>' +
   '</div>';
 }
 function calDrawerRowsHTML(list) {
@@ -3378,6 +3472,17 @@ function calendarAction(event) {
   const el = this;
   const what = el.dataset.cal;
   if (what === 'day') { calOpenDay(el.dataset.date, el); return; }
+  if (what === 'imdb') {
+    // Only a title whose own page is still unknown gets here: the handler opens
+    // the tab inside this click and points it at the resolved page, so the
+    // anchor's own navigation is suppressed rather than racing it.
+    event.preventDefault();
+    calOpenImdb({
+      media: 'movie', id: 'm' + el.dataset.tmdb, title: el.dataset.title || '',
+      date: el.dataset.date || '', imdb: ''
+    });
+    return;
+  }
   if (what === 'close') { calCloseDay(); return; }
   if (what === 'showall') { calState.dayAll = true; paintCalDrawer(); return; }
   if (what === 'scope') {

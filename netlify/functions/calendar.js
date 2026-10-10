@@ -140,6 +140,19 @@ const PLATFORM_SPELLINGS = {
   'Peacock': ['Peacock Premium', 'Peacock Plus'],
   'Universal+ Amazon Channel': ['Universal+', 'Universal Plus', 'Universal+ Amazon Channel'],
 };
+const IMDB_TITLE = 'https://www.imdb.com/title/';
+// The episode source writes the id with its own "tt" prefix ("tt35826715"), and a
+// bare number is accepted too because that is how the same id is spelled
+// elsewhere — prefixing one that already carries it builds "tttt…", which is a
+// 404 on IMDb rather than a link.
+const imdbIdOf = value => {
+  const text = String(value || '').trim().replace(/^tt/i, '');
+  return /^\d+$/.test(text) ? 'tt' + text : '';
+};
+const imdbUrl = value => {
+  const id = imdbIdOf(value);
+  return id ? IMDB_TITLE + id + '/' : null;
+};
 const platformKey = name => String(name || '').toLowerCase().replace(/[^a-z0-9]/g, '');
 const PLATFORM_INDEX = (() => {
   const index = new Map();
@@ -497,6 +510,12 @@ function episodeRow(entry) {
     genres: Array.isArray(show.genres) ? show.genres.slice(0, 2) : [],
     premiere: entry.season === 1 && entry.number === 1 ? 'series' : entry.number === 1 ? 'season' : '',
     url: entry.url || show.url || '',
+    // A release links to the title's own IMDb page rather than to the API it came
+    // from. For an episode it costs nothing: the show's IMDb id is already in the
+    // payload this function fetches, so no extra upstream call is made. A show
+    // the source has no id for (a fifth of them — news, talk, the web channels)
+    // is null here and the page falls back to an IMDb search for the name.
+    imdb: imdbUrl(show.externals && show.externals.imdb),
   };
 }
 
