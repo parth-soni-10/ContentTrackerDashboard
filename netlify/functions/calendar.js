@@ -46,6 +46,37 @@ const BATCH = 5; // concurrent TMDB requests
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const REGION_RE = /^[A-Z]{2}$/;
 
+// ── ONE REGION, OR ALL OF THEM ───────────────────────────────────────────
+// `region=all` is the union of the regions the page's picker offers, which the
+// page names in `regions` — that dropdown is the one place the list is defined,
+// so the function unions exactly what it was asked for rather than keeping a
+// second copy that could drift from it. TMDB has no all-regions query (region is
+// one ISO country per request), so a union is one pass per region merged here.
+const ALL_REGIONS = 'all';
+const MAX_UNION_REGIONS = 30;
+// What one invocation may spend. A single region never comes close (a busy month
+// is ~23 upstream calls); a union of every region is ~250, so it is the one
+// shape that needs a budget, and past it the regions that did not get their turn
+// are named in a warning instead of the request being killed with nothing to
+// show. Concurrency stays under TMDB's documented ~40 requests/second ceiling.
+const REGION_BUDGET_MS = 20000;
+const UNION_BUDGET_MS = 9000;
+// How many regions are worked on at once. The ceiling that matters is the total
+// in-flight upstream requests — this times BATCH, the fan-out inside one region —
+// because TMDB's documented upper limit is "somewhere in the 40 requests per
+// second range" and at these latencies three regions is already ~15 requests at
+// a time. Asking for more only buys 429s, which arrive as missing platform lists.
+const UNION_BATCH = 3;
+function requestedRegions(params) {
+  const raw = String(params.region || '').trim().toUpperCase();
+  if (raw !== ALL_REGIONS.toUpperCase()) return [REGION_RE.test(raw) ? raw : 'US'];
+  const list = String(params.regions || '').split(',')
+    .map(code => code.trim().toUpperCase())
+    .filter((code, index, all) => REGION_RE.test(code) && all.indexOf(code) === index)
+    .slice(0, MAX_UNION_REGIONS);
+  return list.length ? list : ['US'];
+}
+
 // ── THE PLATFORMS THIS CALENDAR IS FOR ───────────────────────────────────
 // The calendar fetches from these platforms and nothing else — the list is the
 // Sheet's own platform vocabulary, which is what makes the page agree with what
@@ -221,7 +252,49 @@ function tmdbUrl(path, params) {
   return url;
 }
 
-async function loadMovies(from, to, region, warnings) {
+// One entry per film, whichever pass found it: a theatrical pass outranks a
+// service one (a calendar means the date a film arrives, and a cinema release is
+// the earliest of them), and between two passes of the same rank the earlier date
+// wins. Stated once, so the result cannot depend on which region's sweep happened
+// to land last.
+function mergeFilm(movies, item, theater, provider) {
+  const existing = movies.get(item.id);
+  if (!existing) {
+    movies.set(item.id, {
+      id: item.id,
+      title: item.title,
+      date: item.release_date,
+      poster: item.poster_path ? IMG_BASE + item.poster_path : null,
+      rating: round1(item.vote_average),
+      popularity: Math.round(Number(item.popularity) || 0),
+      providers: provider ? [provider] : [],
+      theater: Boolean(theater),
+    });
+    return;
+  }
+  if (theater) {
+    if (!existing.theater || item.release_date < existing.date) {
+      existing.date = item.release_date;
+      existing.theater = true;
+    }
+  } else if (!existing.theater && item.release_date < existing.date) {
+    existing.date = item.release_date;
+  }
+  if (provider && existing.providers.length < 3 && !existing.providers.includes(provider)) existing.providers.push(provider);
+}
+
+// One region's films, merged into the window's map. `report` is how the union
+// says what it could not reach instead of looking complete: `cut` = the budget
+// was gone before its turn, `partial` = it got its cinema releases but not all of
+// its platform sweeps, `noPlatforms` = TMDB lists none of the watchlist's
+// platforms there.
+async function regionMovies(from, to, region, deadline, warnings, movies, report) {
+  // Recorded at most once per region, whichever step runs out of time: the
+  // warning names a region that did not finish, not every piece it missed.
+  const stop = kind => {
+    if (!report.cut.includes(region) && !report.partial.includes(region)) report[kind].push(region);
+  };
+  if (Date.now() > deadline) { stop('cut'); return; }
   // The regional window. `release_date.gte/lte` — not `primary_release_date.*` —
   // is the pair TMDB documents as the region-aware one: with region and
   // with_release_type the date it returns is the film's own date for those
@@ -248,39 +321,32 @@ async function loadMovies(from, to, region, warnings) {
   // ordered walk (the year window) has no such stop: it is a fixed few pages.
   const plan = moviePlan(spanDays(from, to));
   const dateOrdered = plan.theater.sort === 'release_date.asc';
-  const theaterPages = [];
   for (let start = 1; start <= plan.theater.pages; start += BATCH) {
+    if (Date.now() > deadline) { stop(start === 1 ? 'cut' : 'partial'); break; }
     const chunk = [];
     for (let number = start; number < Math.min(start + BATCH, plan.theater.pages + 1); number++) chunk.push(number);
     const payloads = await mapLimit(chunk, BATCH, number => page(plan.theater, number));
-    theaterPages.push(...payloads);
+    for (const payload of payloads) {
+      for (const item of (payload && payload.results) || []) {
+        // The last word on membership, whichever pass found the film: a film is in
+        // this calendar only if the date TMDB reports for it falls inside the
+        // window, so a popularity-ordered page cannot drag next spring into
+        // October.
+        if (!item.release_date || item.release_date < from || item.release_date > to) continue;
+        // Everything this pass returns has a theatrical release in the window,
+        // which is what the Sheet calls "Theater".
+        mergeFilm(movies, item, true, '');
+      }
+    }
     const last = payloads[payloads.length - 1];
     const items = (last && last.results) || [];
     if (items.length < 20 || (dateOrdered && items[items.length - 1].release_date > to)) break;
   }
 
-  const movies = new Map();
-  for (const payload of theaterPages) {
-    for (const item of (payload && payload.results) || []) {
-      // The last word on membership, whichever pass found the film: a film is in
-      // this calendar only if the date TMDB reports for it falls inside the
-      // window, so a popularity-ordered page cannot drag next spring into
-      // October.
-      if (!item.release_date || item.release_date < from || item.release_date > to) continue;
-      // Everything this pass returns has a theatrical release in the window,
-      // which is what the Sheet calls "Theater".
-      movies.set(item.id, {
-        id: item.id,
-        title: item.title,
-        date: item.release_date,
-        poster: item.poster_path ? IMG_BASE + item.poster_path : null,
-        rating: round1(item.vote_average),
-        popularity: Math.round(Number(item.popularity) || 0),
-        providers: [],
-        theater: true,
-      });
-    }
-  }
+  // Out of time, and nothing of it worth asking for: the cinema pages that did
+  // land are already in the map, and the sweeps would only make the request
+  // overrun worse.
+  if (Date.now() > deadline) { stop('partial'); return; }
 
   // One sweep per platform on the list that this region actually carries. The
   // discover response has no provider field, so the only way to know a film is
@@ -304,10 +370,9 @@ async function loadMovies(from, to, region, warnings) {
       seen.add(provider.label);
       return true;
     });
-  if (!wanted.length) {
-    warn(warnings, 'TMDB films · none of your platforms (' + PLATFORMS.length + ' of them) are listed for ' + region + ' — cinema releases only');
-  }
+  if (!wanted.length) report.noPlatforms.push(region);
 
+  if (Date.now() > deadline) { stop('partial'); return; }
   const sweeps = await mapLimit(wanted, BATCH, provider =>
     fetchJSON(
       tmdbUrl('/discover/movie', {
@@ -328,28 +393,38 @@ async function loadMovies(from, to, region, warnings) {
     if (!sweep || !sweep.payload) continue;
     for (const item of sweep.payload.results || []) {
       if (!item.release_date || item.release_date < from || item.release_date > to) continue;
-      const existing = movies.get(item.id);
       // A film only on a service is a real entry here — that is the service's
-      // own list — so it is added, not merely labelled.
-      const entry = existing || {
-        id: item.id,
-        title: item.title,
-        date: item.release_date,
-        poster: item.poster_path ? IMG_BASE + item.poster_path : null,
-        rating: round1(item.vote_average),
-        popularity: Math.round(Number(item.popularity) || 0),
-        providers: [],
-        theater: false,
-      };
-      if (!existing) movies.set(item.id, entry);
-      // The passes can date the same film differently — the theatre one by its
-      // theatrical or limited date, a service by its digital date — and a
-      // calendar means the first of them, so the earlier date wins. That also
-      // makes the result independent of which pass happened to find it last.
-      else if (!existing.theater && item.release_date < existing.date) existing.date = item.release_date;
-      if (entry.providers.length < 3 && !entry.providers.includes(sweep.provider)) entry.providers.push(sweep.provider);
+      // own list — so it is merged in, not merely labelled.
+      mergeFilm(movies, item, false, sweep.provider);
     }
   }
+}
+
+// The film half of one window: one region, or every region the picker offers
+// when `region=all`. The union is a merge, not a stack — a film on a service in
+// six countries is one entry carrying six labels (capped, as ever, at three) and
+// one date — so the day a film appears never depends on which region's sweep
+// reached it first, and the list stays a list of films rather than of releases.
+// One budget covers the whole union (see UNION_BUDGET_MS).
+async function loadMovies(from, to, regions, warnings, state) {
+  const union = regions.length > 1;
+  if (state) state.complete = true;
+  const deadline = Date.now() + (union ? UNION_BUDGET_MS : REGION_BUDGET_MS);
+  const movies = new Map();
+  const report = { cut: [], partial: [], noPlatforms: [] };
+  await mapLimit(regions, union ? UNION_BATCH : BATCH, region =>
+    regionMovies(from, to, region, deadline, warnings, movies, report)
+  );
+  if (report.noPlatforms.length) {
+    warn(warnings, 'TMDB films · none of your platforms (' + PLATFORMS.length + ' of them) are listed for ' + report.noPlatforms.join(', ') + ' — cinema releases only there');
+  }
+  if (report.partial.length) {
+    warn(warnings, 'TMDB films · ' + report.partial.length + ' of ' + regions.length + ' regions came back without their platform lists (' + report.partial.join(', ') + ') — Refresh tries again');
+  }
+  if (report.cut.length) {
+    warn(warnings, 'TMDB films · no time left for ' + report.cut.length + ' of ' + regions.length + ' regions (' + report.cut.join(', ') + ') — Refresh tries again');
+  }
+  if (state) state.complete = !report.cut.length && !report.partial.length;
 
   // Nothing gets in that is neither in cinemas nor on one of the platforms: a
   // film with no provider label that no theatre pass found is a title on some
@@ -427,13 +502,15 @@ exports.handler = async event => {
   // gains nothing.
   if (to < from) to = from;
   if (to > addDays(from, MAX_DAYS)) to = addDays(from, MAX_DAYS);
-  const region = REGION_RE.test(params.region || '') ? params.region : 'US';
+  const regions = requestedRegions(params);
+  const region = regions.length > 1 ? ALL_REGIONS : regions[0];
 
   const warnings = [];
+  const films = { complete: true };
   const tmdbKey = String(process.env.TMDB_API_KEY || '').trim();
   try {
     const [movies, episodes] = await Promise.all([
-      tmdbKey ? loadMovies(from, to, region, warnings) : Promise.resolve([]),
+      tmdbKey ? loadMovies(from, to, regions, warnings, films) : Promise.resolve([]),
       loadEpisodes(from, to, warnings),
     ]);
     if (!tmdbKey) {
@@ -446,7 +523,7 @@ exports.handler = async event => {
     return json(
       200,
       {
-        range: { from, to, region },
+        range: { from, to, region, regions: regions.length > 1 ? regions : undefined },
         generatedAt: new Date().toISOString(),
         movies,
         episodes,
@@ -455,7 +532,10 @@ exports.handler = async event => {
       // The window's contents change slowly (TVmaze's own copy of the schedule
       // is cached for 24 hours upstream), so a short CDN cache is free; the
       // page's Refresh button passes ?fresh= for a distinct URL that misses it.
-      { 'Cache-Control': 'public, max-age=900, stale-while-revalidate=3600' }
+      // A union that ran out of budget is cached for a minute instead, because
+      // pinning an incomplete answer for fifteen would make the missing regions
+      // look like the calendar's actual contents.
+      { 'Cache-Control': films.complete ? 'public, max-age=900, stale-while-revalidate=3600' : 'public, max-age=60, stale-while-revalidate=3600' }
     );
   } catch (error) {
     console.error('Calendar aggregation failed:', error);

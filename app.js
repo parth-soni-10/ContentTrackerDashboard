@@ -2401,6 +2401,13 @@ const CAL_REGIONS = [
   ['PL', 'Poland'], ['PT', 'Portugal'], ['IE', 'Ireland'], ['NZ', 'New Zealand'],
   ['ZA', 'South Africa'], ['AE', 'United Arab Emirates'], ['SG', 'Singapore']
 ];
+// A film releases country by country, so "every region" is not a region code the
+// API has: it is the sentinel the picker offers, and the list above is what the
+// request hands the function to union over. This array is the one place that
+// list is defined — the function unions exactly what it is sent, so the dropdown
+// and the calendar can never disagree about what "all" means.
+const CAL_REGION_ALL = 'all';
+const calRegionKnown = value => value === CAL_REGION_ALL || CAL_REGIONS.some(region => region[0] === value);
 // Monday-first, matching the en-GB dates used everywhere else in the app.
 const CAL_WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 // No floor on the platform list. A threshold used to hide any platform with
@@ -2426,11 +2433,20 @@ const CAL_PREVIEW = 3;  // entries a day cell shows before its "+N more"
 const CAL_FILTERS_KEY = 'ct-cal-filters';
 const CAL_SCOPES = ['new', 'episodes', 'all'];
 const CAL_TYPES = ['all', 'movie', 'episode'];
+// The widest view is the default: every release of both kinds, on every service
+// the watchlist logs against. "New & notable" is still one select away for a
+// month that reads better with the weekly run of shows thinned out.
+const CAL_FILTER_DEFAULTS = { scope: 'all', type: 'all', platform: 'all', search: '' };
+// The shape of the stored filters, bumped when a default above changes. Storing
+// only happens on a deliberate change, so an untouched device has nothing saved
+// and needs no bump — but a device that once stored the *old* default would keep
+// opening on it, which reads as the new default never having taken effect.
+const CAL_FILTERS_VERSION = 2;
 function calStoredFilters() {
-  const fallback = { scope: 'new', type: 'all', platform: 'all', search: '' };
+  const fallback = CAL_FILTER_DEFAULTS;
   try {
     const saved = JSON.parse(localStorage.getItem(CAL_FILTERS_KEY) || 'null');
-    if (!saved || typeof saved !== 'object') return fallback;
+    if (!saved || typeof saved !== 'object' || saved.v !== CAL_FILTERS_VERSION) return fallback;
     return {
       scope: CAL_SCOPES.indexOf(saved.scope) === -1 ? fallback.scope : saved.scope,
       type: CAL_TYPES.indexOf(saved.type) === -1 ? fallback.type : saved.type,
@@ -2445,6 +2461,7 @@ function calSaveFilters() {
   // later load would have to make sense of.
   try {
     localStorage.setItem(CAL_FILTERS_KEY, JSON.stringify({
+      v: CAL_FILTERS_VERSION,
       scope: calFilters.scope,
       type: calFilters.type,
       platform: calFilters.platform || 'all',
@@ -2454,15 +2471,16 @@ function calSaveFilters() {
 }
 let calFilters = calStoredFilters();
 // Movies release on a per-country schedule, so the region decides what the film
-// half of the calendar contains. Default to the browser's own region when it is
-// one we offer, so a non-US visitor sees their own release dates first.
+// half of the calendar contains — and the default is every region at once: a
+// release calendar that quietly dropped everything outside one country was the
+// wrong default for a watchlist that is not itself in one country. A single
+// region is still one choice away, and a remembered one wins over the default.
 let calRegion = (() => {
   try {
     const saved = localStorage.getItem('ct-cal-region');
-    if (saved && CAL_REGIONS.some(region => region[0] === saved)) return saved;
-  } catch (e) { /* private mode — fall through to the locale guess */ }
-  const guess = String(String(navigator.language || '').split('-')[1] || '').toUpperCase();
-  return CAL_REGIONS.some(region => region[0] === guess) ? guess : 'US';
+    if (calRegionKnown(saved)) return saved;
+  } catch (e) { /* private mode — fall through to the default */ }
+  return CAL_REGION_ALL;
 })();
 let calState = {
   cache: new Map(),   // window key -> { data, loadedAt, updatedAt } — one entry per built window
@@ -2829,6 +2847,9 @@ async function loadCalendar(mode) {
   updateCalendar();
   try {
     const query = new URLSearchParams({ from: win.from, to: win.to, region: calRegion });
+    // "All regions" is a union the function does one region at a time, and it
+    // only knows the list the picker offers — so the list travels with the ask.
+    if (calRegion === CAL_REGION_ALL) query.set('regions', CAL_REGIONS.map(region => region[0]).join(','));
     if (mode === 'fresh') query.set('fresh', String(Date.now()));
     const response = await fetch(CALENDAR_URL + '?' + query.toString(), { headers: { accept: 'application/json' }, credentials: 'same-origin' });
     if (!response.ok) throw new Error('Calendar service returned ' + response.status);
@@ -3377,7 +3398,8 @@ document.addEventListener('keydown', event => {
 
 function renderCalendar() {
   calState.opener = null;
-  const regionOptions = CAL_REGIONS.map(region => '<option value="' + region[0] + '">' + escapeHTML(region[1]) + '</option>').join('');
+  const regionOptions = '<option value="' + CAL_REGION_ALL + '">All regions</option>' +
+    CAL_REGIONS.map(region => '<option value="' + region[0] + '">' + escapeHTML(region[1]) + '</option>').join('');
   document.getElementById('app').innerHTML =
     '<div class="page-header">' +
       '<div class="ph-left"><h1>Release Calendar</h1><p>Rolling: this year month by month, next year at a glance · films from TMDB, episodes from TVmaze</p></div>' +
