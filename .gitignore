@@ -11,3 +11,6 @@
 # and it must never be committable, or the first `git add -A` publishes it.
 /.env
 /.env.local
+
+# Local Netlify folder
+.netlify

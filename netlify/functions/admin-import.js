@@ -54,6 +54,121 @@ function suggestionKey(title, date, note) {
   ].join('\u0001');
 }
 
+// ── THE TWO STORES, ROW BY ROW ────────────────────────────────────────────
+// `{ verify: true }` answers "did the data actually move?" with a comparison
+// rather than a count: both sides are read, aligned on what identifies a watch
+// (title, season, date) and every other field is compared. Rows that exist on
+// only one side, fields that disagree and the undated rows are reported by name,
+// so the claim can be checked. It writes nothing.
+const LIST_CAP = 25;
+const foldText = value => String(value == null ? '' : value).trim();
+const foldKey = value => foldText(value).toLowerCase();
+const foldNum = value => Number(String(value == null ? '' : value).replace(/[^0-9.-]/g, '')) || 0;
+const FIELD_FOLD = { type: foldKey, genre: foldKey, platform: foldKey, note: foldKey, episodes: foldNum, screentime: foldNum };
+const ENTRY_FIELDS = ['type', 'genre', 'platform', 'episodes', 'screentime'];
+const SUGGESTION_FIELDS = ['type', 'genre', 'platform', 'note'];
+
+// Aligned on title + season + date and deliberately *not* on screentime: a row
+// whose screentime differs is one row that disagrees, not a missing row plus an
+// extra one.
+const alignKey = side => [foldKey(side.name), db.seasonKey(side.season), side.date || ''].join('\u0001');
+
+function compareRows(sheetRows, sheetSide, dbRows, dbSide, fields, label) {
+  const index = (rows, toSide) => {
+    const seen = new Map();
+    const repeated = [];
+    for (const row of rows) {
+      const side = toSide(row);
+      if (!side.name) continue;
+      const key = alignKey(side);
+      if (seen.has(key)) repeated.push(side.label);
+      seen.set(key, side);
+    }
+    return { seen, repeated };
+  };
+  const sheet = index(sheetRows, sheetSide);
+  const stored = index(dbRows, dbSide);
+  const missing = [];
+  const mismatched = [];
+  sheet.seen.forEach((a, key) => {
+    const b = stored.seen.get(key);
+    if (!b) { missing.push(a.label); return; }
+    const differences = {};
+    for (const field of fields) {
+      if (FIELD_FOLD[field](a[field]) !== FIELD_FOLD[field](b[field])) {
+        differences[field] = { sheet: a[field], database: b[field] };
+      }
+    }
+    if (Object.keys(differences).length) mismatched.push({ row: a.label, differences });
+  });
+  const extra = [];
+  stored.seen.forEach((side, key) => { if (!sheet.seen.has(key)) extra.push(side.label); });
+  return {
+    rows: label,
+    sheet: sheet.seen.size,
+    database: stored.seen.size,
+    missing: missing.slice(0, LIST_CAP),
+    extra: extra.slice(0, LIST_CAP),
+    mismatched: mismatched.slice(0, LIST_CAP),
+    repeatedInSheet: sheet.repeated.slice(0, LIST_CAP),
+    truncated: { missing: Math.max(0, missing.length - LIST_CAP), extra: Math.max(0, extra.length - LIST_CAP), mismatched: Math.max(0, mismatched.length - LIST_CAP) },
+    undated: { sheet: sheetRows.filter(row => !sheetSide(row).date).length, database: dbRows.filter(row => !dbSide(row).date).length }
+  };
+}
+
+async function integrityReport(data, suggestions, goal) {
+  const { rows: entries } = await db.query(
+    "SELECT name, season, type, genre, platform, episodes, screentime, to_char(watch_date, 'YYYY-MM-DD') AS watch_date FROM entries"
+  );
+  const { rows: storedSuggestions } = await db.query(
+    "SELECT title, type, genre, platform, note, to_char(submitted_date, 'YYYY-MM-DD') AS submitted_date FROM suggestions"
+  );
+  const storedGoal = await db.readGoal();
+  const entryLabel = (name, season, date) => foldText(name) + (foldText(season) ? ' S' + foldText(season) : '') + ' · ' + (date || 'no date');
+
+  const sheetEntry = row => {
+    const date = db.isoOf(db.parseDateParts(text(row, 'watch date'))) || '';
+    const name = text(row, 'name');
+    return {
+      name, season: text(row, 'season'), date,
+      type: text(row, 'type'), genre: text(row, 'details/genre', 'genre'), platform: text(row, 'platform'),
+      episodes: text(row, 'episode count'), screentime: text(row, 'screentime'),
+      label: entryLabel(name, text(row, 'season'), date)
+    };
+  };
+  const dbEntry = row => ({
+    name: row.name, season: row.season, date: row.watch_date || '',
+    type: row.type, genre: row.genre, platform: row.platform,
+    episodes: row.episodes, screentime: row.screentime,
+    label: entryLabel(row.name, row.season, row.watch_date || '')
+  });
+  const sheetSuggestion = row => {
+    const date = db.isoOf(db.parseDateParts(text(row, 'date'))) || '';
+    const name = text(row, 'title');
+    return {
+      name, season: '', date,
+      type: text(row, 'type'), genre: text(row, 'genre'), platform: text(row, 'platform'), note: text(row, 'note'),
+      label: name + ' · ' + (date || 'no date')
+    };
+  };
+  const dbSuggestion = row => ({
+    name: row.title, season: '', date: row.submitted_date || '',
+    type: row.type, genre: row.genre, platform: row.platform, note: row.note,
+    label: foldText(row.title) + ' · ' + (row.submitted_date || 'no date')
+  });
+
+  return {
+    mode: 'verify',
+    entries: compareRows(data.rows, sheetEntry, entries, dbEntry, ENTRY_FIELDS, 'entries'),
+    suggestions: compareRows(suggestions.rows, sheetSuggestion, storedSuggestions, dbSuggestion, SUGGESTION_FIELDS, 'suggestions'),
+    goal: {
+      sheet: goal.hrs > 0 ? { hrs: goal.hrs, year: goal.year } : null,
+      database: storedGoal.hrs > 0 ? { hrs: storedGoal.hrs, year: storedGoal.year } : null,
+      match: Boolean(goal.hrs) === Boolean(storedGoal.hrs) && Number(goal.hrs || 0) === Number(storedGoal.hrs || 0)
+    }
+  };
+}
+
 exports.handler = async event => {
   if (event.httpMethod !== 'POST') return json(405, { error: 'Method not allowed' });
   if (!validSession(event)) return json(401, { error: 'Admin session required', code: 'SESSION_INVALID' });
@@ -62,6 +177,7 @@ exports.handler = async event => {
 
   let body = {};
   try { body = JSON.parse(event.body || '{}'); } catch { return json(400, { error: 'Invalid request body' }); }
+  const verify = body.verify === true; // compare the two stores; never writes
   const dryRun = body.dryRun !== false; // dry run unless explicitly asked to write
 
   try {
@@ -77,6 +193,8 @@ exports.handler = async event => {
       suggestions: { read: suggestions.rows.length, imported: 0, skipped: 0 },
       goal: { read: goal.hrs > 0 ? goal : null, imported: false }
     };
+
+    if (verify) return json(200, await integrityReport(data, suggestions, goal));
 
     if (dryRun) {
       const { rows } = await db.query("SELECT id, name, season, to_char(watch_date, 'YYYY-MM-DD') AS watch_date, screentime FROM entries");

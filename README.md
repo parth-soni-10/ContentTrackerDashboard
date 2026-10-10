@@ -35,7 +35,7 @@ Netlify Database is available on credit-based plans and an active database consu
 
 ### One-time import (only if you are coming from the Google Sheet)
 
-The Sheet's rows were copied into the database by a one-shot importer before the Sheet was retired. It is kept in the repo as `netlify/functions/admin-import.js` so the import can be repeated on a preview, and it is **idempotent** — a row whose duplicate key already exists is skipped rather than inserted twice — and **read-only towards the Sheet**: it never writes back to it and never deletes a database row.
+The Sheet's rows are copied into the database by one one-shot importer, `netlify/functions/admin-import.js` — the only thing left that reads the Sheet. It is **idempotent** (a row whose duplicate key already exists is skipped, not inserted twice) and **read-only towards the Sheet** (it never writes back to it and never deletes a database row). Until it has run, the database is empty and the Sheet holds the only copy of the watchlist — the site reads the database, so a deploy that lands before the import shows no titles.
 
 It needs `SPREADSHEET_ID` and `GOOGLE_SERVICE_ACCOUNT_JSON` set for the deploy doing the import (see the service-account steps below), and it is driven by a signed-in request:
 
@@ -51,6 +51,12 @@ curl -b /tmp/ct-cookies -X POST https://YOUR-SITE.netlify.app/.netlify/functions
 # 3. The real import
 curl -b /tmp/ct-cookies -X POST https://YOUR-SITE.netlify.app/.netlify/functions/admin-import \
   -H 'Content-Type: application/json' -d '{"dryRun":false}'
+
+# 4. Verify — compare the two stores row by row instead of trusting a count.
+#    Reads both sides, writes nothing: rows only the Sheet has, rows only the
+#    database has, fields that disagree, and the undated on each side.
+curl -b /tmp/ct-cookies -X POST https://YOUR-SITE.netlify.app/.netlify/functions/admin-import \
+  -H 'Content-Type: application/json' -d '{"verify":true}'
 ```
 
 When the counts look right and the site reads the new store, remove `SPREADSHEET_ID`, `GOOGLE_SERVICE_ACCOUNT_JSON`, `admin-import.js` and `lib/sheets.js` — at that point the Sheet is no longer read anywhere.
