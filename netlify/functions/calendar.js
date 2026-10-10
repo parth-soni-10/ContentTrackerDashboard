@@ -13,11 +13,15 @@
 //   * Episodes — TMDB cannot serve a calendar of episodes: /discover/tv's
 //     air_date filter answers with SHOWS that have an episode in the window,
 //     and getting the actual dates would mean one request per show (hundreds).
-//     TVmaze's /schedule/full returns every future episode it knows about in a
-//     single 3.3 MB response. Note it must be that endpoint: the plain
-//     /schedule one "will only return episodes that are tied to a specific
-//     country… Episodes from global Web Channels like Netflix are not
-//     included", which is exactly the half a release calendar is for.
+//     TVmaze's /schedule/full returns the last couple of days and every future
+//     episode it knows about in a single 3.3 MB response. Note it must be that
+//     endpoint: the plain /schedule one "will only return episodes that are tied
+//     to a specific country… Episodes from global Web Channels like Netflix are
+//     not included", which is exactly the half a release calendar is for. The
+//     one thing /schedule/full cannot do is reach back to the start of the
+//     current month, so the days it misses are fetched a day at a time — the
+//     same two halves — which is what makes a month that is already running
+//     open on its whole self (see backfillDays).
 //
 // Both halves fail independently: if one source is down the other still
 // renders and the response carries a warning the page shows.
@@ -487,7 +491,9 @@ async function loadMovies(from, to, regions, warnings, state) {
 // "series" and "season" mark the two things a viewer actually plans around —
 // the rest of the schedule is the weekly run of shows already on.
 function episodeRow(entry) {
-  const show = (entry._embedded && entry._embedded.show) || {};
+  // Two shapes for the same thing: the schedule endpoints embed the show under
+  // `_embedded`, the per-day network one puts it at the top level.
+  const show = (entry._embedded && entry._embedded.show) || entry.show || {};
   const streaming = Boolean(show.webChannel && show.webChannel.name);
   const channel = (streaming ? show.webChannel.name : (show.network && show.network.name) || '') || 'Other';
   // The Sheet's spelling of the platform, or '' when the show airs somewhere
@@ -519,22 +525,94 @@ function episodeRow(entry) {
   };
 }
 
-async function loadEpisodes(from, to, warnings) {
+// ── THE DAYS THE BIG RESPONSE DOES NOT REACH ──────────────────────────────
+// /schedule/full is complete for today onwards and only rolling while it starts,
+// which serves a month that is ahead but not the one we are in: on 10 October its
+// own earliest day held three entries. So every day of the window that is already
+// behind us is asked for on its own — the network half for one country plus the
+// web half without one, which is exactly the pair the big response merges — and
+// the month reads as a month instead of as a wall of empty past days.
+//
+// The boundary is today, deliberately not the big response's earliest day: that
+// edge is the rolling part, and a day taken from it arrives half-filled — Oct 8
+// carried three entries (CNN, NBC, ABC, none of them on the platform list, so an
+// empty day) where the day's own list has dozens.
+//
+// It costs two upstream calls a day, which is why it is bounded twice: a batch
+// size and a wall-clock budget, so a page load on the 30th does not turn into
+// sixty requests. The source's own courtesy limit is ~20 requests per 10 seconds
+// (measured: it absorbs bursts well past that, but the ceiling is not ours to
+// spend), and whatever the budget cannot reach is named in a warning rather than
+// quietly missing.
+const BACKFILL_MAX_DAYS = 31; // a month is the longest past a window can be
+const BACKFILL_BATCH = 4; // days at a time — two requests each
+const BACKFILL_BUDGET_MS = 7000; // for the whole backfill, not per day
+
+// One past day, both halves. null when either half failed: half a day is worse
+// than a day that is visibly missing, and the failure is reported once as a count.
+async function daySchedule(date) {
+  const swallowed = []; // per-day failures are counted, not warned about one by one
+  const [network, web] = await Promise.all([
+    fetchJSON(TVMAZE_BASE + '/schedule?date=' + date + '&country=US', swallowed, 'schedule'),
+    fetchJSON(TVMAZE_BASE + '/schedule/web?date=' + date, swallowed, 'web schedule'),
+  ]);
+  if (!network || !web) return null;
+  return (Array.isArray(network) ? network : []).concat(Array.isArray(web) ? web : []);
+}
+
+async function backfillDays(from, to, today, collect, warnings) {
+  const days = [];
+  for (let date = from; date <= to && date < today && days.length < BACKFILL_MAX_DAYS; date = addDays(date, 1)) days.push(date);
+  if (!days.length) return;
+  const deadline = Date.now() + BACKFILL_BUDGET_MS;
+  const state = new Array(days.length).fill('done');
+  await mapLimit(days, BACKFILL_BATCH, async (date, index) => {
+    if (Date.now() > deadline) {
+      state[index] = 'late';
+      return;
+    }
+    const entries = await daySchedule(date);
+    if (!entries) {
+      state[index] = 'failed';
+      return;
+    }
+    entries.forEach(collect);
+  });
+  const late = days.filter((date, index) => state[index] === 'late');
+  const failed = state.filter(value => value === 'failed').length;
+  if (late.length) {
+    warn(
+      warnings,
+      'TVmaze episodes · no time left for ' + late.length + (late.length === 1 ? ' day' : ' days') + ' before today (' +
+        late[0] + ' to ' + late[late.length - 1] + ') — Refresh tries again'
+    );
+  }
+  if (failed) {
+    warn(warnings, 'TVmaze episodes · ' + failed + (failed === 1 ? ' day' : ' days') + ' before today could not be fetched');
+  }
+}
+
+async function loadEpisodes(from, to, today, warnings) {
   const schedule = await fetchJSON(TVMAZE_BASE + '/schedule/full', warnings, 'TVmaze schedule');
   if (!Array.isArray(schedule)) return [];
   const seen = new Set();
   const rows = [];
-  for (const entry of schedule) {
-    if (!entry || !entry.airdate || entry.airdate < from || entry.airdate > to) continue;
-    if (seen.has(entry.id)) continue;
+  // One filter and one dedupe for everything, whoever it came from: the day
+  // endpoints re-serve episodes the big response already carried on its own
+  // border days, and an episode counts once.
+  const collect = entry => {
+    if (!entry || !entry.airdate || entry.airdate < from || entry.airdate > to) return;
+    if (seen.has(entry.id)) return;
     seen.add(entry.id);
     const row = episodeRow(entry);
     // A show on a network or service that is not on the list is not part of this
     // calendar — that is the whole point of fetching from a fixed set.
-    if (!row.platform) continue;
-    if (isExcludedTitle(row.title)) continue;
+    if (!row.platform) return;
+    if (isExcludedTitle(row.title)) return;
     rows.push(row);
-  }
+  };
+  schedule.forEach(collect);
+  await backfillDays(from, to, today, collect, warnings);
   // Most notable first within a day, so the calendar's per-day preview can just
   // take the head of the list: a series premiere outranks a weekly episode.
   return rows.sort((a, b) =>
@@ -565,7 +643,7 @@ exports.handler = async event => {
   try {
     const [movies, episodes] = await Promise.all([
       tmdbKey ? loadMovies(from, to, regions, warnings, films) : Promise.resolve([]),
-      loadEpisodes(from, to, warnings),
+      loadEpisodes(from, to, today, warnings),
     ]);
     if (!tmdbKey) {
       warn(

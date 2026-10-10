@@ -2525,8 +2525,9 @@ function calMonthAt(year, month) {
   };
 }
 // Every month of this year that is still to come — the current one through
-// December. Past months are not offered at all: this is a release calendar, not
-// a history page, and a month that has ended can only ever be empty.
+// December. A month that has *ended* is not offered at all: nobody plans around
+// one. The month that is running is offered whole, its past days included, since
+// they are part of the month you are looking at.
 function calYearMonths(now) {
   now = now || new Date();
   const months = [];
@@ -2538,16 +2539,19 @@ function calNextYearWindow(now) {
   const year = now.getFullYear() + 1;
   return { year: year, from: calISO(new Date(year, 0, 1)), to: calISO(new Date(year, 11, 31)) };
 }
-// The one window the current view is asking for. The current month starts today
-// (its earlier days are deliberately left out) while a month still to come is
-// asked for whole, and next year is asked for whole by definition.
+// The one window the current view is asking for. A month is asked for whole —
+// the current one included, so its past days carry the releases that were on
+// them instead of being a row of blanks — and next year is asked for whole by
+// definition. The days of the current month that are already behind us are not
+// in the schedule response the function fetches first; it goes back for them
+// itself (see backfillDays in calendar.js), which is why the page asks for the
+// whole month and gets a whole month.
 function calScopeWindow() {
   const now = new Date();
-  const today = calISO(now);
   if (calState.scope === 'next') return calNextYearWindow(now);
   const months = calYearMonths(now);
   const month = months[Math.min(calState.month, months.length - 1)] || months[0];
-  return { month: month, from: month.first < today ? today : month.first, to: month.last };
+  return { month: month, from: month.first, to: month.last };
 }
 function calWindowKey(win) {
   return win.from + '|' + win.to + '|' + calRegion;

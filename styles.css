@@ -574,9 +574,11 @@ html.dark .cal-warn { border-color: #4a3a24; }
 .cal-grid-body { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 10px; }
 .cal-cell { display: flex; flex-direction: column; gap: 6px; min-height: 152px; padding: 8px 8px 6px; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow-sm); }
 .cal-cell.cal-blank { background: transparent; border: 0; box-shadow: none; }
-/* Days before today are dimmed rather than filled: the window starts today, so
-   this is a release calendar, not a history page. */
-.cal-cell.past { opacity: .45; background: var(--surface-soft); box-shadow: none; }
+/* Days before today are quiet, not empty: the window is the whole month, so a
+   past day carries the releases that were on it. The recessed background and the
+   muted day number below say "behind us" without washing the posters out — the
+   dimming this used to carry was right when those cells could only be blank. */
+.cal-cell.past { background: var(--surface-soft); box-shadow: none; }
 .cal-cell.today { border-color: var(--green-mid); box-shadow: 0 0 0 2px rgba(64,145,108,.15), var(--shadow-sm); }
 .cal-cell-top { display: flex; align-items: center; gap: 6px; min-height: 18px; }
 .cal-daynum { font-size: 13px; font-weight: 700; color: var(--text); font-variant-numeric: tabular-nums; }
