@@ -157,6 +157,34 @@ const PLATFORM_INDEX = (() => {
 const platformFor = name => PLATFORM_INDEX.get(platformKey(name)) || '';
 const THEATER = 'Theater';
 
+// ── TITLES THIS CALENDAR DOES NOT CARRY ───────────────────────────────────
+// League and promotion entries — a wrestling card, a basketball or football
+// game — are the one thing here that is not a *release* to plan around: they air
+// several nights a week all year, they run for hours, and nobody picks them off
+// a calendar. They are matched on the show's name, at the fetch boundary like
+// the platform filter, so an excluded title is never sent, never counted and
+// never offered in a filter.
+//
+// Deliberately a list of names and not a "sports" rule: the episode source's own
+// genre for this is unusable — it tags quiz and game shows as Sports, so a rule
+// on it would swallow "Alle mot alle" and "The Traitors Telugu" along with the
+// league. A sports *documentary* is a real release too, which is the second
+// reason this is a short explicit list. Word boundaries, so a title that merely
+// contains the letters is untouched.
+//
+// The four below are the leagues in this watchlist's own calendar today. A fifth
+// (NHL, MLB, UFC, WNBA, Formula 1 …) is one line here, and an entry can be any
+// pattern when a name does not fit the acronym — "Thursday Night Football on
+// Prime Video" and "All Elite Wrestling PPV" are league property under a name
+// no acronym catches.
+const EXCLUDED_TITLES = [
+  /\bWWE\b/i,   // wrestling: Raw, SmackDown, NXT, the premium live events
+  /\bNBA\b/i,   // basketball: games and the studio shows
+  /\bNFL\b/i,   // football: the Sunday and Monday packages
+  /\bAEW\b/i,   // wrestling: Dynamite, Collision, the pay-per-views
+];
+const isExcludedTitle = title => EXCLUDED_TITLES.some(pattern => pattern.test(String(title || '')));
+
 const json = (statusCode, body, headers = {}) => ({
   statusCode,
   headers: { 'Content-Type': 'application/json', ...headers },
@@ -437,7 +465,7 @@ async function loadMovies(from, to, regions, warnings, state) {
   // service this calendar is not for. Cinema releases are labelled, so the
   // platform filter can ask for them (and the badge says how it arrives).
   return [...movies.values()]
-    .filter(movie => movie.theater || movie.providers.length)
+    .filter(movie => (movie.theater || movie.providers.length) && !isExcludedTitle(movie.title))
     .map(movie => (movie.theater ? { ...movie, providers: movie.providers.concat(THEATER) } : movie))
     .sort((a, b) => a.date.localeCompare(b.date) || b.popularity - a.popularity);
 }
@@ -485,6 +513,7 @@ async function loadEpisodes(from, to, warnings) {
     // A show on a network or service that is not on the list is not part of this
     // calendar — that is the whole point of fetching from a fixed set.
     if (!row.platform) continue;
+    if (isExcludedTitle(row.title)) continue;
     rows.push(row);
   }
   // Most notable first within a day, so the calendar's per-day preview can just
