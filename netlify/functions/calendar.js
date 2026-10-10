@@ -25,7 +25,7 @@
 // Third rule, and the one that decides what the page contains: a film or an
 // episode is fetched only if it is on one of the platforms the Sheet logs
 // against (see PLATFORMS) — or, for a film, released in a cinema, which the
-// Sheet calls "Theater". The filter lives here at the fetch boundary, so the
+// watchlist calls "Theater". The filter lives here at the fetch boundary, so the
 // rest of the app never sees a title that is not watchable on those services.
 //
 // The key is read per request and the warning names the environment it was
@@ -79,12 +79,19 @@ function requestedRegions(params) {
 
 // ── THE PLATFORMS THIS CALENDAR IS FOR ───────────────────────────────────
 // The calendar fetches from these platforms and nothing else — the list is the
-// Sheet's own platform vocabulary, which is what makes the page agree with what
-// gets logged. It is applied at the fetch boundary rather than in the page, so
-// the data that is dropped is never sent, never counted and never selectable:
+// watchlist's own platform vocabulary, which is what makes the page agree with
+// what gets logged. It is applied at the fetch boundary rather than in the page,
+// so the data that is dropped is never sent, never counted and never selectable:
 // a month here is what can actually be watched, not what exists.
 //
-// "Other" is not a service: it is how the Sheet logs a title that had no
+// YouTube is deliberately absent: nothing in the store logs it, so its shows are
+// web-channel content rather than anything watchable here, and it was the single
+// biggest source of episodes that were never going to be watched (86 of a
+// month's 675, from 36 channels like Hot Ones and Talk Ville). Dropping the name
+// is the whole change — it is matched at the fetch boundary like any other
+// platform, so those episodes and any film only on YouTube stop arriving.
+//
+// "Other" is not a service: it is how the watchlist logs a title that had no
 // platform, and it is also what the episode source reports when a show has no
 // network at all — so it is matched like any other spelling. "Theater" is not a
 // service either, so it is deliberately absent here: a cinema release is a
@@ -109,7 +116,6 @@ const PLATFORMS = [
   'Peacock',
   'Sony Liv',
   'Universal+ Amazon Channel',
-  'YouTube',
 ];
 // The other spellings the two APIs use for the same platform. Comparing names
 // with their punctuation and casing removed ('Apple TV+' and 'Apple TV Plus' are
