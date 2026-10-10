@@ -585,12 +585,21 @@ html.dark .cal-warn { border-color: #4a3a24; }
 .cal-cell-count { margin-left: auto; font-size: 10px; font-weight: 700; color: var(--text-soft); background: var(--bg); border: 1px solid var(--border); border-radius: 20px; padding: 1px 7px; font-variant-numeric: tabular-nums; }
 .cal-cell-body { flex: 1; display: flex; flex-direction: column; gap: 4px; }
 
-.cal-item { display: flex; align-items: center; gap: 7px; width: 100%; padding: 3px; background: transparent; border: 0; border-radius: 8px; font: inherit; text-align: left; cursor: pointer; transition: background-color .15s; }
+.cal-item { position: relative; display: flex; align-items: center; gap: 7px; width: 100%; padding: 3px; border-radius: 8px; font: inherit; text-align: left; cursor: pointer; transition: background-color .15s; }
 .cal-item:hover { background: var(--green-pale); }
+/* The tile's day-opener: invisible, filling the tile, sitting under its title.
+   It has to be a separate element because the title is itself a link (an <a>
+   inside a <button> is invalid, and a <button> inside an <a> would eat the
+   day), so the whole tile stays clickable without nesting the two. */
+.cal-item-open { position: absolute; inset: 0; z-index: 0; width: 100%; padding: 0; background: transparent; border: 0; border-radius: 8px; cursor: pointer; }
+.cal-item-open:focus-visible { outline: 2px solid var(--green); outline-offset: 0; }
 .cal-thumb { width: 26px; height: 38px; flex-shrink: 0; border-radius: 4px; object-fit: cover; background: linear-gradient(135deg, var(--green-pale), var(--surface-soft)); border: 1px solid var(--border); }
 .cal-thumb.placeholder { display: flex; align-items: center; justify-content: center; font-size: 13px; }
 .cal-item-text { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
-.cal-item-title { font-size: 12px; font-weight: 600; line-height: 1.25; color: var(--text); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+/* The title is the tile's IMDb link, lifted over .cal-item-open so the click
+   lands on it rather than on the day drawer underneath. */
+.cal-item-title { position: relative; z-index: 1; font-size: 12px; font-weight: 600; line-height: 1.25; color: var(--text); text-decoration: none; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.cal-item-title:hover, .cal-item-title:focus-visible { color: var(--green); text-decoration: underline; text-underline-offset: 2px; }
 .cal-item-meta { display: flex; align-items: center; flex-wrap: wrap; gap: 3px; }
 .cal-tag { padding: 1px 6px; border-radius: 20px; border: 1px solid var(--border); background: var(--bg); font-size: 9.5px; font-weight: 600; color: var(--text-soft); white-space: nowrap; }
 .cal-tag.new { border-color: transparent; background: var(--gold-pale); color: var(--gold); }

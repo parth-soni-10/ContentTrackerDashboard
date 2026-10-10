@@ -2687,6 +2687,19 @@ function calImdbPending(item) {
   const tmdbId = imdbTmdbId(item);
   return Boolean(tmdbId) && !imdbLookupCache()[tmdbId];
 }
+// The attributes of a link to the release's own IMDb page — the one place they
+// are built, so the drawer's title and its ↗, and the title on every tile, cannot
+// drift apart. A film's page is not known until it is clicked (see calOpenImdb),
+// so such an anchor carries the lookup instead of a final URL: its href is an
+// IMDb search of the title, which is where the click lands if the exact page
+// cannot be resolved.
+function calImdbAttrs(item) {
+  const pending = calImdbPending(item)
+    ? ' data-act="calendarAction" data-cal="imdb" data-tmdb="' + escapeHTML(imdbTmdbId(item)) +
+      '" data-title="' + escapeHTML(item.title) + '" data-date="' + escapeHTML(item.date || '') + '"'
+    : '';
+  return ' href="' + escapeHTML(calImdbHref(item)) + '" target="_blank" rel="noopener" title="Open on IMDb"' + pending;
+}
 // Opens IMDb for a title, resolving a film's page first when it is not known yet.
 // The tab is opened *inside the click*, before the request goes out: a
 // window.open that waits for a response is exactly what browsers block as a
@@ -3002,18 +3015,29 @@ function calThumbHTML(item) {
   if (item.poster) return '<img class="cal-thumb" alt="" loading="lazy" data-src="' + escapeHTML(item.poster) + '">';
   return '<span class="cal-thumb placeholder" aria-hidden="true">' + (item.media === 'movie' ? '🎬' : '📺') + '</span>';
 }
+// A tile is a release: its poster, its title and its badges. **The title is the
+// IMDb link** — the same destination the drawer's title has, so a title means one
+// thing wherever it is — while the rest of the tile (the poster, the badges, the
+// gaps between them) opens the day's complete list, which is what a cell of three
+// entries needs a way into. The two cannot nest: a link inside a button is
+// invalid markup, and a button inside a link would swallow the day. So the day's
+// opener is a transparent button laid over the whole tile and the title is lifted
+// above it — whichever one you aim at is the one that acts.
 function calItemHTML(item, date) {
   const tag = item.media === 'episode' || item.platform
     ? '<span class="cal-tag' + (item.premiere ? ' new' : '') + '">' + escapeHTML(calLabel(item)) + '</span>'
     : '';
   const platform = item.platform ? '<span class="cal-plat">' + escapeHTML(item.platform) + '</span>' : '';
   const seen = calTracked.has(dupNormTitle(item.title)) ? '<span class="cal-tag seen" title="Already in your watchlist">✓</span>' : '';
-  return '<button class="cal-item" type="button" data-act="calendarAction" data-cal="day" data-date="' + date + '"' +
-      ' title="' + escapeHTML(calTitle(item).trim()) + '">' +
+  const day = new Date(date + 'T00:00:00').toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' });
+  return '<div class="cal-item">' +
+      '<button class="cal-item-open" type="button" data-act="calendarAction" data-cal="day" data-date="' + date + '"' +
+        ' title="' + escapeHTML(calTitle(item).trim()) + '"' +
+        ' aria-label="' + escapeHTML('Everything on ' + day) + '"></button>' +
       calThumbHTML(item) +
-      '<span class="cal-item-text"><span class="cal-item-title">' + escapeHTML(item.title) + '</span>' +
+      '<span class="cal-item-text"><a class="cal-item-title"' + calImdbAttrs(item) + '>' + escapeHTML(item.title) + '</a>' +
       '<span class="cal-item-meta">' + tag + seen + platform + '</span></span>' +
-    '</button>';
+    '</div>';
 }
 // "1 episodes" is how a count reads when nobody pluralised it.
 const calWord = (count, word) => word + (count === 1 ? '' : 's');
@@ -3367,15 +3391,9 @@ function updateCalendar() {
 // cell, so this is where "every single thing" is actually readable.
 function calRowHTML(item) {
   // Both links — the title and the ↗ affordance — go to IMDb, so a release has
-  // one destination and no way to land on a source API by accident. A film's own
-  // page is not known until it is clicked (see calOpenImdb), so its anchors carry
-  // the lookup instead of a final URL: the href is an IMDb search of the title,
-  // which is where a click lands if the exact page cannot be resolved.
-  const imdb = escapeHTML(calImdbHref(item));
-  const pending = calImdbPending(item)
-    ? ' data-act="calendarAction" data-cal="imdb" data-tmdb="' + escapeHTML(imdbTmdbId(item)) +
-      '" data-title="' + escapeHTML(item.title) + '" data-date="' + escapeHTML(item.date || '') + '"'
-    : '';
+  // one destination and no way to land on a source API by accident (the
+  // attributes are built by calImdbAttrs, the same ones a tile's title uses).
+  const imdb = calImdbAttrs(item);
   const meta = [];
   if (item.media === 'episode') meta.push(escapeHTML(calLabel(item)));
   if (item.platform) meta.push(escapeHTML(item.platform));
@@ -3387,12 +3405,12 @@ function calRowHTML(item) {
   return '<div class="cal-row">' + calThumbHTML(item) +
     '<div class="cal-row-main">' +
       '<div class="cal-row-title">' +
-        '<a class="cal-row-imdb" href="' + imdb + '" target="_blank" rel="noopener" title="Open on IMDb"' + pending + '>' + escapeHTML(item.title) + '</a>' + seen +
+        '<a class="cal-row-imdb"' + imdb + '>' + escapeHTML(item.title) + '</a>' + seen +
       '</div>' +
       (item.episode ? '<div class="cal-row-ep">' + escapeHTML(item.episode) + '</div>' : '') +
       '<div class="cal-row-meta"><span>' + meta.join(' · ') + '</span>' + genres + rating + '</div>' +
     '</div>' +
-    '<a class="cal-row-link" href="' + imdb + '" target="_blank" rel="noopener" title="Open on IMDb"' + pending + '>↗</a>' +
+    '<a class="cal-row-link"' + imdb + '>↗</a>' +
   '</div>';
 }
 function calDrawerRowsHTML(list) {
