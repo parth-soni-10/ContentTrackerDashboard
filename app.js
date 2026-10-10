@@ -3071,6 +3071,7 @@ function calFilterFlagHTML() {
     ? '<span class="cal-flag" title="The filters this view is showing">' + escapeHTML(bits.join(' · ')) + '</span>'
     : '';
 }
+
 // The two scopes are the two shapes of the same question: this year one month at
 // a time, next year as a whole. Their years come from the clock, so the labels
 // roll over on 1 January without a deploy.
@@ -3200,6 +3201,47 @@ function updateCalendar() {
   const today = calISO(new Date());
   const months = calYearMonths();
   const month = months[Math.min(calState.month, months.length - 1)] || months[0];
+  // The platform filter's options come from the loaded window: every platform
+  // with a release in it (see the note on CAL_PLATFORM_CAP), which is what keeps
+  // the services you watch choosable in a thin month or a year at a glance. Each
+  // candidate is judged as though it were the chosen one — `platform:` in `opts`
+  // — so an option can never paint an empty calendar, and a platform that is
+  // merely unrepresented in this window stays offered (it is in `data.platforms`),
+  // so a remembered filter is not silently reset by a month that lacks it.
+  //
+  // This has to run *before* anything is painted, because the platform in force
+  // decides what the paint contains. A stored platform the window does not carry
+  // at all — a service whose releases are gone — otherwise left an empty month
+  // whose select and summary line still named it; dropping it first is what keeps
+  // the select, the summary and the grid from ever disagreeing.
+  const offered = new Set();
+  Object.keys(data.days).forEach(date => {
+    data.days[date].forEach(item => {
+      (item.platforms || (item.platform ? [item.platform] : [])).forEach(name => {
+        if (calMatches(item, { platform: name })) offered.add(name);
+      });
+    });
+  });
+  const options = data.platforms
+    .filter(platform => platform.name && (offered.has(platform.name) || platform.name === calFilters.platform))
+    .slice(0, CAL_PLATFORM_CAP);
+  const settled = options.some(platform => platform.name === calFilters.platform) ? calFilters.platform : 'all';
+  const platformKey = options.map(platform => platform.name).join('|');
+  if (platformKey !== calState.platformsKey) {
+    calState.platformsKey = platformKey;
+    const select = document.getElementById('cal-plat');
+    if (select) {
+      select.innerHTML = '<option value="all">All platforms</option>' + options
+        .map(platform => '<option value="' + escapeHTML(platform.name) + '">' + escapeHTML(platform.name) + ' · ' + platform.count + '</option>').join('');
+      select.value = settled;
+    }
+  }
+  if (calFilters.platform !== settled) {
+    calFilters.platform = settled;
+    const select = document.getElementById('cal-plat');
+    if (select) select.value = settled;
+  }
+
   const days = calFilteredDays();
 
   const bar = document.getElementById('cal-months');
@@ -3221,36 +3263,6 @@ function updateCalendar() {
   const eCount = document.getElementById('cal-ecount');
   if (mCount) mCount.textContent = counts.films;
   if (eCount) eCount.textContent = counts.episodes;
-
-  // The platform filter's options come from the loaded window: every platform
-  // with a release in it (see the note on CAL_PLATFORM_CAP), which is what keeps
-  // the services you watch choosable in a thin month or a year at a glance. Each
-  // candidate is judged as though it were the chosen one — `platform:` in `opts`
-  // — so an option can never paint an empty calendar, and the selection in force
-  // is always kept, so a remembered filter is never silently reset to "All
-  // platforms" by a window that happens not to carry it.
-  const offered = new Set();
-  Object.keys(data.days).forEach(date => {
-    data.days[date].forEach(item => {
-      (item.platforms || (item.platform ? [item.platform] : [])).forEach(name => {
-        if (calMatches(item, { platform: name })) offered.add(name);
-      });
-    });
-  });
-  const options = data.platforms
-    .filter(platform => platform.name && (offered.has(platform.name) || platform.name === calFilters.platform))
-    .slice(0, CAL_PLATFORM_CAP);
-  const platformKey = options.map(platform => platform.name).join('|');
-  if (platformKey !== calState.platformsKey) {
-    calState.platformsKey = platformKey;
-    const select = document.getElementById('cal-plat');
-    if (select) {
-      select.innerHTML = '<option value="all">All platforms</option>' + options
-        .map(platform => '<option value="' + escapeHTML(platform.name) + '">' + escapeHTML(platform.name) + ' · ' + platform.count + '</option>').join('');
-      select.value = options.some(platform => platform.name === calFilters.platform) ? calFilters.platform : 'all';
-      calFilters.platform = select.value;
-    }
-  }
 
   const warnings = data.warnings.length
     ? '<div class="cal-warn"><strong>Partially loaded</strong>' + escapeHTML(data.warnings.join(' · ')) + '</div>'
