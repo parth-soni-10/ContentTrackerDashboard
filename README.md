@@ -33,41 +33,6 @@ Everything the deployment needs:
 
 Netlify Database is available on credit-based plans and an active database consumes credits for compute and bandwidth — that is the one recurring cost of this setup.
 
-### One-time import (only if you are coming from the Google Sheet)
-
-The Sheet's rows are copied into the database by one one-shot importer, `netlify/functions/admin-import.js` — the only thing left that reads the Sheet. It is **idempotent** (a row whose duplicate key already exists is skipped, not inserted twice) and **read-only towards the Sheet** (it never writes back to it and never deletes a database row). Until it has run, the database is empty and the Sheet holds the only copy of the watchlist — the site reads the database, so a deploy that lands before the import shows no titles.
-
-It needs `SPREADSHEET_ID` and `GOOGLE_SERVICE_ACCOUNT_JSON` set for the deploy doing the import (see the service-account steps below), and it is driven by a signed-in request:
-
-```
-# 1. Sign in once and keep the session cookie
-curl -c /tmp/ct-cookies -X POST https://YOUR-SITE.netlify.app/.netlify/functions/admin-login \
-  -H 'Content-Type: application/json' -d '{"password":"YOUR_PASSWORD"}'
-
-# 2. Dry run — counts what would be imported, writes nothing (the default)
-curl -b /tmp/ct-cookies -X POST https://YOUR-SITE.netlify.app/.netlify/functions/admin-import \
-  -H 'Content-Type: application/json' -d '{}'
-
-# 3. The real import
-curl -b /tmp/ct-cookies -X POST https://YOUR-SITE.netlify.app/.netlify/functions/admin-import \
-  -H 'Content-Type: application/json' -d '{"dryRun":false}'
-
-# 4. Verify — compare the two stores row by row instead of trusting a count.
-#    Reads both sides, writes nothing: rows only the Sheet has, rows only the
-#    database has, fields that disagree, and the undated on each side.
-curl -b /tmp/ct-cookies -X POST https://YOUR-SITE.netlify.app/.netlify/functions/admin-import \
-  -H 'Content-Type: application/json' -d '{"verify":true}'
-```
-
-When the counts look right and the site reads the new store, remove `SPREADSHEET_ID`, `GOOGLE_SERVICE_ACCOUNT_JSON`, `admin-import.js` and `lib/sheets.js` — at that point the Sheet is no longer read anywhere.
-
-The service account (needed only for that import):
-
-1. In the **Google Cloud Console**, create a project and enable the **Google Sheets API**.
-2. Create a **service account** under APIs & Services → Credentials, then add a JSON key and download it.
-3. In the spreadsheet, click **Share** and add the service account's email address as an **Editor**.
-4. In **Netlify** → Site settings → Environment variables, add `SPREADSHEET_ID` (the long string between `/d/` and `/edit` in the spreadsheet's URL) and `GOOGLE_SERVICE_ACCOUNT_JSON` (the entire contents of the key file, braces included).
-
 ## Run it locally
 
 For shell-only work — layout, styling, copy — any static server is enough:

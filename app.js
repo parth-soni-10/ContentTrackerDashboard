@@ -97,7 +97,7 @@ function normalizePlatform(value) {
   return PLATFORM_MAP[text.toLowerCase()] || text;
 }
 
-// Display-level cleanup only — the Sheet keeps whatever was typed. These maps
+// Display-level cleanup only — the store keeps whatever was typed. These maps
 // merge near-duplicate labels that had crept into the Genre/Type columns (e.g.
 // "Sci-Fi" vs "Science Fiction" vs "Sci-Fi & Fantasy"), so the filters, the
 // genre treemap and "top genre" finally agree with each other.
@@ -120,7 +120,7 @@ function normalizeType(value) {
 }
 // A few titles were typed entirely in lowercase ("nobod", "challengers"), which
 // reads as a typo in a list of Film names. Capitalise those for display without
-// rewriting the Sheet; anything already carrying a capital is left untouched.
+// rewriting the stored value; anything already carrying a capital is left untouched.
 const SMALL_WORDS = new Set(['a','an','and','as','at','but','by','for','from','in','nor','of','on','or','the','to','vs','with']);
 function smartCaseName(value) {
   const text = String(value || '');
@@ -827,7 +827,7 @@ async function requestAdminDelete(rowNumber) {
 // "logged in". Drop the flag and put the login form back up instead of leaving
 // the user stuck behind a dead session.
 // After an admin write the reload must skip the Netlify CDN copy so it hits
-// the sheet directly and shows the write immediately.
+// the store directly and shows the write immediately.
 // The ?fresh= marker is one-shot: loadData strips it after fetching.
 function reloadFresh() {
   try {
@@ -1036,7 +1036,7 @@ function renderDuplicateScan() {
 }
 
 // Removes every flagged copy of one group, top row first so the row numbers of
-// the remaining copies stay valid, then reloads so the sheet is rescanned.
+// the remaining copies stay valid, then reloads so the watchlist is rescanned.
 async function removeDupCopies(groupIndex, button) {
   const group = dupScanGroups[groupIndex];
   if (!group) return;
@@ -1471,7 +1471,7 @@ function renderReadme() {
           <h1><em>personal media tracker</em>Content Tracking Dashboard</h1>
           <p class="readme-desc">Track and analyse my media consumption across streaming platforms. See genre trends, platform habits, and how my viewing changes over time.</p>
         </div>
-        <div class="readme-updated" title="Newest watch date logged in the sheet"><strong>${lastWatched}</strong>Last watched</div>
+        <div class="readme-updated" title="Newest watch date logged in the watchlist"><strong>${lastWatched}</strong>Last watched</div>
       </div>
       <div class="readme-stats">
         <div class="readme-stat">
@@ -3572,9 +3572,9 @@ function showSuggResult(item, animate = true) {
   ne.textContent = item.name;
   setSuggPoster(item);
   const typeEmoji = item.type === 'Movie' ? '🎬' : '📺';
-  // Every one of these comes from the sheet, so it is escaped on the way into
-  // the DOM: a genre or type cell is free text that anyone with sheet access
-  // (or the admin form) can write.
+  // Every one of these is stored free text, so it is escaped on the way into
+  // the DOM: a genre or type cell is whatever the admin form (or an imported
+  // row) put there.
   me.innerHTML = `
     <span class="rm-badge plat">${pe(item.platform)} ${escapeHTML(item.platform)}</span>
     <span class="rm-badge type">${typeEmoji} ${escapeHTML(item.type)}</span>

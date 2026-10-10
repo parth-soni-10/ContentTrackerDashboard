@@ -1,7 +1,10 @@
 // Postgres access for the Netlify functions — the watchlist's own store.
 //
-// This replaces lib/sheets.js, which read and wrote a Google Sheet through a
-// service account. The database is Netlify's managed Postgres: @netlify/database
+// This replaced the Google Sheet as the watchlist's store. Nothing here can read
+// the Sheet any more: lib/sheets.js and the one-shot importer that copied its
+// rows across were deleted once the importer's verify pass showed the two stores
+// matching row for row (380 entries, none missing, none extra, no disagreement).
+// The database is Netlify's managed Postgres: @netlify/database
 // hands out the connection string for whichever database this deploy is attached
 // to — production's database for a production deploy, a throwaway branch forked
 // from it for a deploy preview — and pg runs the queries. NETLIFY_DB_URL is the
