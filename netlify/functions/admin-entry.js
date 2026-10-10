@@ -60,6 +60,18 @@ exports.handler = async event => {
   let body;
   try { body = JSON.parse(event.body || '{}'); } catch { return json(400, { error: 'Invalid request body' }); }
 
+  // The cleanup card asks for the rows it lists before deleting any of them:
+  // every entry the page shows has a watch date, so the undated, zero-time
+  // leftovers are only reachable through this one read. Same session gate.
+  if (body.action === 'invalid') {
+    try {
+      return json(200, { rows: await db.listInvalidEntries() });
+    } catch (error) {
+      console.error('Invalid-row scan failed:', error);
+      return json(502, { error: error.message || 'Unable to scan for invalid rows', code: 'DB_ERROR' });
+    }
+  }
+
   // The same endpoint serves creating, updating and deleting entries; update and
   // delete also carry the id of the entry they act on (the page's `row` field).
   const action = body.action === 'delete' ? 'delete' : (body.action === 'update' ? 'update' : 'create');

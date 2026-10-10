@@ -29,6 +29,7 @@ let suggLastPick = null;
 let adminAuthenticated = false;
 let adminEditRow = null;
 let adminForceAdd = false;   // set by the duplicate warning's "Add anyway"
+let adminCleanupRows = [];   // last Database Cleanup scan (rows with no date and no watch time)
 let reloading = false;
 let loadFailed = false;
 let loadRetried = false;
@@ -665,6 +666,13 @@ function renderAdminForm() {
       <h2 class="submit-heading">Duplicate Checker</h2>
       <p class="submit-sub">Automatically scans the tracker for entries that look like the same thing was logged twice. Runs every time this page opens.</p>
       <div id="admin-dup-results" class="admin-dup-results" aria-live="polite"></div>
+    </div>
+    <div class="submit-form-card">
+      <h2 class="submit-heading">Database Cleanup</h2>
+      <p class="submit-sub">Finds stored rows with no watch date and 0 minutes — rows the rest of the site never shows. Delete them to keep the database clean.</p>
+      <button class="try-btn admin-clean-btn" id="admin-clean-scan" type="button">Scan for invalid rows</button>
+      <div id="admin-clean-msg" aria-live="polite"></div>
+      <div id="admin-clean-results" class="admin-clean-results" aria-live="polite"></div>
     </div></div><div class="submit-right"><div class="note-card"><div class="note-icon" aria-hidden="true">💡</div><div class="note-body"><strong>Protected entry</strong>The password is checked server-side and never leaves this site.</div></div><button class="try-btn" id="admin-lock" type="button">Lock Admin</button></div></div>`;
   document.getElementById('admin-entry-form').addEventListener('submit', submitAdminEntry);
   ['genre', 'platform'].forEach(key => {
@@ -686,6 +694,11 @@ function renderAdminForm() {
     if (button) startAdminEdit(Number(button.dataset.row));
   });
   document.getElementById('admin-cancel-edit').addEventListener('click', cancelAdminEdit);
+  document.getElementById('admin-clean-scan').addEventListener('click', scanInvalidRows);
+  document.getElementById('admin-clean-results').addEventListener('click', event => {
+    const del = event.target.closest('.admin-clean-del');
+    if (del) deleteInvalidRow(Number(del.dataset.row), del);
+  });
   const dupResults = document.getElementById('admin-dup-results');
   dupResults.addEventListener('click', event => {
     const del = event.target.closest('.dup-del-btn');
@@ -1047,6 +1060,102 @@ async function removeDupCopies(groupIndex, button) {
   } catch (error) {
     msg().innerHTML = '<div class="sf-error">' + escapeHTML(error.message) + '. Some copies may already be removed. Reload the page to rescan.</div>';
   } finally {
+    if (button) { button.disabled = false; button.textContent = originalLabel; }
+  }
+}
+
+// ── DATABASE CLEANUP ──────────────────────────────────────────────────────
+// The stored rows this page cannot otherwise reach: mapRows drops every row
+// whose year reads as 0, so a row with no watch date and no watch time exists
+// in the database but in no list, chart or search on the site. The scan reads
+// the table itself (ids and timestamps included) and deleting here uses the
+// same verified single-row delete as everywhere else. The row leaves the
+// rendered list in place — nothing else on the page ever showed it, so no
+// reload is needed.
+async function scanInvalidRows() {
+  const container = document.getElementById('admin-clean-results');
+  const message = document.getElementById('admin-clean-msg');
+  const button = document.getElementById('admin-clean-scan');
+  if (!container || !button) return;
+  button.disabled = true;
+  button.textContent = 'Scanning…';
+  message.textContent = '';
+  try {
+    const response = await fetch('/.netlify/functions/admin-entry', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin',
+      body: JSON.stringify({ action: 'invalid' })
+    });
+    const result = await response.json().catch(() => ({}));
+    if (response.status === 401 && result.code === 'SESSION_INVALID') {
+      expireAdminSession('Your admin session has ended.');
+      return;
+    }
+    if (!response.ok) throw new Error(result.error || 'Unable to scan for invalid rows');
+    adminCleanupRows = Array.isArray(result.rows) ? result.rows : [];
+    renderInvalidRows();
+  } catch (error) {
+    message.innerHTML = '<div class="sf-error">' + escapeHTML(error.message) + '</div>';
+    container.innerHTML = '';
+  } finally {
+    // Re-read: the session-expired path replaces the whole page.
+    const stale = document.getElementById('admin-clean-scan');
+    if (stale) { stale.disabled = false; stale.textContent = 'Scan for invalid rows'; }
+  }
+}
+
+function renderInvalidRows() {
+  const container = document.getElementById('admin-clean-results');
+  if (!container) return;
+  if (!adminCleanupRows.length) {
+    container.innerHTML = '<div class="clean-clear">✓ No invalid rows found. The database is clean.</div>';
+    return;
+  }
+  const cell = value => escapeHTML(value === '' || value == null ? '—' : String(value));
+  const added = value => value ? escapeHTML(String(value).slice(0, 19).replace('T', ' ')) : '—';
+  const rows = adminCleanupRows.map(row =>
+    '<tr>' +
+      '<td class="clean-id">#' + escapeHTML(String(row.id)) + '</td>' +
+      '<td class="clean-name">' + escapeHTML(row.name) + '</td>' +
+      '<td>' + cell(row.season) + '</td>' +
+      '<td>' + cell(row.type) + '</td>' +
+      '<td>' + cell(row.genre) + '</td>' +
+      '<td>' + cell(row.platform) + '</td>' +
+      '<td>' + escapeHTML(String(row.episodes)) + '</td>' +
+      '<td>' + escapeHTML(String(row.screentime)) + '</td>' +
+      '<td class="clean-null">' + (row.watchDate ? escapeHTML(row.watchDate) : 'null') + '</td>' +
+      '<td class="clean-added">' + added(row.createdAt) + '</td>' +
+      '<td><button class="try-btn admin-del-btn admin-clean-del" type="button" data-row="' + escapeHTML(String(row.id)) + '">Delete</button></td>' +
+    '</tr>'
+  ).join('');
+  container.innerHTML =
+    '<div class="clean-sub">' + adminCleanupRows.length + ' invalid row' + (adminCleanupRows.length === 1 ? '' : 's') + ' — no watch date and 0 minutes</div>' +
+    '<div class="clean-table-wrap"><table class="clean-table"><thead><tr>' +
+      '<th>ID</th><th>Name</th><th>Season</th><th>Type</th><th>Genre</th><th>Platform</th>' +
+      '<th>Eps</th><th>Mins</th><th>Watch date</th><th>Added (UTC)</th><th></th>' +
+    '</tr></thead><tbody>' + rows + '</tbody></table></div>';
+}
+
+async function deleteInvalidRow(rowNumber, button) {
+  const row = adminCleanupRows.find(item => item.id === rowNumber);
+  const label = row ? '"' + row.name + '"' : 'this row';
+  if (!window.confirm('Delete row #' + rowNumber + ' (' + label + ') from the database? This cannot be undone.')) return;
+  const originalLabel = button ? button.textContent : '';
+  if (button) { button.disabled = true; button.textContent = 'Deleting…'; }
+  // The card can be replaced mid-request (session expiry rebuilds the page); a
+  // missing message area is then a harmless no-op instead of a TypeError.
+  const msg = () => document.getElementById('admin-clean-msg') || { innerHTML: '' };
+  try {
+    const result = await requestAdminDelete(rowNumber);
+    if (result === null) return; // session expired — the login screen is already up
+    adminCleanupRows = adminCleanupRows.filter(item => item.id !== rowNumber);
+    renderInvalidRows();
+    msg().innerHTML = '<div class="sf-success">Deleted row #' + escapeHTML(String(rowNumber)) +
+      (row ? ' (' + escapeHTML(row.name) + ')' : '') + '. ' +
+      (adminCleanupRows.length
+        ? adminCleanupRows.length + ' invalid row' + (adminCleanupRows.length === 1 ? '' : 's') + ' left.'
+        : 'The database is clean.') + '</div>';
+  } catch (error) {
+    msg().innerHTML = '<div class="sf-error">' + escapeHTML(error.message) + '</div>';
     if (button) { button.disabled = false; button.textContent = originalLabel; }
   }
 }

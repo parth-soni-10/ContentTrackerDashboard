@@ -14,7 +14,7 @@ It reads live from **its own database**, so whenever I log a new title it shows 
 - **Timeline** — everything laid out in date order
 - **Calendar** — a rolling release calendar: this year month by month, next year as a whole, showing only the platforms you track — cinema releases and the films that land on your services, plus every episode of the shows on them. It filters by platform, region and type, and **Episode releases** turns the month into the episode schedule itself — each show's episodes on the day they land, films and the daily news/talk strips left out. Any day opens for the complete list, your filters are remembered on the device so the page opens the way you left it, and it refreshes itself — new months and new years appear on their own
 - **Suggestions & Submit** — easy ways to request or add a new title
-- **Admin** — a password-protected area for managing the watchlist, where a title you already logged is caught before it is added twice
+- **Admin** — a password-protected area for managing the watchlist, where a title you already logged is caught before it is added twice, and a cleanup scan that lists stored rows with no watch date and 0 minutes — invisible everywhere else — so they can be deleted
 
 ## How it works
 

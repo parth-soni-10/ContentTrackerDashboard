@@ -156,6 +156,32 @@ async function listSuggestions() {
   }));
 }
 
+// Rows the watchlist itself can never show: the page's `mapRows` drops every
+// row whose year reads as 0, so a stored row with no watch date and no watch
+// time is invisible in every list, chart and search on the site. This is the
+// one read that exposes them — the admin cleanup card lists them as the raw
+// rows (ids and timestamps included) so they can be deleted deliberately.
+async function listInvalidEntries() {
+  const { rows } = await query(
+    'SELECT id, name, season, type, genre, platform, episodes, screentime,' +
+    " to_char(watch_date, 'YYYY-MM-DD') AS watch_date, created_at, updated_at" +
+    ' FROM entries WHERE watch_date IS NULL AND screentime <= 0 ORDER BY id ASC'
+  );
+  return rows.map(row => ({
+    id: Number(row.id),
+    name: row.name,
+    season: row.season || '',
+    type: row.type || '',
+    genre: row.genre || '',
+    platform: row.platform || '',
+    episodes: Number(row.episodes) || 0,
+    screentime: Number(row.screentime) || 0,
+    watchDate: row.watch_date || null,
+    createdAt: row.created_at ? new Date(row.created_at).toISOString() : null,
+    updatedAt: row.updated_at ? new Date(row.updated_at).toISOString() : null
+  }));
+}
+
 // The Sheet-era duplicate check, on the wire rows: an exact repeat of the same
 // title, season, watch date and screentime. Returns the id it found, or 0.
 function findDuplicateRow(rows, entry) {
@@ -280,6 +306,7 @@ module.exports = {
   withClient,
   listEntries,
   listSuggestions,
+  listInvalidEntries,
   findDuplicateRow,
   createEntry,
   updateEntry,
