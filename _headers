@@ -28,10 +28,14 @@
 # outright would break the no-JS path rather than improve it.
 
 /*
-  Content-Security-Policy: default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data: https://image.tmdb.org https://static.tvmaze.com; font-src 'self'; connect-src 'self'; base-uri 'self'; form-action 'self'; object-src 'none'; frame-ancestors 'none'
-  # frame-ancestors is the one directive a <meta> tag cannot carry, and the admin
-  # panel is an authenticated page, so the legacy header is paired with it.
-  X-Frame-Options: DENY
+  Content-Security-Policy: default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data: https://image.tmdb.org https://static.tvmaze.com; font-src 'self'; connect-src 'self'; base-uri 'self'; form-action 'self'; object-src 'none'; frame-ancestors 'self' https://dashboards-home.netlify.app
+  # frame-ancestors is the one directive a <meta> tag cannot carry. It names the
+  # Dashboard Portal alongside 'self': the portal shows this dashboard in a
+  # preview frame, and 'none' made every preview refuse to load. The legacy
+  # X-Frame-Options: DENY is gone for the same reason - it contradicted the
+  # allowance. The allowance stays origin-scoped to the portal rather than `*`,
+  # so no other site can frame this page (including its authenticated admin
+  # panel, which lives in-page and cannot carry a stricter per-path policy).
   X-Content-Type-Options: nosniff
   Referrer-Policy: strict-origin-when-cross-origin
   # Nothing here uses a device API.
