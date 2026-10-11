@@ -1562,8 +1562,7 @@ function renderReadme() {
           ${goalLocked ? `<div class="goal-note goal-lock-note">🔒 Locked for ${cy} — unlocks to set a new target on 1 Jan.</div>` : ''}
         </div>
       </div>
-    </div>
-    <div class="footer">Data loaded live · ${total} titles</div>`;
+    </div>`;
 
   const goalSet = document.getElementById('goal-set');
   if (goalSet) {
@@ -1666,8 +1665,7 @@ function renderCurrentYear() {
         ${phFilter('Genre', 'cf-genre', 'curFilters.genre', 'currentYear', genreOptions)}
       </div>
     </div>
-    <div class="main" id="cy-main"></div>
-    <div class="footer" id="cy-footer"></div>`;
+    <div class="main" id="cy-main"></div>`;
 
   // Filters persist across visits; re-select them so the dropdowns match the
   // data actually being shown.
@@ -1788,8 +1786,6 @@ function updateCurrentYear() {
       </div>
     </div>`;
 
-  document.getElementById('cy-footer').textContent = `Last updated live · ${cy} data`;
-
   const moData   = countByMonth(d);
   const moLabels = MONTHS.filter(m => moData[m] > 0);
   const moVals   = moLabels.map(m => moData[m]);
@@ -1815,8 +1811,7 @@ function renderAllTime() {
         ${phFilter('Genre', 'af-genre', 'allFilters.genre', 'allTime', genreOptions)}
       </div>
     </div>
-    <div class="main" id="at-main"></div>
-    <div class="footer" id="at-footer"></div>`;
+    <div class="main" id="at-main"></div>`;
 
   // Same persisted-filter re-sync as Current Year, for all three dropdowns.
   allFilters.year     = syncFilterSelect('af-year', allFilters.year);
@@ -1837,7 +1832,6 @@ function updateAllTime() {
   const topPlat    = platCounts[0] || ['—', 0];
   const topGenre   = genCounts[0]  || ['—', 0];
   const bestMo     = Object.entries(countByMonth(d)).sort((a, b) => b[1] - a[1])[0] || ['—', 0];
-  const yearsSet   = [...new Set(d.map(r => r.year))].filter(Boolean);
   const distinctMonthsAt = new Set(d.filter(r => r.month).map(r => r.year + '-' + r.month)).size;
   const avgMo      = distinctMonthsAt ? (d.length / distinctMonthsAt).toFixed(1) : '—';
 
@@ -1846,7 +1840,6 @@ function updateAllTime() {
   const moviesPct = d.length ? (movies / d.length * 100).toFixed(1) : 0;
   const totalEpsat = d.filter(r => r.type.includes('Show') || r.type.includes('Series')).reduce((s, r) => s + r.episodes, 0);
   const genrePct  = totalGen ? (topGenre[1] / totalGen * 100).toFixed(1) : 0;
-  const yearLabel = yearsSet.length + ' year' + (yearsSet.length !== 1 ? 's' : '') + ' of data';
 
   destroyCharts();
 
@@ -1908,8 +1901,6 @@ function updateAllTime() {
       </div>
     </div>`;
 
-  document.getElementById('at-footer').textContent = `${d.length} titles · ${yearLabel}`;
-
   const moData = countByMonth(d);
   initLineChart('at-monthly', MONTHS, MONTHS.map(m => moData[m]));
 }
@@ -1969,8 +1960,7 @@ function renderData() {
       </div>
       <div id="dat-table"></div>
       <div class="pagination" id="dat-pag"></div>
-    </div>
-    <div class="footer" id="dat-footer"></div>`;
+    </div>`;
 
   document.getElementById('data-reset').addEventListener('click', () => {
     datFilters = { year: 'all', platform: 'all', type: 'all', genre: 'all', month: 'all', search: '' };
@@ -2338,8 +2328,7 @@ function renderTimeline() {
 
   document.getElementById('app').innerHTML =
     '<div class="page-header"><div class="ph-left"><h1>Timeline</h1><p>Your watch history, month by month</p></div></div>' +
-    '<div class="timeline">' + jumpBar + sections + '</div>' +
-    '<div class="footer">Data loaded live · ' + rawData.length + ' titles</div>';
+    '<div class="timeline">' + jumpBar + sections + '</div>';
 
   bindTimelineNav();
 }
