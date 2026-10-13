@@ -14,3 +14,9 @@
 
 # Local Netlify folder
 .netlify
+
+# Local secret file for wrangler dev, same rule as .env above.
+/.dev.vars
+
+# Local Cloudflare tool state (bundles, local D1/cache) — never committed.
+/.wrangler/

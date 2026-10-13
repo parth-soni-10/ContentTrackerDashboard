@@ -1,0 +1,32 @@
+# Files in this repo that are NOT part of the published site.
+#
+# The assets directory is the repository root (same as Netlify's publish
+# directory), so everything not listed here would be served. Cloudflare parses
+# `_headers` even though it is listed below — verified against the deployed
+# Dashboard Portal, which applies its CSP while serving no `/_headers` — so the
+# header policy stays in effect without the file itself being readable.
+.git/
+.github/
+.gitignore
+.freebuff/
+.wrangler/
+.netlify/
+node_modules/
+
+netlify/
+migrations/
+tools/
+brag-output/
+
+# Local secrets for `wrangler dev` — the same file .gitignore refuses.
+.dev.vars
+
+README.md
+CLAUDE.md
+LICENSE
+_headers
+package.json
+package-lock.json
+wrangler.toml
+worker.js
+.assetsignore

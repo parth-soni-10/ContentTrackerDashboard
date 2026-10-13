@@ -1,0 +1,44 @@
+# Cloudflare Workers config for the Content Tracker.
+#
+# The site is served from the repository root (the same directory Netlify
+# published), and the eight functions under netlify/functions/ are bundled into
+# worker.js rather than copied — see its header for what the Worker wires up
+# (the D1 store, the /.netlify/functions/* routes, the environment).
+#
+#   npx wrangler dev          → local test on http://localhost:8787
+#   npx wrangler d1 migrations apply content-tracker-watchlist --local
+#   npx wrangler deploy       → publish to <name>.<your-subdomain>.workers.dev
+#
+# `run_worker_first` is scoped to the function paths only, so ordinary page and
+# asset requests never invoke the Worker.
+
+name = "content-tracker-dashboard"
+main = "worker.js"
+compatibility_date = "2026-10-01"
+
+# The site is served from the workers.dev hostname; the versioned Preview URLs
+# are off. They would serve this same Worker — admin endpoints included, against
+# the one production D1 — from a second hostname, which is a door nobody asked
+# for on a dashboard whose writes are password-gated.
+workers_dev = true
+preview_urls = false
+
+# lib/session.js and admin-login.js sign the admin cookie with node:crypto's
+# createHmac/timingSafeEqual over Buffers, exactly as they did on Netlify.
+compatibility_flags = ["nodejs_compat"]
+
+[assets]
+directory = "."
+binding = "ASSETS"
+run_worker_first = ["/.netlify/functions/*"]
+
+# The watchlist store. This was Netlify Database (managed Postgres) with pg;
+# it is now D1, and netlify/functions/lib/db.js is the only file that knows it.
+# The schema lives in migrations/ — wrangler's own default directory, so the
+# command above needs no flag and tracks which files have already run.
+# netlify/database/migrations/ is the Postgres schema the site ran on before
+# this move; it is kept as the record of that shape, not applied by anything.
+[[d1_databases]]
+binding = "DB"
+database_name = "content-tracker-watchlist"
+database_id = "c5c4e1f6-6f5e-4c0b-955d-b0e2d6b27826"
