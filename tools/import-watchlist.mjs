@@ -20,7 +20,7 @@
 import fs from "node:fs";
 import path from "node:path";
 
-const DEFAULT_URL = "https://content-tracker-dashboard.soni-soni-parth.workers.dev";
+const DEFAULT_URL = "https://content-tracker-dashboard.parth10.workers.dev";
 const CHUNK = 200;
 
 const args = process.argv.slice(2);

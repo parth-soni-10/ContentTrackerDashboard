@@ -28,7 +28,7 @@
 # outright would break the no-JS path rather than improve it.
 
 /*
-  Content-Security-Policy: default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data: https://image.tmdb.org https://static.tvmaze.com; font-src 'self'; connect-src 'self'; base-uri 'self'; form-action 'self'; object-src 'none'; frame-ancestors 'self' https://dashboards-home.soni-soni-parth.workers.dev
+  Content-Security-Policy: default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data: https://image.tmdb.org https://static.tvmaze.com; font-src 'self'; connect-src 'self'; base-uri 'self'; form-action 'self'; object-src 'none'; frame-ancestors 'self' https://dashboards-home.parth10.workers.dev
   # frame-ancestors is the one directive a <meta> tag cannot carry. It names the
   # Dashboard Portal alongside 'self': the portal shows this dashboard in a
   # preview frame, and 'none' made every preview refuse to load. The legacy
