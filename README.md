@@ -53,7 +53,7 @@ netlify dev
 
 ## Built with
 
-Plain **HTML / CSS / JavaScript**, **Netlify functions** talking straight to **Postgres** (Netlify Database, installed as `@netlify/database` + `pg`), and **Chart.js** for the charts. Hosted on **Netlify**.
+Plain **HTML / CSS / JavaScript**, **Worker functions** talking straight to **SQLite on D1** (the store the managed Postgres database was migrated into, row for row), and **Chart.js** for the charts. Hosted as a **Cloudflare Worker**, with the schema in `migrations/`.
 
 ---
 

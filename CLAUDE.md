@@ -73,7 +73,7 @@ _headers              → the CSP and cache rules; Cloudflare parses it even tho
 ## Build & Run
 - No build step: the repo root is the assets directory and `worker.js` is the entry. `package.json` is vestigial — the functions require nothing but `node:crypto` (supplied by the `nodejs_compat` flag) and the platform's `fetch`.
 - Local run: `npx wrangler d1 migrations apply content-tracker-watchlist --local` once, then `npx wrangler dev` (http://localhost:8787). Secrets come from `.dev.vars`; `--persist-to <dir>` keeps the local D1 and cache state outside the repo, which also keeps the file watcher from reloading the server on every write.
-- Deploy: `npx wrangler deploy`. Secrets are set once with `npx wrangler secret put NAME` (they survive deploys); a schema change needs `npx wrangler d1 migrations apply … --remote`.
+- Deploy: a push to `main` builds and deploys it — the repo is connected to this Worker in **Cloudflare Workers Builds** (production branch `main`, deploy command `npx wrangler deploy`, preview builds off, no build command) — and `npx wrangler deploy` locally publishes the same thing. Secrets are set once with `npx wrangler secret put NAME` (they survive deploys); a schema change needs `npx wrangler d1 migrations apply … --remote`, which a build does not run.
 - Versioned Preview URLs are off (`preview_urls = false` in wrangler.toml): they would serve this same Worker — admin endpoints included, against the one production D1 — from a second hostname.
 
 ## Git
