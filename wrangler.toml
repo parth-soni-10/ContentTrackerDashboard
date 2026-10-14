@@ -1,46 +1,31 @@
-# Cloudflare Workers config for the Content Tracker.
+# Bundle input for this site's Pages build — NOT a deployment.
 #
-# The site is served from the repository root (the same directory Netlify
-# published), and the eight functions under netlify/functions/ are bundled into
-# worker.js rather than copied — see its header for what the Worker wires up
-# (the D1 store, the /.netlify/functions/* routes, the environment).
+# The Cloudflare Pages project runs, as its build command:
 #
-#   npx wrangler dev          → local test on http://localhost:8787
-#   npx wrangler d1 migrations apply content-tracker-watchlist --local
-#   npx wrangler deploy       → publish to <name>.<your-subdomain>.workers.dev
+#   npx --yes wrangler@4 deploy --dry-run --outdir .pages-bundle
+#   && node tools/deploy-pages.mjs --assets . --bundle .pages-bundle --out .pages-dist
 #
-# `run_worker_first` is scoped to the function paths only, so ordinary page and
-# asset requests never invoke the Worker.
+# and this file is read for the first half of that only: `--dry-run` bundles
+# `main` below into the worker.js that tools/deploy-pages.mjs stages as the
+# project's `_worker.js`. Nothing is deployed from here, and nothing should be —
+# this site has one host, the Pages project. A `wrangler deploy` run in this
+# directory would publish a second copy of the same code to a workers.dev
+# hostname nobody links to, admin endpoints included, against the one production
+# D1.
+#
+# Everything the deployed site needs lives where the deploy reads it:
+# `pages/wrangler.toml` carries the project name and its D1 binding; the admin
+# secrets (ADMIN_PASSWORD, ADMIN_SESSION_SECRET, the TMDB/OMDb keys) are set on
+# the project and are in no file here. `_headers` carries the response headers.
+#
+# Not published: `.assetsignore` lists this file, so it is never uploaded.
 
 name = "content-tracker-dashboard"
 main = "worker.js"
 compatibility_date = "2026-10-01"
 
-# The site is served from the workers.dev hostname; the versioned Preview URLs
-# are off. They would serve this same Worker — admin endpoints included, against
-# the one production D1 — from a second hostname, which is a door nobody asked
-# for on a dashboard whose writes are password-gated.
-workers_dev = true
-preview_urls = false
-
 # lib/session.js and admin-login.js sign the admin cookie with node:crypto's
-# createHmac/timingSafeEqual over Buffers, exactly as they did on Netlify.
+# createHmac/timingSafeEqual over Buffers, exactly as they did on Netlify. The
+# deployed runtime's flags come from the Pages project; this file needs it so the
+# bundle is produced with those builtins left as `node:` externals.
 compatibility_flags = ["nodejs_compat"]
-
-[assets]
-directory = "."
-binding = "ASSETS"
-run_worker_first = ["/.netlify/functions/*"]
-
-# The watchlist store. This was Netlify Database (managed Postgres) with pg;
-# it is now D1, and netlify/functions/lib/db.js is the only file that knows it.
-# The schema lives in migrations/ — wrangler's own default directory, so the
-# command above needs no flag and tracks which files have already run. The
-# Postgres schema the site ran on before this move lived under
-# netlify/database/migrations/ and is gone with the rest of that configuration;
-# only the functions under netlify/ are still here, because the Worker serves
-# them at the /.netlify/functions/* paths the page calls.
-[[d1_databases]]
-binding = "DB"
-database_name = "content-tracker-watchlist"
-database_id = "c5c4e1f6-6f5e-4c0b-955d-b0e2d6b27826"

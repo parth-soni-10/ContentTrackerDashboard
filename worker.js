@@ -20,9 +20,10 @@
  *               and the rest exactly as they always did.
  *
  *   routing     The paths the frontend already calls, /.netlify/functions/*, are
- *               served from here. `run_worker_first` in wrangler.toml is scoped
- *               to that prefix, so asset requests never invoke this Worker and
- *               are served straight from the assets layer.
+ *               served from here; anything else is handed to the assets layer
+ *               below. On Pages every request arrives at this script (it is the
+ *               deployment's _worker.js), which is why that fallback is the
+ *               whole routing contract rather than a run_worker_first pattern.
  *
  *   client IP   The throttle damper keys its buckets on the caller's address. It
  *               looks for Netlify's header first and x-forwarded-for second, so

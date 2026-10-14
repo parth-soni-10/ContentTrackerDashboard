@@ -18,7 +18,7 @@ It reads live from **its own database**, so whenever I log a new title it shows 
 
 ## How it works
 
-The watchlist lives in **D1**, Cloudflare's SQLite — one row per title, with its type, dates, genres, and more. The functions under `netlify/functions/` query that store directly (through `lib/db.js`, the one file that knows the schema), bundled into a single Cloudflare Worker; the paths keep their `/.netlify/functions/*` shape because the page has always called those. There is no spreadsheet, no Apps Script and nothing to redeploy by hand. Add a title (in the admin panel or through the API) and the change shows up on the site.
+The watchlist lives in **D1**, Cloudflare's SQLite — one row per title, with its type, dates, genres, and more. The functions under `netlify/functions/` query that store directly (through `lib/db.js`, the one file that knows the schema), bundled into the one Worker script the Cloudflare Pages deployment serves; the paths keep their `/.netlify/functions/*` shape because the page has always called those. There is no spreadsheet, no Apps Script and nothing to redeploy by hand. Add a title (in the admin panel or through the API) and the change shows up on the site.
 
 The schema is a committed migration in [`migrations/`](migrations/0001_init.sql), applied with `npx wrangler d1 migrations apply content-tracker-watchlist --remote`. D1 does not run migrations on deploy, so that command is part of releasing a schema change. The Postgres schema it replaced lived under `netlify/database/migrations/` and went with the rest of the Netlify-era configuration — git history has it, and the migration's own header says what it was.
 
@@ -26,13 +26,13 @@ The schema is a committed migration in [`migrations/`](migrations/0001_init.sql)
 
 Everything the deployment needs:
 
-- **The store.** One D1 database, bound to the Worker as `DB` in `wrangler.toml` — the name and id are in that file, so there is nothing to provision and no connection string to keep (D1 is a binding, not an endpoint). It holds a few hundred rows, so there is nothing here to size, scale or keep alive.
+- **The store.** One D1 database, bound as `DB` on the deployment (`pages/wrangler.toml` in the repo, the project settings on Cloudflare) — the name and id are in that file, so there is nothing to provision and no connection string to keep (D1 is a binding, not an endpoint). It holds a few hundred rows, so there is nothing here to size, scale or keep alive.
 - `ADMIN_PASSWORD` — the password for the Admin page.
 - `ADMIN_SESSION_SECRET` — a long random string that signs the admin session cookie.
 - `TMDB_API_KEY` — a free [TMDB](https://developer.themoviedb.org/docs/getting-started) API key, used for poster art in the admin lookup and for the **film** half of the Calendar page.
 - `OMDB_API_KEY` — optional, and worth having: IMDb star ratings in the admin lookup. Without it the rating falls back to TMDB's own score.
 
-The secrets go on with `npx wrangler secret put NAME` (they survive deploys); for local runs the same names go in a gitignored `.dev.vars`. There is one deployment and no preview environment — preview URLs are off in `wrangler.toml`, so nothing here needs a second set of values.
+The secrets are set on the Pages project (Settings → Variables and Secrets) and survive deploys; for local runs the same names go in a gitignored `.dev.vars`. There is one deployment and no preview environment, so nothing here needs a second set of values.
 
 ## Run it locally
 
@@ -46,14 +46,14 @@ A bare static server serves the page shell and nothing else: the data comes from
 
 ```
 npx wrangler d1 migrations apply content-tracker-watchlist --local   # once
-npx wrangler dev                                                     # http://localhost:8787
+npx wrangler dev --config wrangler.dev.toml                          # http://localhost:8787
 ```
 
 The local run gets its own D1 database on disk, which starts empty — `tools/import-watchlist.mjs` is the documented way to load rows into it, or just add one through the admin panel. The four secrets come from `.dev.vars`, and `--persist-to <dir>` keeps that local state outside the repo.
 
 ## Built with
 
-Plain **HTML / CSS / JavaScript**, **Worker functions** talking straight to **SQLite on D1** (the store the managed Postgres database was migrated into, row for row), and **Chart.js** for the charts. Hosted as a **Cloudflare Worker**, with the schema in `migrations/`.
+Plain **HTML / CSS / JavaScript**, **Worker functions** talking straight to **SQLite on D1** (the store the managed Postgres database was migrated into, row for row), and **Chart.js** for the charts. Served by **Cloudflare Pages**, with the schema in `migrations/`.
 
 ---
 

@@ -1,0 +1,32 @@
+# Local development config — for `wrangler dev` only, never for a deploy.
+#
+#     npx wrangler dev --config wrangler.dev.toml --persist-to .wrangler/state
+#
+# Why this is a second file: wrangler.toml is the Pages build's bundle input, and
+# a bundle input carries only what bundling reads. The assets directory and the D1
+# binding below are what a running process needs, not what esbuild needs — and
+# leaving them in wrangler.toml is how a `wrangler deploy` run from this directory
+# silently publishes this dashboard, admin endpoints included, to a workers.dev
+# hostname against the one production D1.
+#
+# Kept in step with pages/wrangler.toml by hand: the database id is the same one
+# the deployed site writes to. To test what the deploy serves, run the build
+# command's two steps and then `npx wrangler pages dev .pages-dist`.
+
+name = "content-tracker-dashboard"
+main = "worker.js"
+compatibility_date = "2026-10-01"
+compatibility_flags = ["nodejs_compat"]
+
+[assets]
+directory = "."
+binding = "ASSETS"
+run_worker_first = ["/.netlify/functions/*"]
+
+# The watchlist store, bound as the deployed deployment binds it. The schema
+# lives in migrations/, which is wrangler's own default directory:
+#   npx wrangler d1 migrations apply content-tracker-watchlist --local
+[[d1_databases]]
+binding = "DB"
+database_name = "content-tracker-watchlist"
+database_id = "c5c4e1f6-6f5e-4c0b-955d-b0e2d6b27826"

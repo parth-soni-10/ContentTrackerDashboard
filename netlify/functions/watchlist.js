@@ -2,10 +2,10 @@ const db = require('./lib/db');
 
 /* ── CORS: the one cross-origin read this endpoint allows ────────────────────
  * The portfolio shows a slice of this dashboard and reads this endpoint for it.
- * It is served from two hosts — https://parth-portfolio-wb.pages.dev, which
- * every link now uses, and https://portfolio.parth10.workers.dev, which the
- * Workers deployment still answers on — so both origins are named below. A
- * visitor arriving at either one gets the same read.
+ * It is served from one host — https://parth-portfolio-wb.pages.dev, which every
+ * link and self-reference in that repository uses. Its workers.dev address used
+ * to be named here as a second origin; that deployment is gone, so the allowance
+ * names the one host the site is actually served from.
  *
  * Reading the store this app itself renders is what stops the two disagreeing:
  * the portfolio used to read the Google Sheet, which stopped being the store
@@ -25,8 +25,7 @@ const db = require('./lib/db');
  * exists on the developer's own machine.
  */
 const PORTFOLIO_ORIGINS = [
-  'https://parth-portfolio-wb.pages.dev',
-  'https://portfolio.parth10.workers.dev'
+  'https://parth-portfolio-wb.pages.dev'
 ];
 const ALLOWED_ORIGINS = [...PORTFOLIO_ORIGINS, /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/];
 
