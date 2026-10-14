@@ -28,13 +28,13 @@ _headers
 package.json
 package-lock.json
 wrangler.toml
-wrangler.dev.toml
-worker.js
 .assetsignore
-# Deploy files. This repository's Pages mirror control config, the scripts that
-# deploy it, and the staging output those scripts write (`.pages-bundle/`,
-# `.pages-dist/`) are development files: the assets directory is the repository
-# root, so anything not listed here would be uploaded and served.
-pages/
-.pages-bundle/
+# The function half of the site. Pages compiles this directory at deploy time —
+# a file here is a route, not an asset — and the upload is a staged copy of the
+# repository, so without this rule the router and the catch-all would also be
+# published as static files under /functions/.
+functions/
+# Deploy files: the script that stages the upload and the staging output it
+# writes (`.pages-dist/`) are development files. The assets directory is the
+# repository root, so anything not listed here would be uploaded and served.
 .pages-dist/

@@ -17,13 +17,15 @@ jobs:
         with:
           node-version: '20'
 
-      # No build step and no build script — package.json is there for the two
-      # database dependencies only — so "does it still parse" is the whole of a
-      # static check.
-      - name: Syntax-check the app and every function
+      # No build step and no build script — package.json carries no
+      # dependencies at all — so "does it still parse" is the whole of a static
+      # check. The Pages Function is checked too: Pages compiles functions/ at
+      # deploy time, and a syntax error there is a failed deploy rather than a
+      # failing test.
+      - name: Syntax-check the app, the function and the endpoints
         run: |
           set -e
           node --check app.js
-          for f in netlify/functions/*.js netlify/functions/lib/*.js; do
+          for f in functions/*.js netlify/functions/*.js netlify/functions/lib/*.js; do
             node --check "$f"
           done

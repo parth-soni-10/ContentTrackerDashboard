@@ -26,7 +26,8 @@
 // guarantee than the lock was: two adds arriving together cannot both write,
 // whether they reach the same instance or not.
 //
-// The connection is injected: worker.js calls setDatabase(env.DB) per request.
+// The connection is injected: functions/_router.js calls setDatabase(env.DB)
+// per request.
 // The Netlify build used to get its connection string from NETLIFY_DB_URL (or
 // @netlify/database) — there is no equivalent now, because there is nothing to
 // connect to: D1 is a binding.

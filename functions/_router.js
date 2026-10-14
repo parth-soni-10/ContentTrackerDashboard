@@ -1,9 +1,12 @@
 /**
- * Content Tracker — Cloudflare Worker.
+ * Content Tracker — the routing half of this site's Pages Function.
  *
- * This file only adapts how the functions under netlify/functions/ are hosted. Wrangler bundles those files into this Worker, so the data layer, the
- * admin session, the throttles, the TMDB/OMDb lookups and the release calendar
- * all keep exactly one implementation — the one the site ran on.
+ * This file only adapts how the functions under netlify/functions/ are hosted.
+ * Pages compiles this directory (see `functions/[[path]].js`, the catch-all
+ * route) and it imports those files, so the data layer, the admin session, the
+ * throttles, the TMDB/OMDb lookups and the release calendar all keep exactly
+ * one implementation — the one the site ran on. The `_` prefix keeps this file
+ * out of the routing table: the only route is the catch-all beside it.
  *
  * What the Netlify runtime used to provide, and what replaces it here:
  *
@@ -21,9 +24,10 @@
  *
  *   routing     The paths the frontend already calls, /.netlify/functions/*, are
  *               served from here; anything else is handed to the assets layer
- *               below. On Pages every request arrives at this script (it is the
- *               deployment's _worker.js), which is why that fallback is the
- *               whole routing contract rather than a run_worker_first pattern.
+ *               below. On Pages every request arrives at this code — the
+ *               catch-all function hands it on — which is why that fallback is
+ *               the whole routing contract rather than a run_worker_first
+ *               pattern.
  *
  *   client IP   The throttle damper keys its buckets on the caller's address. It
  *               looks for Netlify's header first and x-forwarded-for second, so
@@ -36,16 +40,16 @@
  * { statusCode, headers, body } result is turned straight back into a Response.
  */
 
-import watchlistModule from "./netlify/functions/watchlist.js";
-import goalModule from "./netlify/functions/goal.js";
-import suggestionsModule from "./netlify/functions/suggestions.js";
-import adminLoginModule from "./netlify/functions/admin-login.js";
-import adminEntryModule from "./netlify/functions/admin-entry.js";
-import adminImportModule from "./netlify/functions/admin-import.js";
-import tmdbSearchModule from "./netlify/functions/tmdb-search.js";
-import imdbIdModule from "./netlify/functions/imdb-id.js";
-import calendarModule from "./netlify/functions/calendar.js";
-import db from "./netlify/functions/lib/db.js";
+import watchlistModule from "../netlify/functions/watchlist.js";
+import goalModule from "../netlify/functions/goal.js";
+import suggestionsModule from "../netlify/functions/suggestions.js";
+import adminLoginModule from "../netlify/functions/admin-login.js";
+import adminEntryModule from "../netlify/functions/admin-entry.js";
+import adminImportModule from "../netlify/functions/admin-import.js";
+import tmdbSearchModule from "../netlify/functions/tmdb-search.js";
+import imdbIdModule from "../netlify/functions/imdb-id.js";
+import calendarModule from "../netlify/functions/calendar.js";
+import db from "../netlify/functions/lib/db.js";
 
 const ROUTES = {
   "/.netlify/functions/watchlist": watchlistModule,

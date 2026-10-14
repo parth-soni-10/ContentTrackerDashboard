@@ -19,5 +19,10 @@
 # Local secret file for wrangler dev, same rule as .env above.
 /.dev.vars
 
-# Local Cloudflare tool state (bundles, local D1/cache) — never committed.
+# Local Cloudflare tool state (local D1/cache, dev-server state) — never
+# committed.
 /.wrangler/
+
+# Deploy staging output, written by tools/deploy-pages.mjs. Build output; also
+# listed in .assetsignore, so it can never be uploaded even by hand.
+/.pages-dist/
