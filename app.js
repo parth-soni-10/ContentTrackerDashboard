@@ -826,8 +826,8 @@ async function requestAdminDelete(rowNumber) {
 // an admin write may come back 401 even though sessionStorage still says
 // "logged in". Drop the flag and put the login form back up instead of leaving
 // the user stuck behind a dead session.
-// After an admin write the reload must skip the Netlify CDN copy so it hits
-// the store directly and shows the write immediately.
+// After an admin write the reload must skip the edge's cached copy of the
+// response so it hits the store directly and shows the write immediately.
 // The ?fresh= marker is one-shot: loadData strips it after fetching.
 function reloadFresh() {
   try {
@@ -2911,7 +2911,7 @@ function calPruneCache(today) {
 // mode '' — paint the window from cache if it is still fresh, else fetch it.
 //     'refresh' — always fetch (the background poll, the tab coming back).
 //     'fresh' — always fetch, with ?fresh=, which is the only way to bypass the
-//               Netlify CDN's own 15-minute copy of the response.
+//               edge cache's own 15-minute copy of the response.
 async function loadCalendar(mode) {
   const win = calScopeWindow();
   const key = calWindowKey(win);

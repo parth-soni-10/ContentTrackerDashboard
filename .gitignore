@@ -1,18 +1,19 @@
 /.freebuff
 /brag-output/
 
-# The database client and its lockfile are installed by Netlify on every deploy;
-# node_modules itself is never part of the repo, and the lockfile is (it pins the
-# driver versions the functions run with).
+# Nothing is installed any more — there is no build step and no dependency — but
+# a stray install would still never belong in the repo.
 /node_modules
 
 # Local secrets. A key in here is what lets the functions be exercised by hand
-# (netlify dev reads .env, as does any local runner), so the file has to exist —
-# and it must never be committable, or the first `git add -A` publishes it.
+# (`wrangler dev` reads .dev.vars; .env is what a local runner reads), so the
+# file has to exist — and it must never be committable, or the first
+# `git add -A` publishes it.
 /.env
 /.env.local
 
-# Local Netlify folder
+# Local state from the old Netlify CLI, kept ignored in case one ever runs here
+# again; .wrangler/ below is the tool that does now.
 .netlify
 
 # Local secret file for wrangler dev, same rule as .env above.

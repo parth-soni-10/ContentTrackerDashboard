@@ -1,7 +1,7 @@
--- The watchlist's own store. This is the SQLite twin of
--- netlify/database/migrations/0001_init.sql, which built the same three tables
--- in Netlify Database (managed Postgres). That migration is kept beside this one
--- as the record of the shape the site ran on until the move to Cloudflare; this
+-- The watchlist's own store. This is the SQLite twin of the migration that
+-- built the same three tables in Netlify Database (managed Postgres); that file
+-- lived under netlify/database/migrations/ and was deleted with the rest of the
+-- Netlify configuration, so git history is where its exact shape lives. This
 -- file is what D1 is created from, and it has to leave an empty database in
 -- exactly the shape netlify/functions/lib/db.js expects.
 --

@@ -35,9 +35,11 @@ run_worker_first = ["/.netlify/functions/*"]
 # The watchlist store. This was Netlify Database (managed Postgres) with pg;
 # it is now D1, and netlify/functions/lib/db.js is the only file that knows it.
 # The schema lives in migrations/ — wrangler's own default directory, so the
-# command above needs no flag and tracks which files have already run.
-# netlify/database/migrations/ is the Postgres schema the site ran on before
-# this move; it is kept as the record of that shape, not applied by anything.
+# command above needs no flag and tracks which files have already run. The
+# Postgres schema the site ran on before this move lived under
+# netlify/database/migrations/ and is gone with the rest of that configuration;
+# only the functions under netlify/ are still here, because the Worker serves
+# them at the /.netlify/functions/* paths the page calls.
 [[d1_databases]]
 binding = "DB"
 database_name = "content-tracker-watchlist"

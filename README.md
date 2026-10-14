@@ -18,20 +18,21 @@ It reads live from **its own database**, so whenever I log a new title it shows 
 
 ## How it works
 
-The watchlist lives in **Postgres**, managed by Netlify as **Netlify Database** — one row per title, with its type, dates, genres, and more. **Netlify functions** query that database directly with `pg`; there is no spreadsheet, no Apps Script and nothing to redeploy by hand. Add a title (in the admin panel or through the API) and the change shows up on the site.
+The watchlist lives in **D1**, Cloudflare's SQLite — one row per title, with its type, dates, genres, and more. The functions under `netlify/functions/` query that store directly (through `lib/db.js`, the one file that knows the schema), bundled into a single Cloudflare Worker; the paths keep their `/.netlify/functions/*` shape because the page has always called those. There is no spreadsheet, no Apps Script and nothing to redeploy by hand. Add a title (in the admin panel or through the API) and the change shows up on the site.
 
-The schema is a committed migration in [`netlify/database/migrations/`](netlify/database/migrations/0001_init.sql), applied by the deploy itself: immediately before a production publish, and on every deploy preview — which gets its **own branch of the database, seeded from production**, so a schema change is rehearsed against real data before it touches production.
+The schema is a committed migration in [`migrations/`](migrations/0001_init.sql), applied with `npx wrangler d1 migrations apply content-tracker-watchlist --remote`. D1 does not run migrations on deploy, so that command is part of releasing a schema change. The Postgres schema it replaced lived under `netlify/database/migrations/` and went with the rest of the Netlify-era configuration — git history has it, and the migration's own header says what it was.
 
 ## Setup (one-time)
 
 Everything the deployment needs:
 
-- **The database.** It comes from the [`@netlify/database`](https://docs.netlify.com/build/data-and-storage/netlify-database/) dependency in `package.json` — Netlify provisions managed Postgres the first time it builds a deploy that has it installed. The connection string is injected as `NETLIFY_DB_URL` for every deploy context, so nothing has to be copied into environment variables. (`netlify database init` does the same thing from the CLI, if you would rather set it up before pushing.)
+- **The store.** One D1 database, bound to the Worker as `DB` in `wrangler.toml` — the name and id are in that file, so there is nothing to provision and no connection string to keep (D1 is a binding, not an endpoint). It holds a few hundred rows, so there is nothing here to size, scale or keep alive.
 - `ADMIN_PASSWORD` — the password for the Admin page.
 - `ADMIN_SESSION_SECRET` — a long random string that signs the admin session cookie.
-- `TMDB_API_KEY` — a free [TMDB](https://developer.themoviedb.org/docs/getting-started) API key, used for poster art and ratings in the admin lookup and for the **film** half of the Calendar page. Give it a value for **every deploy context** (production, branch deploys, deploy previews) — a value set for production only leaves a preview film-less and poster-less, with the Calendar saying so. When you run the functions locally, it needs a value there too (a `.env` file with `TMDB_API_KEY=…` is what `netlify dev` reads).
+- `TMDB_API_KEY` — a free [TMDB](https://developer.themoviedb.org/docs/getting-started) API key, used for poster art in the admin lookup and for the **film** half of the Calendar page.
+- `OMDB_API_KEY` — optional, and worth having: IMDb star ratings in the admin lookup. Without it the rating falls back to TMDB's own score.
 
-Netlify Database is available on credit-based plans and an active database consumes credits for compute and bandwidth — that is the one recurring cost of this setup.
+The secrets go on with `npx wrangler secret put NAME` (they survive deploys); for local runs the same names go in a gitignored `.dev.vars`. There is one deployment and no preview environment — preview URLs are off in `wrangler.toml`, so nothing here needs a second set of values.
 
 ## Run it locally
 
@@ -41,15 +42,14 @@ For shell-only work — layout, styling, copy — any static server is enough:
 python -m http.server
 ```
 
-A bare static server serves the page shell and nothing else: the data comes from the functions, so it will report that the watchlist service did not respond. To run the real thing locally you need the Netlify CLI (26.0.0 or newer) and Node 20.12.2 or newer:
+A bare static server serves the page shell and nothing else: the data comes from the functions, so it will report that the watchlist service did not respond. To run the real thing locally you need Node 20 or newer and `wrangler` (this repo installs nothing — `npx wrangler` is enough):
 
 ```
-netlify link        # once, to attach this checkout to the site
-netlify database migrations apply   # locally, migrations are not automatic
-netlify dev
+npx wrangler d1 migrations apply content-tracker-watchlist --local   # once
+npx wrangler dev                                                     # http://localhost:8787
 ```
 
-`netlify dev` starts a local Postgres for the database and injects `NETLIFY_DB_URL`, so the functions talk to a real database on your machine; `TMDB_API_KEY` and the admin variables come from the `.env` file it reads.
+The local run gets its own D1 database on disk, which starts empty — `tools/import-watchlist.mjs` is the documented way to load rows into it, or just add one through the admin panel. The four secrets come from `.dev.vars`, and `--persist-to <dir>` keeps that local state outside the repo.
 
 ## Built with
 

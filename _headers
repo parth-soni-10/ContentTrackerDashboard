@@ -1,9 +1,10 @@
 # Response headers for the Content Tracker.
 #
-# This is the whole header set: the repo has no netlify.toml, and Netlify reads
-# `_headers` in every deploy mode (a netlify.toml is ignored by a drag-and-drop
-# or API deploy). The publish directory is the repo root, so one /* block covers
-# the page, the functions' same-origin host and every asset.
+# This is the whole header set, and the assets layer applies it to everything it
+# serves. It carries what the [[headers]] blocks in netlify.toml used to say:
+# that file is gone, and a config the host ignores is worse than none. The
+# assets directory is the repo root, so one /* block covers the page, the
+# functions' same-origin host and every asset.
 #
 # script-src and style-src are 'self', with no 'unsafe-inline'. That is the whole
 # point of the policy: once script-src carries 'unsafe-inline' the directive stops
@@ -28,7 +29,7 @@
 # outright would break the no-JS path rather than improve it.
 
 /*
-  Content-Security-Policy: default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data: https://image.tmdb.org https://static.tvmaze.com; font-src 'self'; connect-src 'self'; base-uri 'self'; form-action 'self'; object-src 'none'; frame-ancestors 'self' https://dashboards-home.parth10.workers.dev
+  Content-Security-Policy: default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data: https://image.tmdb.org https://static.tvmaze.com; font-src 'self'; connect-src 'self'; base-uri 'self'; form-action 'self'; object-src 'none'; frame-ancestors 'self' https://dashboards-home.parth10.workers.dev https://dashboards-home-portal.pages.dev
   # frame-ancestors is the one directive a <meta> tag cannot carry. It names the
   # Dashboard Portal alongside 'self': the portal shows this dashboard in a
   # preview frame, and 'none' made every preview refuse to load. The legacy

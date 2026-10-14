@@ -3,4 +3,4 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://content-tracker-dashboard.parth10.workers.dev/sitemap.xml
+Sitemap: https://contenttrackerdashboard.pages.dev/sitemap.xml

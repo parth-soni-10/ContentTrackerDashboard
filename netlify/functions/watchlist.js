@@ -1,26 +1,100 @@
 const db = require('./lib/db');
 
-const json = (statusCode, body) => ({
+/* ── CORS: the one cross-origin read this endpoint allows ────────────────────
+ * The portfolio shows a slice of this dashboard and reads this endpoint for it.
+ * It is served from two hosts — https://parth-portfolio-wb.pages.dev, which
+ * every link now uses, and https://portfolio.parth10.workers.dev, which the
+ * Workers deployment still answers on — so both origins are named below. A
+ * visitor arriving at either one gets the same read.
+ *
+ * Reading the store this app itself renders is what stops the two disagreeing:
+ * the portfolio used to read the Google Sheet, which stopped being the store
+ * when the watchlist moved to D1, and its totals drifted from this page's as a
+ * result.
+ *
+ * It has to be a browser read. The dashboard portal can do the read
+ * server-side (see its watchlist-count function), but the portfolio is a static
+ * site with no server to run a proxy on, so the allowance lives here, on the
+ * response.
+ *
+ * Scoped to named origins, never `*`. These rows are public either way (this
+ * page renders them), so this is hygiene rather than secrecy — but a wildcard
+ * would cover every future caller, and the rule is easier to audit when it says
+ * who it is for. localhost is allowed on any port because that is how the
+ * portfolio is developed (a throwaway static server) and such an origin only
+ * exists on the developer's own machine.
+ */
+const PORTFOLIO_ORIGINS = [
+  'https://parth-portfolio-wb.pages.dev',
+  'https://portfolio.parth10.workers.dev'
+];
+const ALLOWED_ORIGINS = [...PORTFOLIO_ORIGINS, /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/];
+
+function allowedOrigin(event) {
+  const origin = event.headers?.origin || event.headers?.Origin || '';
+  if (!origin) return '';
+  return ALLOWED_ORIGINS.some(allowed =>
+    (allowed instanceof RegExp ? allowed.test(origin) : allowed === origin)) ? origin : '';
+}
+
+/* The echo travels with Vary: Origin. The rows are identical for every caller,
+ * but a response that says "you, specifically, may read this" must not be
+ * handed to the next caller by a shared cache. */
+const cors = origin => (origin ? { 'Access-Control-Allow-Origin': origin, Vary: 'Origin' } : {});
+
+const json = (statusCode, body, extraHeaders) => ({
   statusCode,
-  headers: { 'Content-Type': 'application/json', 'Cache-Control': 'public, max-age=300, stale-while-revalidate=300' },
+  headers: {
+    'Content-Type': 'application/json',
+    'Cache-Control': 'public, max-age=300, stale-while-revalidate=300',
+    ...extraHeaders
+  },
   body: JSON.stringify(body)
 });
 
 exports.handler = async event => {
-  if (event.httpMethod !== 'GET') return json(405, { error: 'Method not allowed' });
-  if (!db.dbEnabled()) return json(500, { error: 'Data service is not configured' });
+  const origin = allowedOrigin(event);
+
+  /* Preflight. This endpoint is a plain GET and the portfolio sends no headers
+     that would trigger one, but answering keeps the allowance honest for any
+     caller that does — and the 405 this used to return is exactly what made a
+     browser read of this endpoint look impossible. */
+  if (event.httpMethod === 'OPTIONS') {
+    if (!origin) return json(405, { error: 'Method not allowed' });
+    return {
+      statusCode: 204,
+      headers: {
+        ...cors(origin),
+        'Access-Control-Allow-Methods': 'GET, OPTIONS',
+        'Access-Control-Allow-Headers': 'content-type',
+        'Access-Control-Max-Age': '86400',
+        'Cache-Control': 'no-store'
+      },
+      body: ''
+    };
+  }
+
+  if (event.httpMethod !== 'GET') return json(405, { error: 'Method not allowed' }, cors(origin));
+
+  /* The allowance goes on failures too, so a caller that is allowed to read this
+     endpoint can read its error rather than seeing an opaque CORS rejection. */
+  if (!db.dbEnabled()) return json(500, { error: 'Data service is not configured' }, cors(origin));
 
   const isGoalRead = event.queryStringParameters?.goal === '1';
   try {
     if (isGoalRead) {
       const goal = await db.readGoal();
-      return { statusCode: 200, headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }, body: JSON.stringify(goal) };
+      return {
+        statusCode: 200,
+        headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', ...cors(origin) },
+        body: JSON.stringify(goal)
+      };
     }
     const wantsSuggestions = event.queryStringParameters?.sheet === 'Suggestions';
     const rows = wantsSuggestions ? await db.listSuggestions() : await db.listEntries();
-    return json(200, rows);
+    return json(200, rows, cors(origin));
   } catch (error) {
     console.error('Watchlist read failed:', error);
-    return json(502, { error: error.message || 'Unable to load data' });
+    return json(502, { error: error.message || 'Unable to load data' }, cors(origin));
   }
 };
