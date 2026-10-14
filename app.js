@@ -348,13 +348,26 @@ function renderDataError() {
 
 // POST the yearly goal to the shared store; returns the server-confirmed
 // { hrs, year } or null on failure.
-async function setSharedGoal(hrs, year) {
+//
+// A failure has two shapes and the reader needs to be told which one it is. The
+// endpoint is admin-gated — it writes shared state that locks for the year, so
+// it takes the same session as the admin writes — and a 401 means "sign in",
+// not "the network is down". That reason is left in goalError for the caller to
+// show; anything else is a plain failure and the card keeps working on this
+// device.
+async function setSharedGoal(hrs, year, options) {
+  const quiet = Boolean(options && options.quiet);
   try {
     const res = await fetch('/.netlify/functions/goal', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
+      credentials: 'same-origin',
       body: JSON.stringify({ hrs, year })
     });
+    if (res.status === 401) {
+      if (!quiet) goalError = 'Sign in on the Admin page to set the shared goal.';
+      return null;
+    }
     const data = res.ok ? await res.json().catch(() => ({})) : null;
     if (data && data.status === 'ok' && data.goal) {
       return { hrs: Number(data.goal.hrs) || 0, year: String(data.goal.year || '') };
@@ -386,7 +399,11 @@ async function loadGoal() {
   } catch (e) {}
   if (!goalState.hrs && localHrs > 0) {
     if (serverReachable) {
-      const saved = await setSharedGoal(localHrs, localYear || String(new Date().getFullYear()));
+      // Quiet: this is a page load, not a click. A visitor with an old local
+      // goal and no admin session gets the goal they are already seeing, not a
+      // sign-in prompt they did not ask for; the Set button says that when it is
+      // pressed.
+      const saved = await setSharedGoal(localHrs, localYear || String(new Date().getFullYear()), { quiet: true });
       if (saved) goalState = saved;
     } else {
       goalState = { hrs: localHrs, year: localYear };
@@ -1572,10 +1589,10 @@ function renderReadme() {
       if (input) input.disabled = true;
       goalSet.disabled = true;
       goalSet.textContent = 'Saving…';
+      goalError = '';
       const saved = await setSharedGoal(v, String(cy));
       if (saved) {
         goalState = saved;
-        goalError = '';
       } else {
         // Server save unavailable (backend not redeployed yet / offline): keep
         // the card working on this device and say so instead of pretending.
@@ -1584,7 +1601,9 @@ function renderReadme() {
           localStorage.setItem('ct-goal-year', String(cy));
         } catch (e) {}
         goalState = { hrs: v, year: v ? String(cy) : '' };
-        goalError = 'Saved on this device only — syncing is unavailable right now.';
+        // setSharedGoal has already named a refused session — that reason is
+        // more useful than "syncing is unavailable", and it is actionable.
+        if (!goalError) goalError = 'Saved on this device only — syncing is unavailable right now.';
       }
       renderReadme();
     });

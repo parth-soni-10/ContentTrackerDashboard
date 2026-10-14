@@ -1,4 +1,21 @@
+// The shared yearly watch goal. Reading it is public — the goal is drawn on the
+// README card the site shows everyone (the read is `watchlist?goal=1`, in
+// lib/db.js) — but writing it is an admin act, gated here exactly as
+// admin-entry.js and admin-import.js gate their writes.
+//
+// Why it is not open, which is what it was: `setGoal` in lib/db.js refuses to
+// change a goal once the year's is set, so a single unauthenticated write is not
+// a transient annoyance — it pins the target for the rest of the year, and every
+// card that reads it (progress, pace, the lock note) is then wrong with nothing
+// the owner can do about it until 1 January. The write is one row of shared
+// state, and its cost is permanent; the read stays open because it carries
+// nothing and the card is part of the public page.
+//
+// The page follows the same rule: app.js sends its own session cookie with the
+// Set button's POST, and tells the reader to sign in on the Admin page when the
+// answer is 401 rather than reporting the save as a network failure.
 const db = require('./lib/db');
+const { validSession } = require('./lib/session');
 
 const json = (statusCode, body) => ({
   statusCode,
@@ -8,6 +25,7 @@ const json = (statusCode, body) => ({
 
 exports.handler = async event => {
   if (event.httpMethod !== 'POST') return json(405, { error: 'Method not allowed' });
+  if (!validSession(event)) return json(401, { error: 'Admin session required', code: 'SESSION_INVALID' });
   if (!db.dbEnabled()) return json(500, { error: 'Goal service is not configured' });
 
   let body;
