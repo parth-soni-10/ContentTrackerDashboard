@@ -691,7 +691,7 @@ function renderAdminForm() {
       <button class="try-btn admin-clean-btn" id="admin-clean-scan" type="button">Scan for invalid rows</button>
       <div id="admin-clean-msg" aria-live="polite"></div>
       <div id="admin-clean-results" class="admin-clean-results" aria-live="polite"></div>
-    </div></div><div class="submit-right"><div class="note-card"><div class="note-icon" aria-hidden="true">💡</div><div class="note-body"><strong>Protected entry</strong>The password is checked server-side and never leaves this site.</div></div><button class="try-btn" id="admin-lock" type="button">Lock Admin</button></div><div class="submit-form-card submit-wide"><h2 class="submit-heading">Release Calendar</h2><p class="submit-sub">The same releases as the Calendar tab — the ＋ on a listing adds it straight to the watchlist, with its release day as the watch date.</p><div class="cal-embed">' + calShellHTML() + '</div></div></div>`;
+    </div></div><div class="submit-right"><div class="note-card"><div class="note-icon" aria-hidden="true">💡</div><div class="note-body"><strong>Protected entry</strong>The password is checked server-side and never leaves this site.</div></div><button class="try-btn" id="admin-lock" type="button">Lock Admin</button></div><div class="submit-form-card submit-wide"><h2 class="submit-heading">Release Calendar</h2><p class="submit-sub">The same releases as the Calendar tab — the ＋ on a listing adds it straight to the watchlist, with its release day as the watch date.</p><div class="cal-embed">${calShellHTML()}</div></div></div>`;
   document.getElementById('admin-entry-form').addEventListener('submit', submitAdminEntry);
   ['genre', 'platform'].forEach(key => {
     const select = document.getElementById('admin-' + key);
