@@ -137,6 +137,10 @@ exports.handler = async event => {
       genre: mergedGenre,
       platform,
       season: isMovie ? '' : usedSeason || season,
+      // Whether the numbers below describe the asked-for season: without the
+      // season payload the episode count falls back to the whole series, which
+      // must never be written into a season row.
+      seasonOk: isMovie ? true : Boolean(seasonDetails),
       episodes: episodeCount,
       screentime: mergedRuntime || (isMovie ? details.runtime || 0 : (details.episode_run_time?.[0] || omdbRuntime || 0) * episodeCount),
       source: 'TMDB'

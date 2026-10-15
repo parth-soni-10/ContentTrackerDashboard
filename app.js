@@ -691,6 +691,13 @@ function renderAdminForm() {
       <button class="try-btn admin-clean-btn" id="admin-clean-scan" type="button">Scan for invalid rows</button>
       <div id="admin-clean-msg" aria-live="polite"></div>
       <div id="admin-clean-results" class="admin-clean-results" aria-live="polite"></div>
+    </div>
+    <div class="submit-form-card">
+      <h2 class="submit-heading">Fill in zeros</h2>
+      <p class="submit-sub">Entries sitting at 0 screentime whose watch date has arrived get their episode count and runtime looked up again. Only empty numbers are filled — anything typed stays.</p>
+      <div id="admin-zero-count" class="admin-zero-count" aria-live="polite"></div>
+      <button class="try-btn admin-clean-btn" id="admin-zero-fill" type="button">Fill them in</button>
+      <div id="admin-zero-results" class="admin-clean-results" aria-live="polite"></div>
     </div></div><div class="submit-right"><div class="note-card"><div class="note-icon" aria-hidden="true">💡</div><div class="note-body"><strong>Protected entry</strong>The password is checked server-side and never leaves this site.</div></div><button class="try-btn" id="admin-lock" type="button">Lock Admin</button></div><div class="submit-form-card submit-wide"><h2 class="submit-heading">Release Calendar</h2><p class="submit-sub">The same releases as the Calendar tab — the ＋ on a listing adds it straight to the watchlist, with its release day as the watch date.</p><div class="cal-embed">${calShellHTML()}</div></div></div>`;
   document.getElementById('admin-entry-form').addEventListener('submit', submitAdminEntry);
   ['genre', 'platform'].forEach(key => {
@@ -724,7 +731,9 @@ function renderAdminForm() {
     const groupBtn = event.target.closest('.dup-group-btn');
     if (groupBtn) removeDupCopies(Number(groupBtn.dataset.group), groupBtn);
   });
+  document.getElementById('admin-zero-fill').addEventListener('click', event => fillZeroEntries(event.currentTarget));
   renderDuplicateScan();
+  paintZeroCount();
   // The release calendar, embedded: the same shell the Calendar tab mounts,
   // with the one-click Add button on every listing.
   calInitShell(true);
@@ -1254,6 +1263,163 @@ async function autofillAdminEntry() {
     button.disabled = false;
     button.textContent = 'Autofill';
   }
+}
+
+// ── FILL IN ZEROS ─────────────────────────────────────────────────────────
+// Quick-added future releases arrive with 0 episodes and 0 screentime, because
+// at release-announcement time there is nothing to count yet. Once the watch
+// date has arrived the numbers exist (TMDB lists the season's episodes and
+// runtimes), so this re-fetches them and writes back ONLY what is still empty:
+// episodes, screentime, and a blank genre. Anything typed stays, and a row the
+// lookup cannot describe honestly is skipped, never guessed into.
+// A season number typed as "S6" or "Season 6" is dug back out to digits — the
+// lookup only understands a bare number and silently falls back to season 1.
+function zeroSeasonParam(value) {
+  const match = String(value || '').match(/\d{1,2}/);
+  return match ? match[0] : '';
+}
+// The day count uses local midnights on both sides: a watch date is a calendar
+// day, not a UTC instant.
+function zeroEntries() {
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  const out = { zeros: 0, eligible: [], upcoming: 0, noDate: 0 };
+  rawData.forEach(row => {
+    if (Number(row.screentime) > 0) return;
+    out.zeros++;
+    const at = parseLocalDate(row.watchDate);
+    if (!at) { out.noDate++; return; }
+    if (at.getTime() > today) { out.upcoming++; return; }
+    out.eligible.push(row);
+  });
+  return out;
+}
+function paintZeroCount() {
+  const box = document.getElementById('admin-zero-count');
+  const button = document.getElementById('admin-zero-fill');
+  if (!box || !button) return;
+  const { zeros, eligible } = zeroEntries();
+  box.textContent = zeros === 0
+    ? 'Nothing at 0 screentime — every entry has its numbers.'
+    : zeros + (zeros === 1 ? ' entry' : ' entries') + ' at 0 screentime · ' + eligible.length + ' ready to fill';
+  button.disabled = eligible.length === 0;
+  button.textContent = eligible.length === 0 ? 'Fill them in' : 'Fill ' + eligible.length + (eligible.length === 1 ? ' entry' : ' entries');
+}
+// One row's refill: look the title up again and, when the answer describes the
+// row honestly, save it as an update. Returns a short status for the summary.
+async function lookupZeroEntry(row) {
+  const wantMovie = String(row.type || '').toLowerCase() === 'movie';
+  const query = new URLSearchParams({ title: row.name });
+  if (!wantMovie) {
+    const season = zeroSeasonParam(row.season);
+    if (season) query.set('season', season);
+  }
+  let data;
+  try {
+    const response = await fetch('/.netlify/functions/tmdb-search?' + query.toString(), { credentials: 'same-origin' });
+    data = await response.json().catch(() => ({}));
+    if (!response.ok) return { status: 'lookup-failed' };
+  } catch (error) {
+    return { status: 'lookup-failed' };
+  }
+  // A same-named film must never fill a series row or vice versa.
+  if ((data.type === 'Movie') !== wantMovie) return { status: 'mismatch' };
+  const patch = {};
+  if (!wantMovie && !(Number(row.episodes) > 0)) {
+    // Without the season payload the count falls back to the whole series
+    // (see seasonOk), which must never land in a season row.
+    if (!data.seasonOk) return { status: 'no-season' };
+    if (Number(data.episodes) > 0) patch.episodes = Number(data.episodes);
+  }
+  if (!(Number(row.screentime) > 0) && Number(data.screentime) > 0) {
+    if (!wantMovie && !data.seasonOk) return { status: 'no-season' };
+    patch.screentime = Math.round(Number(data.screentime));
+  }
+  let genre = '';
+  if (!row.genre && data.genre && data.genre !== 'Uncategorized' && data.genre !== 'Unknown') genre = String(data.genre).split(',')[0].trim();
+  if (!Object.keys(patch).length && !genre) return { status: 'nothing-new' };
+  const payload = {
+    action: 'update',
+    row: row.row,
+    name: row.name,
+    season: row.season || '',
+    type: wantMovie ? 'Movie' : 'Series/Show',
+    genre: genre || row.genre || '',
+    platform: row.platform || '',
+    episodes: patch.episodes !== undefined ? patch.episodes : Number(row.episodes) || 0,
+    screentime: patch.screentime !== undefined ? patch.screentime : Number(row.screentime) || 0,
+    watchDate: row.watchDate || '',
+  };
+  try {
+    const response = await fetch('/.netlify/functions/admin-entry', { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin', body: JSON.stringify(payload) });
+    const result = await response.json().catch(() => ({}));
+    if (response.status === 401 && result.code === 'SESSION_INVALID') return { status: 'session' };
+    if (!response.ok) return { status: 'save-failed' };
+  } catch (error) {
+    return { status: 'save-failed' };
+  }
+  return { status: 'filled', patch, genre };
+}
+function zeroLine(row, text) {
+  return '<div class="admin-zero-line"><strong>' + escapeHTML(row.name) + '</strong> — ' + text + '</div>';
+}
+async function fillZeroEntries(button) {
+  const box = document.getElementById('admin-zero-results');
+  const { zeros, eligible, upcoming, noDate } = zeroEntries();
+  if (!eligible.length) return;
+  button.disabled = true;
+  const lines = [];
+  let next = 0;
+  let filled = 0;
+  let stopped = false;
+  const paint = () => {
+    if (box) box.innerHTML = '<div class="admin-zero-line">Filling ' + next + ' of ' + eligible.length + '…</div>' + lines.join('');
+  };
+  paint();
+  // Three at a time: each lookup costs the function up to four upstream calls,
+  // and a burst of fifty would come back as 429s.
+  const worker = async () => {
+    while (next < eligible.length && !stopped) {
+      const index = next++;
+      const row = eligible[index];
+      const outcome = await lookupZeroEntry(row);
+      // The session died mid-run: the login screen replaces this page, so stop
+      // quietly instead of writing into a DOM that is gone.
+      if (outcome.status === 'session') {
+        stopped = true;
+        expireAdminSession('Your admin session has ended.');
+        return;
+      }
+      if (outcome.status === 'filled') {
+        filled++;
+        const bits = [];
+        if (outcome.patch.episodes) bits.push(outcome.patch.episodes + ' eps');
+        if (outcome.patch.screentime) bits.push(outcome.patch.screentime + ' mins');
+        if (outcome.genre) bits.push(outcome.genre);
+        lines.push(zeroLine(row, '✓ ' + bits.join(' · ')));
+      } else if (outcome.status === 'mismatch') {
+        lines.push(zeroLine(row, 'skipped — the lookup found the film version, not the series (or vice versa)'));
+      } else if (outcome.status === 'no-season') {
+        lines.push(zeroLine(row, 'skipped — that season is not listed yet'));
+      } else if (outcome.status === 'nothing-new') {
+        lines.push(zeroLine(row, 'skipped — nothing new to fill'));
+      } else {
+        lines.push(zeroLine(row, 'could not be refilled right now'));
+      }
+      paint();
+    }
+  };
+  await Promise.all([worker(), worker(), worker()]);
+  if (stopped) return;
+  const rest = [];
+  if (upcoming) rest.push(upcoming + ' still upcoming');
+  if (noDate) rest.push(noDate + ' with no usable date');
+  const summary = filled === eligible.length
+    ? 'Filled ' + filled + ' of ' + zeros + ' at zero' + (rest.length ? ' (' + rest.join(', ') + ' left alone)' : '') + '.'
+    : 'Filled ' + filled + ' of ' + eligible.length + ' ready' + (rest.length ? ' · ' + rest.join(' · ') : '') + '.';
+  if (box) box.innerHTML = '<div class="sf-success">' + escapeHTML(summary) + '</div>' + lines.join('');
+  try { await loadData(true); } catch (e) {}
+  paintZeroCount();
 }
 
 async function submitAdminEntry(event) {

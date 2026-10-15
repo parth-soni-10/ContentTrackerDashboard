@@ -444,6 +444,9 @@ html.dark .rm-badge.genre { background: #24382c; color: var(--text-mid); }
 .clean-table .clean-null { color: var(--gold); font-style: italic; }
 .clean-table .clean-added { color: var(--text-soft); font-variant-numeric: tabular-nums; }
 .clean-table td:last-child { text-align: right; }
+.admin-zero-count { font-size: 13px; color: var(--text-mid); margin: 10px 0; }
+.admin-zero-line { font-size: 13px; color: var(--text-mid); padding: 6px 2px; border-top: 1px solid var(--border); line-height: 1.5; }
+.admin-zero-line strong { color: var(--text); font-weight: 600; }
 .clean-table .admin-clean-del { width: auto; min-width: 0; padding: 5px 12px; min-height: 0; }
 
 /* Add-time duplicate warning — the block that stands in for a save that was
