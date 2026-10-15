@@ -609,6 +609,7 @@ function renderAdmin() {
   // so it survives reloads but is cleared when the tab closes).
   if (!adminAuthenticated && sessionStorage.getItem('ct_admin_session') === '1') adminAuthenticated = true;
   if (!adminAuthenticated) {
+    calAdminAdd = false;
     document.getElementById('app').innerHTML = `
       <div class="page-header"><div class="ph-left"><h1>Admin</h1><p>Sign in to add a title directly to the tracker</p></div></div>
       <div class="admin-page"><div class="admin-card">
@@ -690,7 +691,7 @@ function renderAdminForm() {
       <button class="try-btn admin-clean-btn" id="admin-clean-scan" type="button">Scan for invalid rows</button>
       <div id="admin-clean-msg" aria-live="polite"></div>
       <div id="admin-clean-results" class="admin-clean-results" aria-live="polite"></div>
-    </div></div><div class="submit-right"><div class="note-card"><div class="note-icon" aria-hidden="true">💡</div><div class="note-body"><strong>Protected entry</strong>The password is checked server-side and never leaves this site.</div></div><button class="try-btn" id="admin-lock" type="button">Lock Admin</button></div></div>`;
+    </div></div><div class="submit-right"><div class="note-card"><div class="note-icon" aria-hidden="true">💡</div><div class="note-body"><strong>Protected entry</strong>The password is checked server-side and never leaves this site.</div></div><button class="try-btn" id="admin-lock" type="button">Lock Admin</button></div><div class="submit-form-card submit-wide"><h2 class="submit-heading">Release Calendar</h2><p class="submit-sub">The same releases as the Calendar tab — the ＋ on a listing adds it straight to the watchlist, with its release day as the watch date.</p><div class="cal-embed">' + calShellHTML() + '</div></div></div>`;
   document.getElementById('admin-entry-form').addEventListener('submit', submitAdminEntry);
   ['genre', 'platform'].forEach(key => {
     const select = document.getElementById('admin-' + key);
@@ -724,6 +725,9 @@ function renderAdminForm() {
     if (groupBtn) removeDupCopies(Number(groupBtn.dataset.group), groupBtn);
   });
   renderDuplicateScan();
+  // The release calendar, embedded: the same shell the Calendar tab mounts,
+  // with the one-click Add button on every listing.
+  calInitShell(true);
 }
 
 function renderAdminEditResults(query) {
@@ -2511,6 +2515,15 @@ let calState = {
 };
 let calTracked = new Set();
 let calTimers = [];
+// True while the calendar is painted inside the Admin page: every listing then
+// carries one extra button that adds it straight to the watchlist. Only one
+// page exists at a time, so this is set on each calendar-bearing render and
+// read at paint time — never toggled per item.
+// calAdded remembers this visit's quick adds by normalised title, so a repaint
+// (which rebuilds calTracked from the not-yet-reloaded watchlist) keeps the
+// done state and the ✓ marker instead of forgetting the click.
+let calAdminAdd = false;
+let calAdded = new Set();
 
 function calISO(date) {
   return date.getFullYear() + '-' + String(date.getMonth() + 1).padStart(2, '0') + '-' + String(date.getDate()).padStart(2, '0');
@@ -3150,6 +3163,84 @@ function calThumbHTML(item) {
 // invalid markup, and a button inside a link would swallow the day. So the day's
 // opener is a transparent button laid over the whole tile and the title is lifted
 // above it — whichever one you aim at is the one that acts.
+// The Admin embed's one extra button: a release added straight to the
+// watchlist, with no form in between. Tiles get a compact ＋ (a 145px cell has
+// no room for a label), drawer rows get "＋ Add". Done state survives repaints
+// through calAdded; anything the watchlist already held answers from the
+// server as a duplicate and lands in the same state.
+function calAddTitle(item, added) {
+  return added && calTracked.has(dupNormTitle(item.title)) ? 'Already in your watchlist' : 'Added to your watchlist';
+}
+function calAddAttrs(item, date, cls, label) {
+  const key = dupNormTitle(item.title);
+  if (key && calAdded.has(key)) {
+    const where = calAddTitle(item, true);
+    return 'class="' + cls + ' done" type="button" disabled title="' + escapeHTML(where) + '" aria-label="' + escapeHTML(where) + '">✓';
+  }
+  return 'class="' + cls + '" type="button" data-act="calendarAction" data-cal="add" data-date="' + date + '" data-id="' + escapeHTML(item.id) + '"' +
+    ' title="Add to your watchlist" aria-label="Add ' + escapeHTML(item.title) + ' to your watchlist">' + label;
+}
+function calAddHTML(item, date) {
+  if (!calAdminAdd) return '';
+  return '<button ' + calAddAttrs(item, date, 'cal-add', '＋') + '</button>';
+}
+function calRowAddHTML(item, date) {
+  if (!calAdminAdd) return '';
+  const key = dupNormTitle(item.title);
+  if (key && calAdded.has(key)) {
+    const where = calAddTitle(item, true);
+    return '<button class="cal-row-add done" type="button" disabled title="' + escapeHTML(where) + '">✓ Added</button>';
+  }
+  return '<button ' + calAddAttrs(item, date, 'cal-row-add', '＋ Add') + '</button>';
+}
+// The item behind an Add button, looked up by the day it was painted on: ids
+// are unique within a day on both halves (films merge by id, episodes dedupe).
+function calFindItem(id, date) {
+  const day = calState.data && calState.data.days[date];
+  if (!day) return null;
+  return day.find(entry => entry.id === id) || null;
+}
+// A calendar listing as a watchlist row. The platform is already the
+// watchlist's own spelling (the function filters on it), the release day is
+// the watch date — a row without one is shown nowhere — and a season premiere
+// carries its season number the way a logged series does.
+function calQuickAddPayload(item, date) {
+  const isMovie = item.media === 'movie';
+  return {
+    name: item.title,
+    type: isMovie ? 'Movie' : 'Series/Show',
+    season: !isMovie && Number(item.season) > 0 ? String(Number(item.season)) : '',
+    genre: !isMovie && Array.isArray(item.genres) && item.genres.length ? item.genres[0] : '',
+    platform: item.platform || '',
+    watchDate: date,
+  };
+}
+async function calQuickAdd(button) {
+  const item = calFindItem(button.dataset.id || '', button.dataset.date || '');
+  if (!item) return;
+  const idle = button.classList.contains('cal-row-add') ? '＋ Add' : '＋';
+  button.disabled = true;
+  button.textContent = '…';
+  button.title = 'Adding to your watchlist…';
+  try {
+    const response = await fetch('/.netlify/functions/admin-entry', { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin', body: JSON.stringify(calQuickAddPayload(item, button.dataset.date)) });
+    const result = await response.json().catch(() => ({}));
+    if (response.status === 401 && result.code === 'SESSION_INVALID') {
+      expireAdminSession('Your admin session has ended.');
+      return;
+    }
+    if (!response.ok) throw new Error(result.error || 'Unable to save entry');
+    // The server's own duplicate rule is the guard here — there is no add-time
+    // gate on a one-click add — so an "already saved" answer is a done state,
+    // not an error.
+    calAdded.add(dupNormTitle(item.title));
+    updateCalendar();
+  } catch (error) {
+    button.disabled = false;
+    button.textContent = idle;
+    button.title = (error && error.message) || 'Unable to save entry';
+  }
+}
 function calItemHTML(item, date) {
   const tag = item.media === 'episode' || item.platform
     ? '<span class="cal-tag' + (item.premiere ? ' new' : '') + '">' + escapeHTML(calLabel(item)) + '</span>'
@@ -3163,7 +3254,7 @@ function calItemHTML(item, date) {
         ' aria-label="' + escapeHTML('Everything on ' + day) + '"></button>' +
       calThumbHTML(item) +
       '<span class="cal-item-text"><a class="cal-item-title"' + calImdbAttrs(item) + '>' + escapeHTML(item.title) + '</a>' +
-      '<span class="cal-item-meta">' + tag + seen + platform + '</span></span>' +
+      '<span class="cal-item-meta">' + tag + seen + platform + '</span>' + calAddHTML(item, date) + '</span>' +
     '</div>';
 }
 // "1 episodes" is how a count reads when nobody pluralised it.
@@ -3430,6 +3521,9 @@ function updateCalendar() {
   }
 
   calTracked = calTrackedTitles();
+  // Quick adds are not in the watchlist snapshot yet (nothing reloads around a
+  // one-click add), so their keys are folded back in after every rebuild.
+  calAdded.forEach(key => { if (key) calTracked.add(key); });
   const data = calState.data;
   if (!data) return;
   const today = calISO(new Date());
@@ -3516,7 +3610,7 @@ function updateCalendar() {
 // ── DAY DRAWER ───────────────────────────────────────────────────────────
 // The complete list for one day. The grid can only ever show three entries a
 // cell, so this is where "every single thing" is actually readable.
-function calRowHTML(item) {
+function calRowHTML(item, date) {
   // Both links — the title and the ↗ affordance — go to IMDb, so a release has
   // one destination and no way to land on a source API by accident (the
   // attributes are built by calImdbAttrs, the same ones a tile's title uses).
@@ -3537,17 +3631,18 @@ function calRowHTML(item) {
       (item.episode ? '<div class="cal-row-ep">' + escapeHTML(item.episode) + '</div>' : '') +
       '<div class="cal-row-meta"><span>' + meta.join(' · ') + '</span>' + genres + rating + '</div>' +
     '</div>' +
+    calRowAddHTML(item, date) +
     '<a class="cal-row-link"' + imdb + '>↗</a>' +
   '</div>';
 }
-function calDrawerRowsHTML(list) {
+function calDrawerRowsHTML(list, date) {
   let lastTier = -1;
   return list.map(item => {
     const tier = calRank(item);
     const heading = tier !== lastTier && CAL_TIER_LABELS[tier]
       ? '<div class="cal-row-head">' + escapeHTML(CAL_TIER_LABELS[tier]) + '</div>' : '';
     lastTier = tier;
-    return heading + calRowHTML(item);
+    return heading + calRowHTML(item, date);
   }).join('');
 }
 function paintCalDrawer() {
@@ -3580,7 +3675,7 @@ function paintCalDrawer() {
       '</div>' +
       (hidden > 0 ? '<div class="cal-drawer-note">' + hidden + ' more release' + (hidden === 1 ? '' : 's') + ' here hidden by your filters.' +
         '<button class="cal-drawer-showall" type="button" data-act="calendarAction" data-cal="showall">Show all ' + all.length + '</button></div>' : '') +
-      '<div class="cal-drawer-body">' + (visible.length ? calDrawerRowsHTML(visible) : '<div class="cal-row-empty">Nothing here matches the current filters.</div>') + '</div>' +
+      '<div class="cal-drawer-body">' + (visible.length ? calDrawerRowsHTML(visible, date) : '<div class="cal-row-empty">Nothing here matches the current filters.</div>') + '</div>' +
     '</div>';
   document.body.appendChild(wrap);
   document.documentElement.classList.add('cal-lock');
@@ -3617,6 +3712,7 @@ function calendarAction(event) {
   const el = this;
   const what = el.dataset.cal;
   if (what === 'day') { calOpenDay(el.dataset.date, el); return; }
+  if (what === 'add') { calQuickAdd(el); return; }
   if (what === 'imdb') {
     // Only a title whose own page is still unknown gets here: the handler opens
     // the tab inside this click and points it at the resolved page, so the
@@ -3658,19 +3754,12 @@ document.addEventListener('keydown', event => {
   if (event.key === 'Escape' && calState.openDay) calCloseDay();
 });
 
-function renderCalendar() {
-  calState.opener = null;
+// The calendar's own markup — filters, month strip and grid — without the page
+// around it, so the Admin page can embed the same calendar rather than a copy.
+function calShellHTML() {
   const regionOptions = '<option value="' + CAL_REGION_ALL + '">All regions</option>' +
     CAL_REGIONS.map(region => '<option value="' + region[0] + '">' + escapeHTML(region[1]) + '</option>').join('');
-  document.getElementById('app').innerHTML =
-    '<div class="page-header">' +
-      '<div class="ph-left"><h1>Release Calendar</h1><p>Rolling: this year month by month, next year at a glance · films from TMDB, episodes from TVmaze</p></div>' +
-      '<div class="ph-right">' +
-        '<div class="dh-pill">🎬 <strong id="cal-mcount">—</strong> films</div>' +
-        '<div class="dh-pill">📺 <strong id="cal-ecount">—</strong> episodes</div>' +
-      '</div>' +
-    '</div>' +
-    '<div class="data-filters cal-filters">' +
+  return '<div class="data-filters cal-filters">' +
       '<div class="df-select"><select id="cal-scope" aria-label="Show" data-filter="calFilters.scope" data-rebuild="calendar">' +
         '<option value="new">New &amp; notable</option>' +
         '<option value="episodes" title="Every episode releasing. Left out: films, news and talk shows, and anything that airs every day">Episode releases</option>' +
@@ -3690,9 +3779,12 @@ function renderCalendar() {
     '<div id="cal-months"></div>' +
     '<div class="cal-main" id="cal-main"></div>' +
     '<div class="footer">Release data: <a href="https://www.tvmaze.com" target="_blank" rel="noopener">TVmaze</a> (CC BY-SA) and <a href="https://www.themoviedb.org" target="_blank" rel="noopener">TMDB</a></div>';
-
-  // The selects are rebuilt by the page render, so a filter kept across a tab
-  // switch has to be put back into them.
+}
+// The selects are rebuilt by the page render, so a filter kept across a tab
+// switch has to be put back into them — on the calendar page and in the Admin
+// embed alike. `admin` decides whether listings carry the one-click Add button.
+function calInitShell(admin) {
+  calAdminAdd = Boolean(admin);
   const keep = (id, value) => { const el = document.getElementById(id); if (el) el.value = value; };
   keep('cal-scope', calFilters.scope);
   keep('cal-type', calFilters.type);
@@ -3718,6 +3810,21 @@ function renderCalendar() {
   calState.platformsKey = '';
   calStartAuto();
   loadCalendar('');
+}
+
+function renderCalendar() {
+  calState.opener = null;
+  document.getElementById('app').innerHTML =
+    '<div class="page-header">' +
+      '<div class="ph-left"><h1>Release Calendar</h1><p>Rolling: this year month by month, next year at a glance · films from TMDB, episodes from TVmaze</p></div>' +
+      '<div class="ph-right">' +
+        '<div class="dh-pill">🎬 <strong id="cal-mcount">—</strong> films</div>' +
+        '<div class="dh-pill">📺 <strong id="cal-ecount">—</strong> episodes</div>' +
+      '</div>' +
+    '</div>' +
+    calShellHTML();
+
+  calInitShell(false);
 }
 
 // ── SUGGESTIONS ───────────────────────────────────────────────────────────

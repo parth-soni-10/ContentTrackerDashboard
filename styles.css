@@ -609,6 +609,13 @@ html.dark .cal-warn { border-color: #4a3a24; }
 .cal-plat { max-width: 100%; font-size: 10px; color: var(--text-soft); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .cal-more { width: 100%; padding: 3px 0; border: 0; border-radius: 6px; background: transparent; font: inherit; font-size: 11px; font-weight: 600; color: var(--green); text-align: center; cursor: pointer; }
 .cal-more:hover { background: var(--green-pale); }
+/* The Admin embed's one-click Add: lifted over .cal-item-open like the title
+   is, so the click lands on it rather than on the day drawer underneath. Only
+   rendered inside Admin (see calAdminAdd), never on the public calendar. */
+.cal-add { position: relative; z-index: 1; align-self: flex-end; flex-shrink: 0; width: 22px; height: 22px; margin-top: 2px; border: 1px solid var(--border-mid); border-radius: 6px; background: var(--surface); color: var(--green); font-size: 13px; line-height: 1; cursor: pointer; transition: background-color .15s, color .15s; }
+.cal-add:hover:not(:disabled) { background: var(--green); border-color: var(--green); color: #fff; }
+.cal-add.done { background: var(--green); border-color: var(--green); color: #fff; cursor: default; }
+.cal-add:disabled { cursor: default; }
 
 /* The agenda is the ≤600px view (see the mobile block) — the DOM is always
    there, but only phones show it. */
@@ -643,6 +650,17 @@ html.dark .cal-warn { border-color: #4a3a24; }
 .cal-row-rating { display: inline-flex; align-items: center; gap: 4px; }
 .cal-row-link { flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; border: 1px solid var(--border-mid); border-radius: 9px; color: var(--green); font-size: 14px; text-decoration: none; }
 .cal-row-link:hover { background: var(--green-pale); }
+/* The drawer's one-click Add (Admin embed only): a labelled button beside the
+   ↗ link, since a drawer row has the room a grid tile does not. */
+.cal-row-add { flex-shrink: 0; padding: 6px 12px; border: 1px solid var(--border-mid); border-radius: 8px; background: var(--surface); font: inherit; font-size: 12px; font-weight: 600; color: var(--green); cursor: pointer; transition: background-color .15s, color .15s; }
+.cal-row-add:hover:not(:disabled) { background: var(--green); border-color: var(--green); color: #fff; }
+.cal-row-add.done { background: var(--green); border-color: var(--green); color: #fff; cursor: default; }
+/* The Admin page's embedded calendar: a full-width card holding the same shell
+   the Calendar tab mounts. The shell's own page-width paddings are dropped so
+   they do not double up inside the card. */
+.submit-wide { grid-column: 1 / -1; }
+.cal-embed .cal-scopes, .cal-embed .cal-month-bar, .cal-embed .data-filters { padding-left: 0; padding-right: 0; }
+.cal-embed .footer { padding: 0 0 4px; text-align: left; }
 /* Sticky tier headings, so a 300-entry day stays navigable. */
 .cal-row-head { position: sticky; top: 0; z-index: 1; padding: 14px 20px 6px; background: var(--surface); border-bottom: 1px solid var(--border); font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: var(--text-soft); }
 .cal-row-empty { padding: 24px 20px; font-size: 13px; color: var(--text-soft); }
