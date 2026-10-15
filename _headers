@@ -52,6 +52,16 @@
 /vendor/*
   Cache-Control: public, max-age=604800, stale-while-revalidate=86400
 
+# The app's own code: five minutes, not heuristic browser caching. app.js once
+# rode the browser's default cache with no rule of its own, so a deploy read as
+# "nothing changed" until a hard refresh — the Admin page ran the previous
+# release's logic while the rest of the site had moved on.
+/*.js
+  Cache-Control: public, max-age=300, stale-while-revalidate=86400
+
+/*.css
+  Cache-Control: public, max-age=300, stale-while-revalidate=86400
+
 /*.svg
   Cache-Control: public, max-age=604800, stale-while-revalidate=86400
 

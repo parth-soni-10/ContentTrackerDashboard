@@ -13,8 +13,10 @@
 //     is what app.js has always mapped — so the frontend needed no change to
 //     read a third store either.
 //   * the duplicate rule: name (case-insensitive), season ('S2' = 'Season 2' =
-//     '2'), watch date and screentime all equal is the same watch logged twice.
-//     It is implemented here in JS against the rows that share a name, the way
+//     '2'), watch date and screentime all equal is the same watch logged twice,
+//     and the guard additionally requires the same stored type — a film and a
+//     same-named series are different watches even on the same day. It is
+//     implemented here in JS against the rows that share a name, the way
 //     it was against the sheet, because that normalisation exists in exactly one
 //     place — seasonKey below.
 //
@@ -68,19 +70,27 @@ const GOAL_PROPERTY = 'watch-goal';
 // type="date"> sends) and the sheet's display format (what old rows and the
 // import carry). Everything is stored as 'YYYY-MM-DD' — a plain string, so no
 // timezone and no session DateStyle can move a watch date by a day — and read
-// back as that same ISO text.
+// back as that same ISO text. Parts outside the calendar (month 13, 30
+// February) are rejected rather than stored: without that a "date" of 2026-13-99
+// sorted oddly and rendered as "99-undefined-26".
 function parseDateParts(value) {
   const text = String(value || '').trim();
   if (!text) return null;
+  const daysIn = (y, mo) => new Date(Date.UTC(y, mo, 0)).getUTCDate();
+  const valid = parts => {
+    if (!parts) return null;
+    if (parts.mo < 1 || parts.mo > 12 || parts.d < 1 || parts.d > daysIn(parts.y, parts.mo)) return null;
+    return parts;
+  };
   let m = text.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
-  if (m) return { y: Number(m[1]), mo: Number(m[2]), d: Number(m[3]) };
+  if (m) return valid({ y: Number(m[1]), mo: Number(m[2]), d: Number(m[3]) });
   m = text.match(/^(\d{1,2})[-/ ]([A-Za-z]{3})[a-z]*[-/ ](\d{2,4})$/);
   if (m) {
     const mo = MONTH_SHORT.indexOf(m[2].slice(0, 1).toUpperCase() + m[2].slice(1, 3).toLowerCase());
     if (mo < 0) return null;
     let y = Number(m[3]);
     if (y < 100) y += y > 50 ? 1900 : 2000;
-    return { y, mo: mo + 1, d: Number(m[1]) };
+    return valid({ y, mo: mo + 1, d: Number(m[1]) });
   }
   return null;
 }
@@ -178,16 +188,18 @@ async function listInvalidEntries() {
 }
 
 // The Sheet-era duplicate check, on the wire rows: an exact repeat of the same
-// title, season, watch date and screentime. Returns the id it found, or 0.
+// title, kind, season, watch date and screentime. Returns the id it found, or 0.
 function findDuplicateRow(rows, entry) {
   const wanted = {
     name: String(entry.name || '').trim().toLowerCase(),
+    type: String(entry.type || '').trim().toLowerCase(),
     season: seasonKey(entry.season),
     date: isoOf(parseDateParts(entry.watchDate)) || '',
     screentime: Number(entry.screentime) || 0
   };
   for (const row of rows) {
     if (String(row.Name || '').trim().toLowerCase() !== wanted.name) continue;
+    if (String(row.Type || '').trim().toLowerCase() !== wanted.type) continue;
     if (seasonKey(row.Season) !== wanted.season) continue;
     if ((isoOf(parseDateParts(row['Watch Date'])) || '') !== wanted.date) continue;
     if ((Number(row.Screentime) || 0) !== wanted.screentime) continue;
@@ -227,7 +239,10 @@ function normalizeEntry(entry) {
 
 // Returns { id } for a new row, or { duplicate: id } when the same watch is
 // already logged. The insert and its duplicate guard are one statement, so two
-// requests that add the same show at the same moment cannot both write.
+// requests that add the same show at the same moment cannot both write. The
+// guard also requires the same type: without that a film and a same-named
+// series released the same day (both at 0 screentime, as quick-adds arrive)
+// would block each other as "duplicates".
 async function createEntry(entry) {
   const values = normalizeEntry(entry);
   const key = duplicateKey({ name: values.name, season: values.season, watchDate: values.watchDate, screentime: values.screentime });
@@ -235,12 +250,12 @@ async function createEntry(entry) {
   const meta = await write(
     'INSERT INTO entries (name, season, type, genre, platform, episodes, screentime, watch_date, dup_key, created_at, updated_at)' +
     ' SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?' +
-    ' WHERE NOT EXISTS (SELECT 1 FROM entries WHERE dup_key = ?)',
+    ' WHERE NOT EXISTS (SELECT 1 FROM entries WHERE dup_key = ? AND type = ?)',
     [values.name, values.season, values.type, values.genre, values.platform, values.episodes, values.screentime,
-      values.watchDate, key, now, now, key]
+      values.watchDate, key, now, now, key, values.type]
   );
   if (meta.changes) return { id: Number(meta.last_row_id) };
-  const existing = await rows('SELECT id FROM entries WHERE dup_key = ? LIMIT 1', [key]);
+  const existing = await rows('SELECT id FROM entries WHERE dup_key = ? AND type = ? LIMIT 1', [key, values.type]);
   return { duplicate: existing.length ? Number(existing[0].id) : 0 };
 }
 

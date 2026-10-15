@@ -123,7 +123,9 @@ function password() {
   const file = path.join(process.cwd(), ".dev.vars");
   if (fs.existsSync(file)) {
     const line = fs.readFileSync(file, "utf8").split(/\r?\n/).find(l => l.startsWith("ADMIN_PASSWORD="));
-    if (line) return line.slice("ADMIN_PASSWORD=".length).trim();
+    // A quoted value ("secret" or 'secret') is the shell's quoting, not part
+    // of the password — without stripping, every login 401s with no hint why.
+    if (line) return line.slice("ADMIN_PASSWORD=".length).trim().replace(/^(['"])(.*)\1$/, "$2");
   }
   throw new Error("No admin password: set ADMIN_PASSWORD or put it in .dev.vars");
 }
@@ -137,7 +139,12 @@ if (login.status !== 200) {
   console.error(`admin-login failed (${login.status}) — is the password in .dev.vars the deployed one?`);
   process.exit(1);
 }
-const cookie = (login.headers.getSetCookie?.() || []).map(c => c.split(";")[0]).join("; ");
+const setCookies = login.headers.getSetCookie?.() || (login.headers.get("set-cookie") ? [login.headers.get("set-cookie")] : []);
+const cookie = setCookies.map(c => c.split(";")[0]).join("; ");
+if (!cookie) {
+  console.error("signed in, but no session cookie came back — cannot import");
+  process.exit(1);
+}
 console.log(`signed in to ${base}\n`);
 
 const total = { received: 0, inserted: 0, duplicates: 0, skipped: 0 };

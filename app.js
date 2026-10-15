@@ -1267,8 +1267,12 @@ async function autofillAdminEntry() {
   result.className = 'admin-name-result';
   result.textContent = 'Searching TMDB and preparing details…';
   try {
+    const typeSel = document.getElementById('admin-type');
     const query = new URLSearchParams({ title: name });
     if (season) query.set('season', season);
+    // The form knows the kind, so the match is verified against it instead of
+    // trusting bare popularity (see pickMatch on the function).
+    if (typeSel) query.set('type', typeSel.value === 'Movie' ? 'movie' : 'tv');
     const response = await fetch('/.netlify/functions/tmdb-search?' + query.toString(), { credentials: 'same-origin' });
     const data = await response.json();
     if (!response.ok) throw new Error(data.error || 'Could not find this title');
@@ -1354,7 +1358,7 @@ async function lookupZeroEntry(row) {
   // lookup would silently answer season 1 — wrong numbers filed without a
   // word. Skipped until a season is on the row.
   if (!wantMovie && !zeroSeasonParam(row.season)) return { status: 'no-season-number' };
-  const query = new URLSearchParams({ title: row.name });
+  const query = new URLSearchParams({ title: row.name, type: wantMovie ? 'movie' : 'tv' });
   if (!wantMovie) {
     const season = zeroSeasonParam(row.season);
     if (season) query.set('season', season);
@@ -2319,9 +2323,22 @@ function exportDataCSV() {
   setTimeout(() => { try { URL.revokeObjectURL(a.href); } catch (e) {} }, 0);
 }
 // Read shareable filter params from the URL (e.g. ?year=2026) and sync the UI.
+// A value that names nothing — a typo'd shared link, a platform since renamed —
+// falls back to 'all' instead of filtering the page down to an empty table
+// that reads as missing data.
 function applyDataFilters() {
   const qs = new URLSearchParams(location.search);
-  ['year','platform','type','genre','month'].forEach(k => { if (qs.get(k)) datFilters[k] = qs.get(k); });
+  const known = {
+    year: new Set(['all', ...rawData.map(r => String(r.year))]),
+    platform: new Set(['all', ...rawData.map(r => r.platform)]),
+    type: new Set(['all', ...rawData.map(r => r.type)]),
+    genre: new Set(['all', ...rawData.map(r => r.genre)]),
+    month: new Set(['all', ...MONTHS]),
+  };
+  ['year', 'platform', 'type', 'genre', 'month'].forEach(k => {
+    const v = qs.get(k);
+    if (v) datFilters[k] = known[k].has(v) ? v : 'all';
+  });
   if (qs.get('search') != null) datFilters.search = qs.get('search');
   const sels = { 'df-year':'year','df-plat':'platform','df-type':'type','df-genre':'genre','df-month':'month' };
   Object.keys(sels).forEach(id => { const el = document.getElementById(id); if (el) el.value = datFilters[sels[id]]; });
@@ -2499,7 +2516,7 @@ async function loadAllRatings() {
     while (next < pending.length) {
       const row = pending[next++];
       try {
-        const meta = await lookupMedia(String(row.name || '').trim().toLowerCase(), row.name);
+        const meta = await lookupMedia(String(row.name || '').trim().toLowerCase(), row.name, String(row.type || '').toLowerCase() === 'movie' ? 'movie' : 'tv');
         if (meta && Number(meta.rating) > 0) row.rating = Number(meta.rating);
       } catch (e) { /* nothing to do — coverage just stays short */ }
       ratingScan.done++;
