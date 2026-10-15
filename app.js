@@ -3234,6 +3234,10 @@ async function calQuickAdd(button) {
     // gate on a one-click add — so an "already saved" answer is a done state,
     // not an error.
     calAdded.add(dupNormTitle(item.title));
+    // The write is in the store but not in this visit's snapshot, so a search
+    // right after the click would miss it. Re-read quietly (no repaint, so the
+    // form and the calendar state are untouched) and then repaint the calendar.
+    try { await loadData(true); } catch (e) {}
     updateCalendar();
   } catch (error) {
     button.disabled = false;
