@@ -155,19 +155,22 @@ function initTheme() {
 
 // Poster + public rating + IMDb id — cached per title to avoid hammering TMDB/OMDB.
 // Versioned so a schema change (adding imdbId) triggers one refetch pass, then caches forever.
+// v3 re-verifies every poster: v2 cached the top popularity hit, which is how
+// "You" matched "Because I Want You" — the lookup now prefers an exact name in
+// the right kind, so every title gets one checked pass.
 // `miss` remembers titles the lookup came back without a rating for: those
 // never get an imdbId, so without it every re-render re-queried TMDB *and*
 // OMDb for the same handful of titles.
 const MEDIA_STORE = (() => {
   try {
     const c = JSON.parse(localStorage.getItem('ct-media-cache') || '{}');
-    if (c && c.v === 2) return { v: 2, items: c.items || {}, miss: c.miss || {} };
+    if (c && c.v === 3) return { v: 3, items: c.items || {}, miss: c.miss || {} };
   } catch (e) { /* unreadable or corrupt storage — start from empty */ }
-  return { v: 2, items: {}, miss: {} };
+  return { v: 3, items: {}, miss: {} };
 })();
 const MEDIA_CACHE = MEDIA_STORE.items;
 const MEDIA_MISS  = MEDIA_STORE.miss;
-function saveMediaCache() { try { localStorage.setItem('ct-media-cache', JSON.stringify({ v: 2, items: MEDIA_CACHE, miss: MEDIA_MISS })); } catch (e) {} }
+function saveMediaCache() { try { localStorage.setItem('ct-media-cache', JSON.stringify({ v: 3, items: MEDIA_CACHE, miss: MEDIA_MISS })); } catch (e) {} }
 // Give a title the media API couldn't find a week off before trying again; the
 // key is the sheet spelling, so fixing a typo looks the new spelling up at once.
 const MEDIA_MISS_TTL = 7 * 24 * 60 * 60 * 1000;
@@ -209,8 +212,17 @@ function ratingStars(value) {
   for (let i = 1; i <= 5; i++) stars += '<span class="rt-star' + (i <= filled ? ' on' : '') + '">★</span>';
   return '<span class="rt-stars">' + stars + '</span><span class="rt-num">' + (Math.round(v * 10) / 10) + '</span>';
 }
+// Titles are free text, so a key goes into a selector escaped: an unescaped
+// quote or backslash in a title throws out of querySelectorAll, and on a
+// poster-pool worker that kills every title still queued behind it.
+function escKey(key) {
+  try {
+    if (typeof CSS !== 'undefined' && CSS.escape) return CSS.escape(key);
+  } catch (e) {}
+  return String(key || '').replace(/["\\]/g, '');
+}
 function applyRating(key, rating) {
-  const nodes = document.querySelectorAll('[data-rk="' + key + '"]');
+  const nodes = document.querySelectorAll('[data-rk="' + escKey(key) + '"]');
   for (const el of nodes) el.innerHTML = ratingStars(rating);
   rawData.forEach(r => { if (String(r.name || '').trim().toLowerCase() === key) r.rating = rating; });
 }
@@ -219,7 +231,7 @@ function applyRating(key, rating) {
 // real imdbID arrives.
 function applyImdbLink(key, imdbId) {
   if (!imdbId) return;
-  const nodes = document.querySelectorAll('[data-tk="' + key + '"]');
+  const nodes = document.querySelectorAll('[data-tk="' + escKey(key) + '"]');
   for (const el of nodes) {
     if (el.tagName === 'SPAN') {
       const a = document.createElement('a');
@@ -240,8 +252,10 @@ function applyImdbLink(key, imdbId) {
 }
 // One in-flight lookup per title, shared by every row of that title on the
 // page (e.g. Daredevil S1-S3), so a season set costs one API call, not three.
+// `type` is the row's own kind ('movie' or 'tv') so the match is verified
+// against it instead of trusting bare popularity.
 const mediaLookups = {};
-async function lookupMedia(key, title) {
+async function lookupMedia(key, title, type) {
   const cached = MEDIA_CACHE[key];
   if (cached && cached.imdbId) return cached;
   // No rating came back for this title before: reuse whatever is cached (the
@@ -251,7 +265,9 @@ async function lookupMedia(key, title) {
   if (!mediaLookups[key]) {
     mediaLookups[key] = (async () => {
       try {
-        const res = await fetch('/.netlify/functions/tmdb-search?' + new URLSearchParams({ title, light: '1' }), { credentials: 'same-origin' });
+        const params = { title, light: '1' };
+        if (type === 'movie' || type === 'tv') params.type = type;
+        const res = await fetch('/.netlify/functions/tmdb-search?' + new URLSearchParams(params), { credentials: 'same-origin' });
         // A 200 with nothing in it is a real "no such title"; a failed request
         // isn't, so only the former is remembered as a miss.
         const data = res.ok ? (await res.json()) : null;
@@ -270,15 +286,21 @@ async function lookupMedia(key, title) {
 async function loadPoster(title, imgEl) {
   const key = String(title || '').trim().toLowerCase();
   if (!key || !imgEl) { posterFallback(imgEl); return; }
+  const type = imgEl.dataset && (imgEl.dataset.type === 'movie' || imgEl.dataset.type === 'tv') ? imgEl.dataset.type : '';
   const cached = MEDIA_CACHE[key];
   if (cached && cached.imdbId) {
-    applyPoster(imgEl, cached.poster);
-    applyRating(key, cached.rating);
-    applyImdbLink(key, cached.imdbId);
+    // The paint calls throw on a hostile title exactly like the fetch path's
+    // do, so they get the same catch — an unwatched throw here kills the pool
+    // worker and every poster queued behind it.
+    try {
+      applyPoster(imgEl, cached.poster);
+      applyRating(key, cached.rating);
+      applyImdbLink(key, cached.imdbId);
+    } catch (e) { posterFallback(imgEl); }
     return;
   }
   try {
-    const meta = await lookupMedia(key, title);
+    const meta = await lookupMedia(key, title, type);
     applyPoster(imgEl, meta.poster);
     applyRating(key, meta.rating);
     applyImdbLink(key, meta.imdbId);
@@ -694,7 +716,7 @@ function renderAdminForm() {
     </div>
     <div class="submit-form-card">
       <h2 class="submit-heading">Fill in zeros</h2>
-      <p class="submit-sub">Entries sitting at 0 screentime whose watch date has arrived get their episode count and runtime looked up again. Only empty numbers are filled — anything typed stays.</p>
+      <p class="submit-sub">Entries sitting at 0 screentime get their episode count and runtime looked up again — past and upcoming alike. Only empty numbers are filled — anything typed stays.</p>
       <div id="admin-zero-count" class="admin-zero-count" aria-live="polite"></div>
       <button class="try-btn admin-clean-btn" id="admin-zero-fill" type="button">Fill them in</button>
       <div id="admin-zero-results" class="admin-clean-results" aria-live="polite"></div>
@@ -733,7 +755,7 @@ function renderAdminForm() {
   });
   document.getElementById('admin-zero-fill').addEventListener('click', event => fillZeroEntries(event.currentTarget));
   renderDuplicateScan();
-  paintZeroCount();
+  paintZeroCount(true);
   // The release calendar, embedded: the same shell the Calendar tab mounts,
   // with the one-click Add button on every listing.
   calInitShell(true);
@@ -1279,36 +1301,54 @@ function zeroSeasonParam(value) {
   return match ? match[0] : '';
 }
 // The day count uses local midnights on both sides: a watch date is a calendar
-// day, not a UTC instant.
+// day, not a UTC instant. Rows dated in the future are attempted too — a season
+// TMDB already lists (The Rookie S8 months before its January premiere) fills
+// fine; one it does not list yet comes back as "not listed yet" to try again.
 function zeroEntries() {
   const now = new Date();
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
-  const out = { zeros: 0, eligible: [], upcoming: 0, noDate: 0 };
+  const out = { zeros: 0, eligible: [], noDate: 0, list: [] };
   rawData.forEach(row => {
     if (Number(row.screentime) > 0) return;
     out.zeros++;
     const at = parseLocalDate(row.watchDate);
-    if (!at) { out.noDate++; return; }
-    if (at.getTime() > today) { out.upcoming++; return; }
-    out.eligible.push(row);
+    const state = !at ? 'nodate' : at.getTime() > today ? 'upcoming' : 'ready';
+    out.list.push({ row, state });
+    if (state === 'nodate') out.noDate++;
+    else out.eligible.push(row);
   });
   return out;
 }
-function paintZeroCount() {
+function zeroPendingLine(entry) {
+  const date = entry.row.watchDate ? escapeHTML(entry.row.watchDate) : 'no date';
+  const tag = entry.state === 'ready' ? 'ready' : entry.state === 'upcoming' ? 'upcoming' : 'left out';
+  return '<div class="admin-zero-line"><strong>' + escapeHTML(entry.row.name) + '</strong> — 0 eps · 0 mins · ' + date + ' · ' + tag + '</div>';
+}
+function paintZeroCount(fresh) {
   const box = document.getElementById('admin-zero-count');
   const button = document.getElementById('admin-zero-fill');
   if (!box || !button) return;
-  const { zeros, eligible } = zeroEntries();
+  const { zeros, eligible, list } = zeroEntries();
   box.textContent = zeros === 0
     ? 'Nothing at 0 screentime — every entry has its numbers.'
-    : zeros + (zeros === 1 ? ' entry' : ' entries') + ' at 0 screentime · ' + eligible.length + ' ready to fill';
+    : zeros + (zeros === 1 ? ' entry' : ' entries') + ' at 0 screentime · ' + eligible.length + ' can be tried';
   button.disabled = eligible.length === 0;
   button.textContent = eligible.length === 0 ? 'Fill them in' : 'Fill ' + eligible.length + (eligible.length === 1 ? ' entry' : ' entries');
+  // The pending list paints on a fresh card only: after a run the results box
+  // holds per-row outcomes, and recounting must not paint over them.
+  if (fresh) {
+    const results = document.getElementById('admin-zero-results');
+    if (results) results.innerHTML = list.map(zeroPendingLine).join('');
+  }
 }
 // One row's refill: look the title up again and, when the answer describes the
 // row honestly, save it as an update. Returns a short status for the summary.
 async function lookupZeroEntry(row) {
   const wantMovie = String(row.type || '').toLowerCase() === 'movie';
+  // A series row without a season number has no season to ask for, and the
+  // lookup would silently answer season 1 — wrong numbers filed without a
+  // word. Skipped until a season is on the row.
+  if (!wantMovie && !zeroSeasonParam(row.season)) return { status: 'no-season-number' };
   const query = new URLSearchParams({ title: row.name });
   if (!wantMovie) {
     const season = zeroSeasonParam(row.season);
@@ -1365,24 +1405,29 @@ function zeroLine(row, text) {
 }
 async function fillZeroEntries(button) {
   const box = document.getElementById('admin-zero-results');
-  const { zeros, eligible, upcoming, noDate } = zeroEntries();
-  if (!eligible.length) return;
+  const started = zeroEntries();
+  // Every dated zero is attempted, in list order; dateless rows stay as their
+  // pending lines. Outcomes replace lines in place, so a row never moves while
+  // the run paints around it.
+  const jobs = started.list
+    .map((entry, index) => ({ row: entry.row, index }))
+    .filter((job, i) => started.list[i].state !== 'nodate');
+  if (!jobs.length) return;
   button.disabled = true;
-  const lines = [];
+  const lines = started.list.map(zeroPendingLine);
   let next = 0;
   let filled = 0;
   let stopped = false;
   const paint = () => {
-    if (box) box.innerHTML = '<div class="admin-zero-line">Filling ' + next + ' of ' + eligible.length + '…</div>' + lines.join('');
+    if (box) box.innerHTML = '<div class="admin-zero-line">Filling ' + next + ' of ' + jobs.length + '…</div>' + lines.join('');
   };
   paint();
   // Three at a time: each lookup costs the function up to four upstream calls,
   // and a burst of fifty would come back as 429s.
   const worker = async () => {
-    while (next < eligible.length && !stopped) {
-      const index = next++;
-      const row = eligible[index];
-      const outcome = await lookupZeroEntry(row);
+    while (next < jobs.length && !stopped) {
+      const job = jobs[next++];
+      const outcome = await lookupZeroEntry(job.row);
       // The session died mid-run: the login screen replaces this page, so stop
       // quietly instead of writing into a DOM that is gone.
       if (outcome.status === 'session') {
@@ -1396,30 +1441,28 @@ async function fillZeroEntries(button) {
         if (outcome.patch.episodes) bits.push(outcome.patch.episodes + ' eps');
         if (outcome.patch.screentime) bits.push(outcome.patch.screentime + ' mins');
         if (outcome.genre) bits.push(outcome.genre);
-        lines.push(zeroLine(row, '✓ ' + bits.join(' · ')));
+        lines[job.index] = zeroLine(job.row, '✓ ' + bits.join(' · '));
       } else if (outcome.status === 'mismatch') {
-        lines.push(zeroLine(row, 'skipped — the lookup found the film version, not the series (or vice versa)'));
+        lines[job.index] = zeroLine(job.row, 'skipped — the lookup found the film version, not the series (or vice versa)');
       } else if (outcome.status === 'no-season') {
-        lines.push(zeroLine(row, 'skipped — that season is not listed yet'));
+        lines[job.index] = zeroLine(job.row, 'skipped — that season is not listed yet');
+      } else if (outcome.status === 'no-season-number') {
+        lines[job.index] = zeroLine(job.row, 'skipped — add a season number to fill a series');
       } else if (outcome.status === 'nothing-new') {
-        lines.push(zeroLine(row, 'skipped — nothing new to fill'));
+        lines[job.index] = zeroLine(job.row, 'skipped — nothing new to fill');
       } else {
-        lines.push(zeroLine(row, 'could not be refilled right now'));
+        lines[job.index] = zeroLine(job.row, 'could not be refilled right now');
       }
       paint();
     }
   };
   await Promise.all([worker(), worker(), worker()]);
   if (stopped) return;
-  const rest = [];
-  if (upcoming) rest.push(upcoming + ' still upcoming');
-  if (noDate) rest.push(noDate + ' with no usable date');
-  const summary = filled === eligible.length
-    ? 'Filled ' + filled + ' of ' + zeros + ' at zero' + (rest.length ? ' (' + rest.join(', ') + ' left alone)' : '') + '.'
-    : 'Filled ' + filled + ' of ' + eligible.length + ' ready' + (rest.length ? ' · ' + rest.join(' · ') : '') + '.';
+  const summary = 'Filled ' + filled + ' of ' + jobs.length + ' attempted' +
+    (started.noDate ? ' · ' + started.noDate + ' left out (no usable date)' : '') + '.';
   if (box) box.innerHTML = '<div class="sf-success">' + escapeHTML(summary) + '</div>' + lines.join('');
   try { await loadData(true); } catch (e) {}
-  paintZeroCount();
+  paintZeroCount(false);
 }
 
 async function submitAdminEntry(event) {
@@ -1637,7 +1680,7 @@ function renderReadme() {
       // Poster + text sit in one span that becomes a link to the exact IMDb
       // page once the media lookup resolves (see applyImdbLink).
       '<span class="rw-link" data-tk="' + escapeHTML(ratingKey) + '">' +
-        '<img class="rw-poster" alt="" loading="lazy" width="54" height="80" data-poster="' + posterTitle + '">' +
+        '<img class="rw-poster" alt="" loading="lazy" width="54" height="80" data-poster="' + posterTitle + '" data-type="' + (r.type.toLowerCase() === 'movie' ? 'movie' : 'tv') + '">' +
         '<div class="rw-info">' +
           '<div class="rw-name">' + escapeHTML(r.name) + escapeHTML(seasonStr) + '</div>' +
           '<div class="rw-meta">' +
@@ -2351,7 +2394,7 @@ function updateDataTable() {
     // far, so the count rides along under the title instead of disappearing.
     var epsMobile  = (r.episodes && !isMovie) ? '<span class="meta-mobile">' + escapeHTML(r.episodes + ' eps') + '</span>' : '';
     rowsHTML += '<td class="td-strong"><span class="name-link" data-tk="' + escapeHTML(ratingKey) + '">' +
-      '<img class="poster" alt="" loading="lazy" width="42" height="60" data-poster="' + posterTitle + '">' +
+      '<img class="poster" alt="" loading="lazy" width="42" height="60" data-poster="' + posterTitle + '" data-type="' + (isMovie ? 'movie' : 'tv') + '">' +
       '<span class="title-cell">' + name + '<span class="season-note">' + escapeHTML(seasonStr) + '</span>' + epsMobile + '</span>' +
       '</span></td>';
     rowsHTML += '<td><span class="' + pillClass + '">' + typeLabel + '</span></td>';
@@ -4123,12 +4166,14 @@ function showSuggResult(item, animate = true) {
 }
 
 // Poster for the current pick, created per spin so a title the media API can't
-// resolve (which swaps the <img> for a placeholder) never sticks around.
+// resolve never sticks around: the old poster is removed whether it is still
+// an <img> or already the placeholder span a failed lookup swapped it for (the
+// span carries no id, so removing by id alone stacked a dead placeholder over
+// every later pick).
 function setSuggPoster(item) {
   const card = document.getElementById('sugg-card');
   if (!card) return;
-  const old = document.getElementById('sugg-poster');
-  if (old) old.remove();
+  card.querySelectorAll('.result-poster').forEach(el => el.remove());
   if (!item) return;
   const img = document.createElement('img');
   img.className = 'result-poster';
@@ -4136,6 +4181,8 @@ function setSuggPoster(item) {
   img.alt = '';
   img.width = 84;
   img.height = 126;
+  if (item.type === 'Movie') img.dataset.type = 'movie';
+  else img.dataset.type = 'tv';
   card.insertBefore(img, card.querySelector('.result-name'));
   loadPoster(item.name, img);
 }

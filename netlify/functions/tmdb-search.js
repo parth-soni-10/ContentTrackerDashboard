@@ -6,6 +6,22 @@ const json = (statusCode, body) => ({
 
 const clean = (value, max) => String(value || '').trim().slice(0, max);
 
+// Picking the top popularity hit is how "You" matched "Because I Want You":
+// an exact name always outranks a popular near-miss, and a known media type
+// (the page knows Movie vs Series for every lookup) outranks a popular wrong
+// kind. Only when neither says anything does popularity decide.
+const normTitle = value => String(value || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+function pickMatch(candidates, title, type) {
+  const want = normTitle(title);
+  const media = /movie/i.test(type || '') ? 'movie' : /tv|series|show/i.test(type || '') ? 'tv' : '';
+  const ranked = list => list.slice().sort((a, b) => (b.popularity || 0) - (a.popularity || 0));
+  const pool = media ? candidates.filter(item => item.media_type === media) : candidates;
+  const exact = (pool.length ? pool : candidates).filter(item => normTitle(item.title || item.name) === want && want);
+  if (exact.length) return ranked(exact)[0];
+  if (pool.length) return ranked(pool)[0];
+  return ranked(candidates)[0] || null;
+}
+
 async function omdbLookup(title, type) {
   if (!process.env.OMDB_API_KEY) return null;
   const url = new URL('https://www.omdbapi.com/');
@@ -24,6 +40,7 @@ exports.handler = async event => {
 
   const title = clean(event.queryStringParameters?.title, 160);
   const season = clean(event.queryStringParameters?.season, 10);
+  const type = clean(event.queryStringParameters?.type, 20);
   if (!title) return json(400, { error: 'Title is required' });
 
   // Lightweight poster + rating lookup — one TMDB search, no details/providers.
@@ -34,9 +51,11 @@ exports.handler = async event => {
       const searchResponse = await fetch(searchUrl);
       if (!searchResponse.ok) return json(502, { error: 'TMDB search failed' });
       const search = await searchResponse.json();
-      const match = (search.results || [])
-        .filter(item => item.media_type === 'movie' || item.media_type === 'tv')
-        .sort((a, b) => (b.popularity || 0) - (a.popularity || 0))[0];
+      const match = pickMatch(
+        (search.results || []).filter(item => item.media_type === 'movie' || item.media_type === 'tv'),
+        title,
+        type
+      );
       // OMDB (IMDb stars) first; fall back to the TMDB score if it's missing.
       // Both are 0-10, so clamp to that scale so the star display is consistent.
       // The IMDb id comes from the SAME TMDB match that produced the poster
@@ -81,7 +100,7 @@ exports.handler = async event => {
 
     const search = await searchResponse.json();
     const candidates = (search.results || []).filter(item => item.media_type === 'movie' || item.media_type === 'tv');
-    const match = candidates.sort((a, b) => (b.popularity || 0) - (a.popularity || 0))[0];
+    const match = pickMatch(candidates, title, type);
     if (!match) return json(404, { error: 'No matching title found' });
 
     const isMovie = match.media_type === 'movie';
