@@ -208,14 +208,19 @@ const json = (statusCode, body, headers = {}) => ({
   body: JSON.stringify(body),
 });
 
-// Where this invocation actually ran. Netlify sets CONTEXT for every deploy
-// (production / deploy-preview / branch-deploy / dev); a bare local runner sets
-// nothing, which is itself the diagnosis.
+// Where this invocation actually ran. Netlify set CONTEXT for every deploy
+// (production / deploy-preview / branch-deploy / dev); Cloudflare Pages, where
+// this runs now, sets CF_PAGES_BRANCH instead and never CONTEXT — so reading
+// only the Netlify name made this say "local run" on every deployed invocation,
+// which is what the warning below quotes back to the page. Both names are read,
+// the richer one first; a bare local runner sets neither, and that absence is
+// itself the diagnosis.
 function runContext() {
   const context = String(process.env.CONTEXT || '').trim();
-  const branch = String(process.env.BRANCH || '').trim().slice(0, 60);
-  if (!context) return 'no Netlify context — local run';
-  return context === 'branch-deploy' && branch ? context + ' on ' + branch : context;
+  const branch = String(process.env.BRANCH || process.env.CF_PAGES_BRANCH || '').trim().slice(0, 60);
+  if (context) return context === 'branch-deploy' && branch ? context + ' on ' + branch : context;
+  if (process.env.CF_PAGES) return branch ? 'Cloudflare Pages on ' + branch : 'Cloudflare Pages';
+  return 'no deploy context — local run';
 }
 
 // How much of TMDB to ask for, decided by the window itself. The theatre half is
