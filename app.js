@@ -2411,9 +2411,9 @@ const CAL_REGIONS = [
 ];
 // A film releases country by country, so "every region" is not a region code the
 // API has: it is the sentinel the picker offers, and the list above is what the
-// request hands the function to union over. This array is the one place that
-// list is defined — the function unions exactly what it is sent, so the dropdown
-// and the calendar can never disagree about what "all" means.
+// page fans out over — one movies request per region — when it is chosen. This
+// array is the one place that list is defined, so the dropdown and the calendar
+// can never disagree about what "all" means.
 const CAL_REGION_ALL = 'all';
 const calRegionKnown = value => value === CAL_REGION_ALL || CAL_REGIONS.some(region => region[0] === value);
 // Monday-first, matching the en-GB dates used everywhere else in the app.
@@ -2927,6 +2927,129 @@ function calPruneCache(today) {
     calState.cache.delete(oldestKey);
   }
 }
+// One window is several small requests, never one big one: a movies request per
+// region plus the episodes in pieces — the schedule response on its own, then
+// the past in ranges of CAL_BACKFILL_CHUNK days. Each stays inside the free
+// plan's 50-subrequest cap, where the old single union (~250 upstream calls in
+// one invocation) blew past it and arrived as "Too many subrequests" warnings.
+// Every piece caches at the CDN on its own URL, so a warm load is edge hits,
+// and past ranges cache for a day because a day that has aired never changes.
+const CAL_PART_BATCH = 4;     // requests in flight at once
+const CAL_BACKFILL_CHUNK = 10; // past days per episodes request (20 subrequests)
+async function calFetchPart(query) {
+  const response = await fetch(CALENDAR_URL + '?' + query.toString(), { headers: { accept: 'application/json' }, credentials: 'same-origin' });
+  if (!response.ok) throw new Error('Calendar service returned ' + response.status);
+  return response.json();
+}
+// Days are added in UTC, the way the function counts them — a local-midnight
+// parse would shift the range for anyone off UTC.
+function calAddDays(iso, days) {
+  const date = new Date(iso + 'T00:00:00Z');
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
+}
+// The same merge the function runs for a union (see mergeFilm there): one entry
+// per film, dated by the earliest region, carrying at most three labels.
+function calMergeMovies(parts) {
+  const movies = new Map();
+  for (const part of parts) {
+    for (const item of (part && part.movies) || []) {
+      if (!item || item.id == null || !item.date) continue;
+      const existing = movies.get(item.id);
+      if (!existing) {
+        movies.set(item.id, {
+          id: item.id,
+          title: item.title,
+          date: item.date,
+          poster: item.poster || null,
+          rating: Number(item.rating) || 0,
+          popularity: Number(item.popularity) || 0,
+          providers: Array.isArray(item.providers) ? item.providers.filter(Boolean).slice(0, 3) : [],
+          theater: Boolean(item.theater),
+        });
+        continue;
+      }
+      if (item.theater) {
+        if (!existing.theater || item.date < existing.date) {
+          existing.date = item.date;
+          existing.theater = true;
+        }
+      } else if (!existing.theater && item.date < existing.date) {
+        existing.date = item.date;
+      }
+      for (const provider of item.providers || []) {
+        if (provider && existing.providers.length < 3 && !existing.providers.includes(provider)) existing.providers.push(provider);
+      }
+    }
+  }
+  return [...movies.values()]
+    .filter(movie => movie.title && (movie.theater || movie.providers.length))
+    .map(movie => (movie.theater && !movie.providers.includes(CAL_THEATER) ? { ...movie, providers: movie.providers.concat(CAL_THEATER) } : movie))
+    .sort((a, b) => a.date.localeCompare(b.date) || b.popularity - a.popularity);
+}
+function calMergeEpisodes(parts) {
+  const episodes = new Map();
+  for (const part of parts) {
+    for (const item of (part && part.episodes) || []) {
+      if (!item || item.id == null || !item.date || episodes.has(item.id)) continue;
+      episodes.set(item.id, item);
+    }
+  }
+  return [...episodes.values()].sort((a, b) =>
+    a.date.localeCompare(b.date) ||
+    (Number(b.weight) || 0) - (Number(a.weight) || 0) ||
+    String(a.title).localeCompare(String(b.title))
+  );
+}
+async function calFetchWindow(win, fresh) {
+  const base = { from: win.from, to: win.to };
+  if (fresh) base.fresh = String(Date.now());
+  const queries = [];
+  const movieRegions = calRegion === CAL_REGION_ALL ? CAL_REGIONS.map(region => region[0]) : [calRegion];
+  movieRegions.forEach(code => queries.push(new URLSearchParams({ ...base, region: code, include: 'movies' })));
+  queries.push(new URLSearchParams({ ...base, region: 'US', include: 'episodes', backfill: 'none' }));
+  // The past of the window in short ranges, oldest first. Days the big response
+  // only reaches thinly are fetched here instead, which is what makes a running
+  // month open whole.
+  const today = calISO(new Date());
+  const past = [];
+  for (let date = win.from; date < win.to && date < today; date = calAddDays(date, 1)) past.push(date);
+  for (let at = 0; at < past.length; at += CAL_BACKFILL_CHUNK) {
+    const chunk = past.slice(at, at + CAL_BACKFILL_CHUNK);
+    queries.push(new URLSearchParams({ ...base, region: 'US', include: 'episodes', backfill: chunk[0] + ',' + chunk[chunk.length - 1] }));
+  }
+  const parts = new Array(queries.length);
+  let next = 0;
+  await Promise.all(Array.from({ length: Math.min(CAL_PART_BATCH, queries.length) }, async () => {
+    while (next < queries.length) {
+      const index = next++;
+      try {
+        parts[index] = await calFetchPart(queries[index]);
+      } catch (error) {
+        parts[index] = null;
+      }
+    }
+  }));
+  const warnings = [];
+  const seenWarnings = new Set();
+  let landed = 0;
+  for (const part of parts) {
+    if (!part) continue;
+    landed++;
+    for (const warning of part.warnings || []) {
+      if (!seenWarnings.has(warning)) { seenWarnings.add(warning); warnings.push(warning); }
+    }
+  }
+  if (!landed) throw new Error('Unable to load the calendar');
+  if (landed < parts.length) warnings.push('Calendar · ' + (parts.length - landed) + ' of ' + parts.length + ' data requests failed — showing what arrived');
+  return {
+    range: { from: win.from, to: win.to, region: calRegion },
+    generatedAt: new Date().toISOString(),
+    movies: calMergeMovies(parts),
+    episodes: calMergeEpisodes(parts),
+    warnings,
+  };
+}
 // mode '' — paint the window from cache if it is still fresh, else fetch it.
 //     'refresh' — always fetch (the background poll, the tab coming back).
 //     'fresh' — always fetch, with ?fresh=, which is the only way to bypass the
@@ -2954,16 +3077,8 @@ async function loadCalendar(mode) {
   calState.notice = '';
   updateCalendar();
   try {
-    const query = new URLSearchParams({ from: win.from, to: win.to, region: calRegion });
-    // "All regions" is a union the function does one region at a time, and it
-    // only knows the list the picker offers — so the list travels with the ask.
-    if (calRegion === CAL_REGION_ALL) query.set('regions', CAL_REGIONS.map(region => region[0]).join(','));
-    if (mode === 'fresh') query.set('fresh', String(Date.now()));
-    const response = await fetch(CALENDAR_URL + '?' + query.toString(), { headers: { accept: 'application/json' }, credentials: 'same-origin' });
-    if (!response.ok) throw new Error('Calendar service returned ' + response.status);
-    const payload = await response.json();
     const entry = {
-      data: calIndex(payload, win),
+      data: calIndex(await calFetchWindow(win, mode === 'fresh'), win),
       loadedAt: Date.now(),
       updatedAt: new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })
     };

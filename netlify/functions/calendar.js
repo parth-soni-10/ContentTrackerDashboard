@@ -63,8 +63,17 @@ const MAX_UNION_REGIONS = 30;
 // shape that needs a budget, and past it the regions that did not get their turn
 // are named in a warning instead of the request being killed with nothing to
 // show. Concurrency stays under TMDB's documented ~40 requests/second ceiling.
+//
+// The second budget is a count, and on the free plan it is the binding one: one
+// invocation may only make 50 external subrequests and the limit cannot be
+// raised there. The page fans its union out itself now — one movies request per
+// region plus an episodes request — so a single region's films must stay well
+// under 50 on their own. Past TMDB_CALL_BUDGET no new TMDB work starts and the
+// region lands in the partial/cut report below, instead of the tail of the
+// request arriving as a per-provider "Too many subrequests" warning.
 const REGION_BUDGET_MS = 20000;
 const UNION_BUDGET_MS = 9000;
+const TMDB_CALL_BUDGET = 40;
 // How many regions are worked on at once. The ceiling that matters is the total
 // in-flight upstream requests — this times BATCH, the fan-out inside one region —
 // because TMDB's documented upper limit is "somewhere in the 40 requests per
@@ -258,19 +267,29 @@ function warn(warnings, text) {
 }
 
 // A bounded fetch: every upstream call gets its own deadline so one slow source
-// can't push the whole function past the platform's request timeout.
+// can't push the whole function past the platform's request timeout. A 429 or a
+// 5xx is retried once after a short pause — both sources shed load that way —
+// but a call that failed for lack of subrequests never is: another call only
+// spends more of what ran out.
 async function fetchJSON(url, warnings, label) {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
-  try {
-    const response = await fetch(url, { signal: controller.signal, headers: { accept: 'application/json' } });
-    if (!response.ok) throw new Error('HTTP ' + response.status);
-    return await response.json();
-  } catch (error) {
-    warn(warnings, label + ' · ' + (error && error.message ? error.message : 'request failed'));
-    return null;
-  } finally {
-    clearTimeout(timer);
+  for (let attempt = 0; ; attempt++) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+    try {
+      const response = await fetch(url, { signal: controller.signal, headers: { accept: 'application/json' } });
+      if (!response.ok && attempt === 0 && (response.status === 429 || response.status === 502 || response.status === 503)) {
+        clearTimeout(timer);
+        await new Promise(resolve => setTimeout(resolve, 350));
+        continue;
+      }
+      if (!response.ok) throw new Error('HTTP ' + response.status);
+      return await response.json();
+    } catch (error) {
+      warn(warnings, label + ' · ' + (error && error.message ? error.message : 'request failed'));
+      return null;
+    } finally {
+      clearTimeout(timer);
+    }
   }
 }
 
@@ -344,13 +363,21 @@ function mergeFilm(movies, item, theater, provider) {
 // was gone before its turn, `partial` = it got its cinema releases but not all of
 // its platform sweeps, `noPlatforms` = TMDB lists none of the watchlist's
 // platforms there.
-async function regionMovies(from, to, region, deadline, warnings, movies, report) {
+async function regionMovies(from, to, region, deadline, warnings, movies, report, usage) {
   // Recorded at most once per region, whichever step runs out of time: the
   // warning names a region that did not finish, not every piece it missed.
   const stop = kind => {
     if (!report.cut.includes(region) && !report.partial.includes(region)) report[kind].push(region);
   };
-  if (Date.now() > deadline) { stop('cut'); return; }
+  // Every TMDB call in this invocation is counted here, and past the budget no
+  // new work starts — the guard lives beside the time deadline because on the
+  // free plan the count is what runs out first.
+  const spent = () => (usage ? usage.tmdb >= TMDB_CALL_BUDGET : false);
+  const tmdbGet = (url, label) => {
+    if (usage) usage.tmdb++;
+    return fetchJSON(url, warnings, label);
+  };
+  if (Date.now() > deadline || spent()) { stop('cut'); return; }
   // The regional window. `release_date.gte/lte` — not `primary_release_date.*` —
   // is the pair TMDB documents as the region-aware one: with region and
   // with_release_type the date it returns is the film's own date for those
@@ -367,7 +394,7 @@ async function regionMovies(from, to, region, deadline, warnings, movies, report
     include_adult: 'false',
   };
   const page = (pass, number) =>
-    fetchJSON(tmdbUrl('/discover/movie', { ...windowParams, with_release_type: pass.types, sort_by: pass.sort, page: String(number) }), warnings, 'TMDB films');
+    tmdbGet(tmdbUrl('/discover/movie', { ...windowParams, with_release_type: pass.types, sort_by: pass.sort, page: String(number) }), 'TMDB films');
 
   // The dated walk (see moviePlan): pages come in release-date order, so the
   // window is finished once a page's own last entry is already past `to` — or
@@ -379,6 +406,7 @@ async function regionMovies(from, to, region, deadline, warnings, movies, report
   const dateOrdered = plan.theater.sort === 'release_date.asc';
   for (let start = 1; start <= plan.theater.pages; start += BATCH) {
     if (Date.now() > deadline) { stop(start === 1 ? 'cut' : 'partial'); break; }
+    if (spent()) { stop(start === 1 ? 'cut' : 'partial'); break; }
     const chunk = [];
     for (let number = start; number < Math.min(start + BATCH, plan.theater.pages + 1); number++) chunk.push(number);
     const payloads = await mapLimit(chunk, BATCH, number => page(plan.theater, number));
@@ -402,13 +430,13 @@ async function regionMovies(from, to, region, deadline, warnings, movies, report
   // Out of time, and nothing of it worth asking for: the cinema pages that did
   // land are already in the map, and the sweeps would only make the request
   // overrun worse.
-  if (Date.now() > deadline) { stop('partial'); return; }
+  if (Date.now() > deadline || spent()) { stop('partial'); return; }
 
   // One sweep per platform on the list that this region actually carries. The
   // discover response has no provider field, so the only way to know a film is
   // on a service is to ask that service for its window; the answers are what
   // make this half a list of what is watchable rather than of what is digital.
-  const providerList = await fetchJSON(tmdbUrl('/watch/providers/movie', { watch_region: region }), warnings, 'TMDB providers');
+  const providerList = await tmdbGet(tmdbUrl('/watch/providers/movie', { watch_region: region }), 'TMDB providers');
   const seen = new Set();
   const wanted = ((providerList && providerList.results) || [])
     .map(provider => ({
@@ -428,9 +456,9 @@ async function regionMovies(from, to, region, deadline, warnings, movies, report
     });
   if (!wanted.length) report.noPlatforms.push(region);
 
-  if (Date.now() > deadline) { stop('partial'); return; }
+  if (Date.now() > deadline || spent()) { stop('partial'); return; }
   const sweeps = await mapLimit(wanted, BATCH, provider =>
-    fetchJSON(
+    tmdbGet(
       tmdbUrl('/discover/movie', {
         ...windowParams,
         with_release_type: RELEASE_TYPES,
@@ -440,7 +468,6 @@ async function regionMovies(from, to, region, deadline, warnings, movies, report
         sort_by: 'popularity.desc',
         page: '1',
       }),
-      warnings,
       'TMDB films on ' + provider.label
     ).then(payload => ({ provider: provider.label, payload }))
   );
@@ -461,15 +488,18 @@ async function regionMovies(from, to, region, deadline, warnings, movies, report
 // six countries is one entry carrying six labels (capped, as ever, at three) and
 // one date — so the day a film appears never depends on which region's sweep
 // reached it first, and the list stays a list of films rather than of releases.
-// One budget covers the whole union (see UNION_BUDGET_MS).
-async function loadMovies(from, to, regions, warnings, state) {
+// One budget covers the whole union (see UNION_BUDGET_MS), and the page usually
+// fans the union out itself — one movies request per region — so that each
+// invocation stays inside the platform's subrequest cap; several regions in one
+// call still works, bounded the same way.
+async function loadMovies(from, to, regions, warnings, state, usage) {
   const union = regions.length > 1;
   if (state) state.complete = true;
   const deadline = Date.now() + (union ? UNION_BUDGET_MS : REGION_BUDGET_MS);
   const movies = new Map();
   const report = { cut: [], partial: [], noPlatforms: [] };
   await mapLimit(regions, union ? UNION_BATCH : BATCH, region =>
-    regionMovies(from, to, region, deadline, warnings, movies, report)
+    regionMovies(from, to, region, deadline, warnings, movies, report, usage)
   );
   if (report.noPlatforms.length) {
     warn(warnings, 'TMDB films · none of your platforms (' + PLATFORMS.length + ' of them) are listed for ' + report.noPlatforms.join(', ') + ' — cinema releases only there');
@@ -550,8 +580,15 @@ function episodeRow(entry) {
 // spend), and whatever the budget cannot reach is named in a warning rather than
 // quietly missing.
 const BACKFILL_MAX_DAYS = 31; // a month is the longest past a window can be
-const BACKFILL_BATCH = 4; // days at a time — two requests each
+const BACKFILL_BATCH = 3; // days at a time — two requests each. TVmaze's courtesy
+// limit is ~20 requests per 10 seconds, so a whole month goes out in small
+// waves rather than one burst.
 const BACKFILL_BUDGET_MS = 7000; // for the whole backfill, not per day
+// The longest past range one invocation backfills on an explicit ask: 12 days is
+// 24 subrequests, inside the free plan's 50 with room for the schedule call
+// beside it. Longer pasts are asked for in several such ranges (see backfillParam),
+// because past days never change and each range caches for a day.
+const BACKFILL_CHUNK_DAYS = 12;
 
 // One past day, both halves. null when either half failed: half a day is worse
 // than a day that is visibly missing, and the failure is reported once as a count.
@@ -565,10 +602,7 @@ async function daySchedule(date) {
   return (Array.isArray(network) ? network : []).concat(Array.isArray(web) ? web : []);
 }
 
-async function backfillDays(from, to, today, collect, warnings) {
-  const days = [];
-  for (let date = from; date <= to && date < today && days.length < BACKFILL_MAX_DAYS; date = addDays(date, 1)) days.push(date);
-  if (!days.length) return;
+async function backfillRange(days, collect) {
   const deadline = Date.now() + BACKFILL_BUDGET_MS;
   const state = new Array(days.length).fill('done');
   await mapLimit(days, BACKFILL_BATCH, async (date, index) => {
@@ -583,8 +617,23 @@ async function backfillDays(from, to, today, collect, warnings) {
     }
     entries.forEach(collect);
   });
-  const late = days.filter((date, index) => state[index] === 'late');
-  const failed = state.filter(value => value === 'failed').length;
+  // A day that failed probably met a shed-load 429 rather than an empty
+  // schedule, so the failures get one more pass on their own while the budget
+  // lasts instead of reading as a quiet gap.
+  const retry = days.map((date, index) => ({ date, index })).filter(row => state[row.index] === 'failed');
+  if (retry.length && Date.now() < deadline) {
+    await mapLimit(retry, 2, async ({ date, index }) => {
+      if (Date.now() > deadline) return;
+      const entries = await daySchedule(date);
+      if (!entries) return;
+      entries.forEach(collect);
+      state[index] = 'done';
+    });
+  }
+  return { late: days.filter((date, index) => state[index] === 'late'), failed: state.filter(value => value === 'failed').length };
+}
+
+function warnBackfill(warnings, late, failed) {
   if (late.length) {
     warn(
       warnings,
@@ -597,9 +646,36 @@ async function backfillDays(from, to, today, collect, warnings) {
   }
 }
 
-async function loadEpisodes(from, to, today, warnings) {
-  const schedule = await fetchJSON(TVMAZE_BASE + '/schedule/full', warnings, 'TVmaze schedule');
-  if (!Array.isArray(schedule)) return [];
+async function backfillDays(from, to, today, collect, warnings) {
+  const days = [];
+  for (let date = from; date <= to && date < today && days.length < BACKFILL_MAX_DAYS; date = addDays(date, 1)) days.push(date);
+  if (!days.length) return;
+  const { late, failed } = await backfillRange(days, collect);
+  warnBackfill(warnings, late, failed);
+}
+
+// Which past days this invocation backfills. `backfill=none` fetches the big
+// response only; `backfill=YYYY-MM-DD,YYYY-MM-DD` backfills exactly that range
+// (clamped to the window and to BACKFILL_CHUNK_DAYS) and skips the big response
+// — that is how the page fetches a long past without putting 60 subrequests in
+// one invocation. Anything else is the automatic behaviour: the whole past of
+// the window, up to BACKFILL_MAX_DAYS.
+function backfillParam(params, from, to) {
+  const raw = String(params.backfill || '').trim();
+  if (raw.toLowerCase() === 'none') return { mode: 'none', days: [] };
+  const match = raw.match(/^(\d{4}-\d{2}-\d{2}),(\d{4}-\d{2}-\d{2})$/);
+  if (match) {
+    const days = [];
+    const start = match[1] < from ? from : match[1];
+    const end = match[2] > to ? to : match[2];
+    for (let date = start; date <= end && days.length < BACKFILL_CHUNK_DAYS; date = addDays(date, 1)) days.push(date);
+    if (days.length) return { mode: 'range', days };
+  }
+  return { mode: 'auto', days: [] };
+}
+
+async function loadEpisodes(from, to, today, warnings, backfill) {
+  const mode = (backfill && backfill.mode) || 'auto';
   const seen = new Set();
   const rows = [];
   // One filter and one dedupe for everything, whoever it came from: the day
@@ -616,8 +692,15 @@ async function loadEpisodes(from, to, today, warnings) {
     if (isExcludedTitle(row.title)) return;
     rows.push(row);
   };
-  schedule.forEach(collect);
-  await backfillDays(from, to, today, collect, warnings);
+  if (mode === 'range') {
+    const { late, failed } = await backfillRange(backfill.days, collect);
+    warnBackfill(warnings, late, failed);
+  } else {
+    const schedule = await fetchJSON(TVMAZE_BASE + '/schedule/full', warnings, 'TVmaze schedule');
+    if (!Array.isArray(schedule)) return [];
+    schedule.forEach(collect);
+    if (mode === 'auto') await backfillDays(from, to, today, collect, warnings);
+  }
   // Most notable first within a day, so the calendar's per-day preview can just
   // take the head of the list: a series premiere outranks a weekly episode.
   return rows.sort((a, b) =>
@@ -642,21 +725,43 @@ exports.handler = async event => {
   const regions = requestedRegions(params);
   const region = regions.length > 1 ? ALL_REGIONS : regions[0];
 
+  // What this invocation builds. The page asks for the halves separately — one
+  // movies request per region plus an episodes request — so that no single
+  // invocation carries the union's old ~250 subrequests on the free plan's 50.
+  // `backfill=none` fetches the big schedule response only, and
+  // `backfill=FROM,TO` backfills exactly that past range without it. Absent
+  // both, one request still builds the whole window as before.
+  const include = String(params.include || '').trim().toLowerCase();
+  const wantMovies = include !== 'episodes';
+  const wantEpisodes = include !== 'movies';
+  const backfill = wantEpisodes ? backfillParam(params, from, to) : { mode: 'none', days: [] };
+
   const warnings = [];
   const films = { complete: true };
+  const usage = { tmdb: 0 };
   const tmdbKey = String(process.env.TMDB_API_KEY || '').trim();
   try {
     const [movies, episodes] = await Promise.all([
-      tmdbKey ? loadMovies(from, to, regions, warnings, films) : Promise.resolve([]),
-      loadEpisodes(from, to, today, warnings),
+      wantMovies && tmdbKey ? loadMovies(from, to, regions, warnings, films, usage) : Promise.resolve([]),
+      wantEpisodes ? loadEpisodes(from, to, today, warnings, backfill) : Promise.resolve([]),
     ]);
-    if (!tmdbKey) {
+    if (wantMovies && !tmdbKey) {
       warn(
         warnings,
         'TMDB films · no TMDB_API_KEY where this function ran (' + runContext() + ') — the key is set per environment, so this one needs a value too'
       );
     }
 
+    // A past range never changes — the episodes that aired, aired — so an
+    // explicit backfill caches for a day and the page's later months never
+    // refetch it. Everything else keeps the short cache, and an incomplete
+    // union keeps the minute one so the missing regions are retried, not pinned.
+    const rangeIsPast = backfill.mode === 'range' && backfill.days.length > 0 && backfill.days.every(day => day < today);
+    const cacheable = !wantMovies && rangeIsPast
+      ? 'public, max-age=86400, stale-while-revalidate=86400'
+      : films.complete
+        ? 'public, max-age=900, stale-while-revalidate=3600'
+        : 'public, max-age=60, stale-while-revalidate=3600';
     return json(
       200,
       {
@@ -672,7 +777,7 @@ exports.handler = async event => {
       // A union that ran out of budget is cached for a minute instead, because
       // pinning an incomplete answer for fifteen would make the missing regions
       // look like the calendar's actual contents.
-      { 'Cache-Control': films.complete ? 'public, max-age=900, stale-while-revalidate=3600' : 'public, max-age=60, stale-while-revalidate=3600' }
+      { 'Cache-Control': cacheable }
     );
   } catch (error) {
     console.error('Calendar aggregation failed:', error);
