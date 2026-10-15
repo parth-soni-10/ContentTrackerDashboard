@@ -516,7 +516,7 @@ async function bootData() {
   repaintIfChanged();
 }
 
-async function loadData(skipRerender) {
+async function loadData(skipRerender, bust) {
   try {
     goalReady = loadGoal();
     const controller = new AbortController();
@@ -525,9 +525,14 @@ async function loadData(skipRerender) {
     // function's own timeout error instead of a misleading client-side abort.
     const timeout = setTimeout(() => controller.abort(), 45000);
     // A one-shot ?fresh= marker (set by reloadFresh after an admin write)
-    // bypasses the CDN cache so the reload shows the write immediately.
+    // bypasses the CDN cache so the reload shows the write immediately. Reads
+    // that follow a write in the same visit (quick-add, fill-in-zeros) pass
+    // bust for the same reason: the watchlist endpoint caches for five
+    // minutes, and a plain re-read would show the numbers from before.
     const fresh = new URLSearchParams(location.search).get('fresh');
-    const url = fresh ? WATCHLIST_URL + '?fresh=' + encodeURIComponent(fresh) : WATCHLIST_URL;
+    const url = fresh
+      ? WATCHLIST_URL + '?fresh=' + encodeURIComponent(fresh)
+      : bust ? WATCHLIST_URL + '?fresh=' + Date.now() : WATCHLIST_URL;
     const res = await fetch(url, { redirect: 'follow', mode: 'cors', signal: controller.signal, cache: 'default' });
     clearTimeout(timeout);
     if (fresh) {
@@ -1461,7 +1466,10 @@ async function fillZeroEntries(button) {
   const summary = 'Filled ' + filled + ' of ' + jobs.length + ' attempted' +
     (started.noDate ? ' · ' + started.noDate + ' left out (no usable date)' : '') + '.';
   if (box) box.innerHTML = '<div class="sf-success">' + escapeHTML(summary) + '</div>' + lines.join('');
-  try { await loadData(true); } catch (e) {}
+  // Re-read past the CDN cache: the watchlist endpoint caches for five
+  // minutes, and a plain re-read would keep showing the pre-fill zeros — the
+  // filled rows would come straight back into this list.
+  try { await loadData(true, true); } catch (e) {}
   paintZeroCount(false);
 }
 
@@ -3445,8 +3453,9 @@ async function calQuickAdd(button) {
     calAdded.add(dupNormTitle(item.title));
     // The write is in the store but not in this visit's snapshot, so a search
     // right after the click would miss it. Re-read quietly (no repaint, so the
-    // form and the calendar state are untouched) and then repaint the calendar.
-    try { await loadData(true); } catch (e) {}
+    // form and the calendar state are untouched) past the CDN cache, and then
+    // repaint the calendar.
+    try { await loadData(true, true); } catch (e) {}
     updateCalendar();
   } catch (error) {
     button.disabled = false;
