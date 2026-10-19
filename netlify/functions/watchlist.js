@@ -79,8 +79,33 @@ exports.handler = async event => {
      endpoint can read its error rather than seeing an opaque CORS rejection. */
   if (!db.dbEnabled()) return json(500, { error: 'Data service is not configured' }, cors(origin));
 
-  const isGoalRead = event.queryStringParameters?.goal === '1';
+  const wants = event.queryStringParameters || {};
+  const isGoalRead = wants.goal === '1';
+
+  /* Rows and goal in one read. The dashboard's first load used to ask for these
+     separately — `?goal=1` and then the list — which the 15 Oct 2026 sweep
+     measured as two reads of the same store on one page load: 384 ms for the
+     goal, 396 ms for the rows. The goal is one row of the settings table, so
+     there was never a reason for the second round trip.
+
+     The combined shape is opt-in (`rows=1&goal=1`) rather than the default,
+     because the rows alone are what other callers read: the portfolio renders a
+     slice of this store cross-origin from this endpoint and expects the array,
+     so `?goal=1`, `?sheet=Suggestions` and a bare request keep answering exactly
+     as they did. What changes for the combined read is only that the browser
+     gets one response instead of two.
+
+     The response carries the endpoint's usual five-minute cache. A goal set
+     through /goal is reflected in the page immediately (setSharedGoal returns
+     what it wrote) and across devices within that window, which is the same
+     window the rows already had. */
+  const isCombinedRead = isGoalRead && wants.rows === '1';
+
   try {
+    if (isCombinedRead) {
+      const [rows, goal] = await Promise.all([db.listEntries(), db.readGoal()]);
+      return json(200, { rows, goal }, cors(origin));
+    }
     if (isGoalRead) {
       const goal = await db.readGoal();
       return {

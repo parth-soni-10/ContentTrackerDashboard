@@ -17,6 +17,9 @@ netlify/
 migrations/
 tools/
 brag-output/
+# The handler tests: a local harness, not a published page. Without this rule
+# `node --test`'s sources would be served at /tests/.
+tests/
 
 # Local secrets for `wrangler dev` — the same file .gitignore refuses.
 .dev.vars

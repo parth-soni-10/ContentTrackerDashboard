@@ -35,3 +35,15 @@ compatibility_flags = ["nodejs_compat"]
 binding = "DB"
 database_name = "content-tracker-watchlist"
 database_id = "c5c4e1f6-6f5e-4c0b-955d-b0e2d6b27826"
+
+# The shared feedback namespace. /api/feedback answers 503 until this binding
+# exists, and that is deliberate: a route that silently accepted feedback it
+# could not store would read as a working form and lose every message.
+#
+# Provisioned once, shared by every site in this collection, then bound here:
+#   npx wrangler kv namespace create site-feedback
+# and uncomment the block below with the id it returns. No id is committed
+# before it exists — a placeholder id fails the deploy instead of the binding.
+# [[kv_namespaces]]
+# binding = "SITE_FEEDBACK"
+# id = "<id from wrangler kv namespace create site-feedback>"

@@ -6,8 +6,10 @@
   <meta name="theme-color" content="#f7faf8">
   <meta name="google-site-verification" content="rMJwu8nMy93VQ4XmpsnjZ4ssIM8n52YLyu6-655mA6s" />
   <title>Content Tracker</title>
-  <meta name="description" content="A personal media analytics dashboard: every show and movie I watch, tracked with genre, platform and year-over-year trends.">
+  <meta name="description" content="A personal media analytics dashboard tracking shows and movies, watch time, genres, streaming platforms, and year-over-year trends. Latest recorded snapshot (15 Sep 2026): 363 titles — 277 shows and 86 movies.">
   <link rel="canonical" href="https://contenttrackerdashboard.pages.dev/">
+  <link rel="preconnect" href="https://api.themoviedb.org" crossorigin>
+  <link rel="preconnect" href="https://image.tmdb.org" crossorigin>
 
   <!-- Icons (SVG first, PNG apple-touch fallback for iOS) -->
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
@@ -29,6 +31,10 @@
   <meta name="twitter:image" content="https://contenttrackerdashboard.pages.dev/og-image.png">
 
   <link rel="stylesheet" href="styles.css">
+  <!-- The component layer's styles: class-only, so the CSP's style-src 'self'
+       stays strict. Loaded after styles.css because it upgrades what that file
+       already laid out. -->
+  <link rel="stylesheet" href="app/components.css">
   <!-- Deliberately not deferred: this has to run before the first paint or a
        dark-mode visitor sees a white flash. An external file rather than an
        inline script so the CSP stays script-src 'self'. -->
@@ -86,14 +92,46 @@
   </button>
 </nav>
 
-<main id="app" tabindex="-1"></main>
+<main id="app" tabindex="-1">
+  <article class="static-summary" aria-labelledby="static-summary-title">
+    <header>
+      <p class="static-summary-kicker">Content Tracker · Personal media analytics</p>
+      <h1 id="static-summary-title">My watchlist, made measurable</h1>
+      <p>A personal log of the shows and movies I watch, with year-by-year comparisons, genre and streaming-platform trends, and screen-time totals. The dashboard reads its watchlist directly from its D1 database; adding a title updates the data behind these views.</p>
+    </header>
+    <section aria-labelledby="static-summary-metrics">
+      <h2 id="static-summary-metrics">Latest recorded snapshot</h2>
+      <p class="static-summary-note">Snapshot date: <time datetime="2026-09-15">15 September 2026</time>. These are recorded fallback figures, not a live count; the dashboard refreshes from its database when JavaScript runs.</p>
+      <dl class="static-summary-stats">
+        <div><dt>Titles tracked</dt><dd>363</dd></div>
+        <div><dt>Series and shows</dt><dd>277</dd></div>
+        <div><dt>Movies</dt><dd>86</dd></div>
+      </dl>
+    </section>
+    <section aria-labelledby="static-summary-metrics-covered">
+      <h2 id="static-summary-metrics-covered">What the dashboard measures</h2>
+      <p>Explore all-time and current-year watch history, titles and screen time, comparisons with the same months last year, most-watched platforms and genres, monthly viewing patterns, recent watches, and a searchable table filterable by year, platform, type, genre, and month. A release calendar adds upcoming films and episodes for the streaming platforms in the watchlist.</p>
+    </section>
+    <section aria-labelledby="static-summary-build">
+      <h2 id="static-summary-build">How it is built</h2>
+      <p>The dashboard is a static HTML, CSS, and JavaScript application. Its watchlist is stored in Cloudflare D1 (SQLite) and read by a Cloudflare Pages Function; Chart.js renders the analytics. It is a personal viewing record, not a public streaming catalogue.</p>
+    </section>
+  </article>
+</main>
 
-<!-- Vendored, not from a CDN: a compromised third-party response would run as
-     first-party script on a page whose admin panel can then be driven with the
-     visitor's own session. Same Chart.js 4.4.1 the CDN served — the copy
-     RBI-Weekly-Data-Dashboard already vendors, which carries the MIT banner. -->
-<script src="vendor/chart.umd.js" defer></script>
+<!-- Chart.js is vendored, not from a CDN: a compromised third-party response
+     would run as first-party script on a page whose admin panel can then be
+     driven with the visitor's own session. It is also no longer loaded here —
+     app.js injects it on the two routes that draw a chart (#current, #alltime),
+     so the six pages that show no chart do not download 200 KB they never use.
+     The file itself is unchanged; only the tag that fetched it eagerly is gone.
+     Lazy-loading a same-origin script keeps `script-src 'self'` intact, and
+     sw.js still precaches vendor/chart.umd.js at install, so a chart page
+     opened offline gets the library from the cache the loader asks for. -->
 <script src="app.js" defer></script>
+<!-- Upgrades the rendered controls; runs after app.js because it scans the DOM
+     app.js has drawn (and follows it with a MutationObserver). -->
+<script src="app/components.js" defer></script>
 
 </body>
 </html>
