@@ -2624,9 +2624,16 @@ function renderTimeline() {
 
   document.getElementById('app').innerHTML =
     '<div class="page-header"><div class="ph-left"><h1>Timeline</h1><p>Your watch history, month by month</p></div></div>' +
+    '<div class="hairline-card timeline-reel" aria-label="Recent watches as a film strip">' +
+      '<div class="hairline-figure" id="content-reel"></div>' +
+      '<p class="hairline-read" data-hairline-read aria-live="polite">rest</p>' +
+    '</div>' +
     '<div class="timeline">' + jumpBar + sections + '</div>';
 
   bindTimelineNav();
+  // The figure reads the same rows this render just sorted; the Timeline list
+  // below it remains the complete, keyboard-accessible history.
+  if (window.mountContentReel) window.mountContentReel(rawData);
 }
 
 // Jump bar + month expanders for the timeline.

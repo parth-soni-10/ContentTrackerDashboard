@@ -128,6 +128,12 @@
      Lazy-loading a same-origin script keeps `script-src 'self'` intact, and
      sw.js still precaches vendor/chart.umd.js at install, so a chart page
      opened offline gets the library from the cache the loader asks for. -->
+<!-- Hairline: the engine, its mount adapter and the Timeline's film-strip
+     figure. Same-origin classic scripts, nothing inline: the deployed CSP is
+     script-src 'self', and the engine's inject() is never called. -->
+<script src="hairline/kernel.js" defer></script>
+<script src="hairline/mount.js" defer></script>
+<script src="hairline/reel.js" defer></script>
 <script src="app.js" defer></script>
 <!-- Upgrades the rendered controls; runs after app.js because it scans the DOM
      app.js has drawn (and follows it with a MutationObserver). -->

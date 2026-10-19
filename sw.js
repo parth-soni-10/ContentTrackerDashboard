@@ -16,11 +16,14 @@
  * Reload" and only then posts SKIP_WAITING, so nobody is swapped onto new code
  * mid-read while the admin panel is open.
  */
-var CACHE = 'content-tracker-v1';
+var CACHE = 'content-tracker-v2';
 var SHELL = [
   './',
   './styles.css',
   './app.js',
+  './hairline/kernel.js',
+  './hairline/mount.js',
+  './hairline/reel.js',
   './theme-init.js',
   './vendor/chart.umd.js',
   './favicon.svg'
