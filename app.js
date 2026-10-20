@@ -659,6 +659,8 @@ function navigateTo(page, options) {
   document.getElementById('app').innerHTML = '';
   const pages = { readme: renderReadme, current: renderCurrentYear, alltime: renderAllTime, data: renderData, timeline: renderTimeline, calendar: renderCalendar, suggestions: renderSuggestions, submit: renderSubmit, admin: renderAdmin };
   (pages[page] || renderReadme)();
+  document.getElementById('app').insertAdjacentHTML('beforeend',
+    '<footer class="site-footer">Built by <a href="https://parth-portfolio-wb.pages.dev/" target="_blank" rel="noopener">Parth</a>.</footer>');
   // The page's own name, not the container: a screen reader announces the
   // heading when focus lands on it, which is what a full page load does. The
   // container stays the fallback for a rendered page without one.

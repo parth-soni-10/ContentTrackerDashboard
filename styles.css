@@ -398,6 +398,9 @@ html.dark .rm-badge.genre { background: #24382c; color: var(--text-mid); }
 
 /* ── FOOTER ── */
 .footer { text-align: right; font-size: 13px; color: var(--text-soft); padding: 0 32px 24px; }
+.site-footer { max-width: 1440px; width: 100%; margin: 0 auto; padding: 4px 32px 28px; font-size: 12px; color: var(--text-soft); text-align: right; }
+.site-footer a { color: var(--green); text-decoration: none; }
+.site-footer a:hover { text-decoration: underline; }
 
 /* ── EMPTY STATE ── */
 .empty-state { text-align: center; padding: 48px; color: var(--text-soft); font-size: 14px; font-weight: 400; background: var(--surface); border: 1px solid var(--border); border-radius: var(--r); box-shadow: var(--shadow-sm); }
@@ -902,6 +905,7 @@ html.cal-lock, html.cal-lock body { overflow: hidden; }
 
   /* Footer */
   .footer { padding: 0 16px 20px; font-size: 12px; }
+  .site-footer { padding: 4px 16px 24px; }
 }
 
 /* ── NEW FEATURES ── */
