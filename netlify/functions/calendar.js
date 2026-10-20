@@ -37,10 +37,11 @@
 // different statements: a key scoped to production is absent from a deploy
 // preview, and a local function runner (netlify dev, or a static server with
 // its own function host) has no Netlify environment at all.
-const TMDB_BASE = 'https://api.themoviedb.org/3';
+const { TMDB_BASE: TMDB_API_BASE, pickMatch } = require('./lib/tmdb');
+
+const TMDB_BASE = TMDB_API_BASE;
 const TVMAZE_BASE = 'https://api.tvmaze.com';
 const IMG_BASE = 'https://image.tmdb.org/t/p/w185';
-
 const TIMEOUT_MS = 6500; // per upstream request
 const MAX_DAYS = 400; // a whole year of window, plus slack for a 366-day one
 const DATED_DAYS = 100; // windows up to this long are fetched to the day
@@ -710,6 +711,71 @@ async function loadEpisodes(from, to, today, warnings, backfill) {
   );
 }
 
+// ── A TITLE, LOOKED UP BY NAME ────────────────────────────────────────────
+// The calendar above is built from TMDB's *discover* index: the theatrical
+// list and the per-service lists. A title can exist in TMDB and still be in
+// neither — a streaming release whose provider TMDB has not attached yet (a
+// Netflix film days before its date, say) is in TMDB's search index but in no
+// discover list, so the calendar could not show it at all. This asks for the
+// record directly, which is the only way a title TMDB knows about can be
+// found by name.
+//
+// It answers with the same movie shape the calendar uses, so the page can
+// render it and add it like any other listing. The platform is the watchlist's
+// own spelling of whatever TMDB lists, and 'Other' — the watchlist's word for
+// "no platform recorded" — when TMDB lists none.
+async function searchTitle(title, warnings) {
+  const text = String(title || '').trim();
+  if (!text) return null;
+  const key = String(process.env.TMDB_API_KEY || '').trim();
+  if (!key) {
+    warn(warnings, 'TMDB films · no TMDB_API_KEY where this function ran (' + runContext() + ') — the key is set per environment, so this one needs a value too');
+    return null;
+  }
+  const searchUrl = new URL(TMDB_BASE + '/search/multi');
+  searchUrl.search = new URLSearchParams({ api_key: key, query: text, include_adult: 'false', page: '1' });
+  const search = await fetchJSON(searchUrl.toString(), warnings, 'TMDB search');
+  const candidates = ((search && search.results) || []).filter(item => item.media_type === 'movie' || item.media_type === 'tv');
+  const match = pickMatch(candidates, text, '');
+  if (!match) return null;
+  const isMovie = match.media_type === 'movie';
+  let date = match.release_date || match.first_air_date || '';
+  // A record without a date cannot be placed on a calendar, so it is not a
+  // listing. The details call is the second chance for one.
+  if (!date) {
+    const detailsUrl = new URL(TMDB_BASE + (isMovie ? '/movie/' : '/tv/') + match.id);
+    detailsUrl.search = new URLSearchParams({ api_key: key });
+    const details = await fetchJSON(detailsUrl.toString(), warnings, 'TMDB details');
+    if (details) date = details.release_date || details.first_air_date || '';
+  }
+  if (!date) return null;
+  // The platform, in the watchlist's spelling. The names come from every
+  // region TMDB knows, and only the ones the watchlist logs are kept.
+  const providersUrl = new URL(TMDB_BASE + (isMovie ? '/movie/' : '/tv/') + match.id + '/watch/providers');
+  providersUrl.search = new URLSearchParams({ api_key: key });
+  const prov = await fetchJSON(providersUrl.toString(), warnings, 'TMDB providers');
+  const names = [];
+  Object.values((prov && prov.results) || {}).forEach(byRegion => {
+    ['flatrate', 'free', 'ads'].forEach(group => (byRegion[group] || []).forEach(entry => {
+      const label = platformFor(entry.provider_name);
+      if (label && !names.includes(label)) names.push(label);
+    }));
+  });
+  return {
+    id: match.id,
+    title: match.title || match.name || text,
+    date,
+    poster: match.poster_path ? IMG_BASE + match.poster_path : null,
+    rating: round1(match.vote_average),
+    popularity: Math.round(Number(match.popularity) || 0),
+    providers: names.length ? names.slice(0, 3) : ['Other'],
+    theater: false,
+    // Marked so the page can say where this came from: it is a title asked for
+    // by name, not a release the month's list carried.
+    direct: true,
+  };
+}
+
 exports.handler = async event => {
   if (event.httpMethod !== 'GET') return json(405, { error: 'Method not allowed' });
 
@@ -740,6 +806,20 @@ exports.handler = async event => {
   const films = { complete: true };
   const usage = { tmdb: 0 };
   const tmdbKey = String(process.env.TMDB_API_KEY || '').trim();
+
+  // A title asked for by name: one lookup, no window, no episodes. This is the
+  // way past TMDB's discover index (see searchTitle).
+  if (include === 'search') {
+    const found = await searchTitle(params.title, warnings);
+    return json(200, {
+      range: { from, to, region, regions: regions.length > 1 ? regions : undefined },
+      generatedAt: new Date().toISOString(),
+      movies: found ? [found] : [],
+      episodes: [],
+      warnings,
+    }, { 'Cache-Control': 'public, max-age=3600, stale-while-revalidate=86400' });
+  }
+
   try {
     const [movies, episodes] = await Promise.all([
       wantMovies && tmdbKey ? loadMovies(from, to, regions, warnings, films, usage) : Promise.resolve([]),

@@ -1,3 +1,5 @@
+const { pickMatch } = require('./lib/tmdb');
+
 const json = (statusCode, body) => ({
   statusCode,
   headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' },
@@ -6,21 +8,11 @@ const json = (statusCode, body) => ({
 
 const clean = (value, max) => String(value || '').trim().slice(0, max);
 
-// Picking the top popularity hit is how "You" matched "Because I Want You":
-// an exact name always outranks a popular near-miss, and a known media type
-// (the page knows Movie vs Series for every lookup) outranks a popular wrong
-// kind. Only when neither says anything does popularity decide.
-const normTitle = value => String(value || '').toLowerCase().replace(/[^a-z0-9]/g, '');
-function pickMatch(candidates, title, type) {
-  const want = normTitle(title);
-  const media = /movie/i.test(type || '') ? 'movie' : /tv|series|show/i.test(type || '') ? 'tv' : '';
-  const ranked = list => list.slice().sort((a, b) => (b.popularity || 0) - (a.popularity || 0));
-  const pool = media ? candidates.filter(item => item.media_type === media) : candidates;
-  const exact = (pool.length ? pool : candidates).filter(item => normTitle(item.title || item.name) === want && want);
-  if (exact.length) return ranked(exact)[0];
-  if (pool.length) return ranked(pool)[0];
-  return ranked(candidates)[0] || null;
-}
+// Which of TMDB's results is the title the caller meant? The rule lives in
+// lib/tmdb.js because the calendar's own searches ask it too: an exact name
+// outranks a popular near-miss ("You" must not match "Because I Want You"),
+// and a known kind outranks a popular wrong one. Only when neither says
+// anything does popularity decide.
 
 async function omdbLookup(title, type) {
   if (!process.env.OMDB_API_KEY) return null;

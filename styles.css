@@ -658,6 +658,18 @@ html.dark .cal-warn { border-color: #4a3a24; }
 .cal-add.done { background: var(--green); border-color: var(--green); color: #fff; cursor: default; }
 .cal-add:disabled { cursor: default; }
 
+/* A title found by name rather than by the month's list: the month's own list
+   comes from TMDB's discover index, and a title can be in TMDB without being
+   in it. Shown beside the grid so it can be read and added. */
+.cal-direct { margin: 0 0 14px; padding: 12px 14px; background: var(--surface); border: 1px solid var(--gold); border-radius: var(--r); box-shadow: var(--shadow-sm); }
+.cal-direct-label { font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: var(--gold); margin-bottom: 8px; }
+.cal-direct-row { display: flex; align-items: center; gap: 12px; }
+.cal-direct-main { flex: 1; min-width: 0; }
+.cal-direct-title { font-size: 14.5px; font-weight: 600; color: var(--text); }
+.cal-direct-meta { font-size: 12px; color: var(--text-soft); margin-top: 2px; }
+.cal-direct .cal-thumb { width: 34px; height: 50px; }
+.cal-direct .cal-add { align-self: center; margin-top: 0; width: 26px; height: 26px; }
+
 /* The agenda is the ≤600px view (see the mobile block) — the DOM is always
    there, but only phones show it. */
 .cal-agenda { display: none; }

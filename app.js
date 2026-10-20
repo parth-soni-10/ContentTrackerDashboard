@@ -2793,7 +2793,8 @@ let calState = {
   dayAll: false,      // the drawer is showing the day's full list ignored by filters
   opener: null,       // element to hand focus back to when the drawer closes
   platformsKey: '',
-  platformOptions: []
+  platformOptions: [],
+  direct: null        // a title found by name, outside the window's own list
 };
 let calTracked = new Set();
 let calTimers = [];
@@ -3349,6 +3350,71 @@ async function calFetchWindow(win, fresh) {
 //     'refresh' — always fetch (the background poll, the tab coming back).
 //     'fresh' — always fetch, with ?fresh=, which is the only way to bypass the
 //               edge cache's own 15-minute copy of the response.
+// ── A TITLE FOUND BY NAME ─────────────────────────────────────────────────
+// The calendar's own list comes from TMDB's discover index, and a title can be
+// in TMDB without being in any discover list (a streaming release whose
+// provider TMDB has not attached yet). So when the search box finds nothing
+// local, the title is asked for by name directly — one lookup — and shown
+// beside the month, with the same Add button the rest of the Admin calendar
+// carries. Without this, a title that exists can simply never be found.
+let calDirectTimer = null;
+function calDirectSearch(query) {
+  const text = String(query || '').trim();
+  clearTimeout(calDirectTimer);
+  if (text.length < 2) {
+    if (calState.direct) { calState.direct = null; updateCalendar(); }
+    return;
+  }
+  calDirectTimer = setTimeout(async () => {
+    // A local match means the month already has it: no second lookup, and no
+    // strip repeating what the grid says.
+    const local = calState.data && Object.keys(calState.data.days).some(date =>
+      calState.data.days[date].some(item => String(item.title || '').toLowerCase().includes(text.toLowerCase())));
+    if (local) {
+      if (calState.direct) { calState.direct = null; updateCalendar(); }
+      return;
+    }
+    try {
+      const query2 = new URLSearchParams({ title: text, include: 'search', region: calRegion });
+      const response = await fetch(CALENDAR_URL + '?' + query2.toString(), { headers: { accept: 'application/json' }, credentials: 'same-origin' });
+      const payload = response.ok ? await response.json() : null;
+      const found = payload && payload.movies && payload.movies[0];
+      // The same item shape the month is built from, so it renders and adds
+      // like any other listing.
+      const item = found ? {
+        media: 'movie', id: 'd' + found.id, title: found.title, episode: '',
+        date: found.date, time: '', season: 0, number: 0,
+        platform: (found.providers || [])[0] || '', platforms: found.providers || [], streaming: true,
+        kind: 'Film', poster: found.poster || null, rating: Number(found.rating) || 0,
+        weight: Math.max(0, Math.min(100, Number(found.popularity) || 0)),
+        genres: [], premiere: '', url: found.id ? 'https://www.themoviedb.org/movie/' + found.id : '',
+        imdb: '', direct: true
+      } : null;
+      // A stale answer must not replace a newer one: the search box may have
+      // moved on while this was in flight.
+      if (String(calFilters.search || '').trim().toLowerCase() !== text.toLowerCase()) return;
+      calState.direct = item;
+      updateCalendar();
+    } catch (error) {
+      calState.direct = null;
+    }
+  }, 450);
+}
+function calDirectHTML() {
+  const item = calState.direct;
+  if (!item) return '';
+  const day = new Date(item.date + 'T00:00:00').toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'long', year: 'numeric' });
+  return '<div class="cal-direct">' +
+    '<div class="cal-direct-label">Found by name &mdash; not in this month&rsquo;s list</div>' +
+    '<div class="cal-direct-row">' + calThumbHTML(item) +
+      '<div class="cal-direct-main"><div class="cal-direct-title">' + escapeHTML(item.title) + '</div>' +
+        '<div class="cal-direct-meta">' + escapeHTML(day) + (item.platform ? ' &middot; ' + escapeHTML(item.platform) : '') + '</div>' +
+      '</div>' +
+      calAddHTML(item, item.date) +
+    '</div>' +
+  '</div>';
+}
+
 async function loadCalendar(mode) {
   const win = calScopeWindow();
   const key = calWindowKey(win);
@@ -3380,6 +3446,9 @@ async function loadCalendar(mode) {
     calState.cache.set(key, entry);
     calPruneCache(calISO(new Date()));
     calAdopt(entry, key);
+    // A remembered search runs the same way a typed one does: the month may
+    // not hold what the search is for.
+    if (calFilters.search) calDirectSearch(calFilters.search);
   } catch (error) {
     // A refresh that fails keeps the window that is already on screen and says
     // so; only a failure with nothing to show is an error state.
@@ -3478,6 +3547,8 @@ function calRowAddHTML(item, date) {
 // The item behind an Add button, looked up by the day it was painted on: ids
 // are unique within a day on both halves (films merge by id, episodes dedupe).
 function calFindItem(id, date) {
+  const direct = calState.direct;
+  if (direct && direct.id === id) return direct;
   const day = calState.data && calState.data.days[date];
   if (!day) return null;
   return day.find(entry => entry.id === id) || null;
@@ -3884,11 +3955,11 @@ function updateCalendar() {
     : '';
   const notice = calState.notice ? '<div class="cal-notice">' + escapeHTML(calState.notice) + '</div>' : '';
   if (calState.scope === 'next') {
-    main.innerHTML = warnings + notice + calYearHTML(days);
+    main.innerHTML = warnings + notice + calDirectHTML() + calYearHTML(days);
   } else {
     const monthDays = Object.keys(days).filter(date => date >= month.first && date <= month.last);
     const none = monthDays.length ? '' : '<div class="cal-none">Nothing matches these filters in ' + escapeHTML(month.label) + ' — try “Everything” or a different platform.</div>';
-    main.innerHTML = warnings + notice + calGridHTML(month, days, today) + calAgendaHTML(month, days) + none;
+    main.innerHTML = warnings + notice + calDirectHTML() + calGridHTML(month, days, today) + calAgendaHTML(month, days) + none;
   }
   calPosters(main);
   paintCalDrawer();
@@ -4684,6 +4755,10 @@ function applyDelegated(el, event, attr) {
     // The calendar keeps its filters across visits, so a change has to reach the
     // device it was made on.
     if (objName === 'calFilters') calSaveFilters();
+    // A search that finds nothing in the month is looked up by name instead
+    // (see calDirectSearch) — the month is built from TMDB's discover index,
+    // and a title can exist without being in it.
+    if (objName === 'calFilters' && key === 'search') calDirectSearch(el.value);
     return;
   }
   if (attr === 'data-page-step') {
