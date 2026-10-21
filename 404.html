@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#f7faf8">
+  <meta name="robots" content="noindex">
+  <title>Page not found — Content Tracker</title>
+  <meta name="description" content="That address does not exist on Content Tracker. The dashboard, About, Contact and Privacy pages are linked here.">
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+  <link rel="apple-touch-icon" href="/icon-180.png">
+  <!-- No script: the error page has nothing to run. The sheet is same-origin
+       because the deployed CSP is style-src 'self' with no 'unsafe-inline'. -->
+  <link rel="stylesheet" href="/styles.css">
+  <link rel="stylesheet" href="/doc-page.css">
+</head>
+<body>
+<a class="skip-link" href="#doc">Skip to content</a>
+
+<nav>
+  <a class="nav-brand" href="/" aria-label="Content Tracker home"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="20" height="15" x="2" y="7" rx="2" ry="2"/><polyline points="17 2 12 7 7 2"/></svg> Content Tracker</a>
+  <div class="nav-tabs">
+    <a class="nav-tab" href="/">Dashboard</a>
+    <a class="nav-tab" href="/about">About</a>
+    <a class="nav-tab" href="/contact">Contact</a>
+    <a class="nav-tab" href="/privacy">Privacy</a>
+  </div>
+</nav>
+
+<main id="doc" class="doc-error">
+  <div class="doc-card">
+    <div class="doc-code" aria-hidden="true">404</div>
+    <h1>Page not found</h1>
+    <p>That address does not exist on Content Tracker. It may be mistyped, or the page may have moved when the site was reorganised.</p>
+    <p>Nothing has been lost: this is a missing page, not a page that failed to load. The watchlist itself is unchanged, and the dashboard is one click away below.</p>
+    <div class="doc-actions">
+      <a href="/">Back to the dashboard</a>
+      <a href="/about">About the site</a>
+      <a href="/contact">Report a broken link</a>
+    </div>
+    <p class="doc-meta">Agents: request any page with <code>Accept: text/markdown</code> for a Markdown body. The machine index is at <a href="/llms.txt">/llms.txt</a>, and every page is listed in the <a href="/sitemap.xml">sitemap</a>.</p>
+  </div>
+</main>
+</body>
+</html>

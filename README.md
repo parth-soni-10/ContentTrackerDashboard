@@ -21,6 +21,10 @@ The watchlist lives in **D1**, Cloudflare's SQLite — one row per title with it
 
 The release calendar's data comes from three public sources — **TMDB** for films, **TVmaze** for episode drops and a per-service **release feed** for what lands on a streaming service. Each is best-effort: if one is slow or down, the rest of the page still renders and says what is missing.
 
+## For agents and crawlers
+
+The pages are readable without JavaScript, and every page also has a Markdown representation: send `Accept: text/markdown` to the same URL (or read `/index.md`, `/about.md`, `/contact.md`, `/privacy.md`). The public watchlist is a JSON read at `/.netlify/functions/watchlist`. [`llms.txt`](https://contenttrackerdashboard.pages.dev/llms.txt) explains when the site is worth using and how to call it; `/about`, `/contact` and `/privacy` cover who runs it and what it stores.
+
 ## Built with
 
 Plain **HTML / CSS / JavaScript**, **Chart.js** for the charts, and **Cloudflare Pages** with a **D1** database behind its functions.

@@ -1,5 +1,7 @@
-# The whole site is one page and everything published is meant to be
-# crawled; the only job here is to point at the sitemap.
+# The whole site is one page plus three written pages, and everything published
+# is meant to be crawled; the job here is to point at the sitemap and at the
+# agent guide. /llms.txt explains when the site is worth using and which public
+# JSON endpoints an agent may read.
 User-agent: *
 Allow: /
 

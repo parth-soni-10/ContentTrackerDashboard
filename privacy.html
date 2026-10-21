@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#f7faf8">
+  <title>Privacy — what Content Tracker stores and what it does not</title>
+  <meta name="description" content="Content Tracker privacy: the local storage keys it uses, the watchlist and suggestion data it stores in D1, the admin cookie, rate limiting, and the third parties that supply media metadata.">
+  <link rel="canonical" href="https://contenttrackerdashboard.pages.dev/privacy">
+  <link rel="alternate" type="text/markdown" href="/privacy.md" title="Content Tracker privacy as Markdown">
+  <link rel="describedby" href="/llms.txt" type="text/plain" title="How agents should use this site">
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+  <link rel="apple-touch-icon" href="/icon-180.png">
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "WebPage",
+        "@id": "https://contenttrackerdashboard.pages.dev/privacy#page",
+        "url": "https://contenttrackerdashboard.pages.dev/privacy",
+        "name": "Privacy — Content Tracker",
+        "description": "What Content Tracker stores in the browser and on the server, and what it does not collect.",
+        "isPartOf": { "@id": "https://contenttrackerdashboard.pages.dev/#website" },
+        "about": { "@id": "https://contenttrackerdashboard.pages.dev/#organization" },
+        "inLanguage": "en"
+      },
+      {
+        "@type": "Organization",
+        "@id": "https://contenttrackerdashboard.pages.dev/#organization",
+        "name": "Content Tracker",
+        "url": "https://contenttrackerdashboard.pages.dev/",
+        "email": "soni.soni.parth@gmail.com",
+        "contactPoint": {
+          "@type": "ContactPoint",
+          "contactType": "technical support",
+          "email": "soni.soni.parth@gmail.com",
+          "url": "https://contenttrackerdashboard.pages.dev/contact"
+        },
+        "address": {
+          "@type": "PostalAddress",
+          "addressLocality": "Dublin",
+          "addressCountry": "IE"
+        }
+      }
+    ]
+  }
+  </script>
+  <link rel="stylesheet" href="/styles.css">
+  <link rel="stylesheet" href="/doc-page.css">
+  <script src="/theme-init.js"></script>
+</head>
+<body>
+<a class="skip-link" href="#doc">Skip to content</a>
+
+<nav>
+  <a class="nav-brand" href="/" aria-label="Content Tracker home"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="20" height="15" x="2" y="7" rx="2" ry="2"/><polyline points="17 2 12 7 7 2"/></svg> Content Tracker</a>
+  <div class="nav-tabs">
+    <a class="nav-tab" href="/">Dashboard</a>
+    <a class="nav-tab" href="/about">About</a>
+    <a class="nav-tab" href="/contact">Contact</a>
+    <a class="nav-tab active" href="/privacy" aria-current="page">Privacy</a>
+  </div>
+</nav>
+
+<header class="page-header">
+  <div class="ph-left">
+    <h1>Privacy</h1>
+    <p>What this site stores, where it is kept, and how to remove it</p>
+  </div>
+</header>
+
+<main id="doc" class="doc-main">
+  <div class="doc-card">
+    <h2>The short version</h2>
+    <p class="doc-lead">Content Tracker is a personal dashboard. It has no visitor accounts, no advertising, no analytics and no third-party tracking scripts. It stores the watchlist itself, the suggestions visitors choose to submit, a small amount of state in your own browser, and standard request data at the hosting layer.</p>
+  </div>
+
+  <div class="doc-card">
+    <h2>What is stored in your browser</h2>
+    <p>The application keeps a little state on your own device so a reload does not lose your place. None of it is sent anywhere as analytics.</p>
+    <ul>
+      <li><strong>localStorage:</strong> <code>ct-theme</code> (light or dark preference), <code>ct-media-cache</code> (title metadata and poster lookups, so the same title is not looked up twice), <code>ct-imdb</code> (resolved IMDb ids), <code>ct-cal-filters</code> and <code>ct-cal-region</code> (the release calendar's last filters), and <code>ct-goal</code> / <code>ct-goal-year</code> (a device-local fallback for the yearly watch goal).</li>
+      <li><strong>sessionStorage:</strong> <code>ct_admin_session</code> marks an unlocked admin tab. It is cleared when the tab closes.</li>
+      <li><strong>Cookie:</strong> <code>ct_admin</code> is set only after a successful admin sign-in. It is HttpOnly, Secure, SameSite=Strict and expires when the browser session ends. Visitors who never sign in never receive it.</li>
+    </ul>
+    <p>Clearing site data in your browser removes all of it.</p>
+  </div>
+
+  <div class="doc-card">
+    <h2>What the server stores</h2>
+    <ul>
+      <li><strong>The watchlist:</strong> the titles, seasons, genres, platforms, episode counts, screentime and watch dates shown on the dashboard, held in a Cloudflare D1 database.</li>
+      <li><strong>Suggestions:</strong> if you use the Submit page, the title, type, genre, platform, note and date you enter are stored in the same database and shown publicly on the Submit page. Do not put personal information in a suggestion note; it is visible to everyone.</li>
+      <li><strong>Admin writes:</strong> changes made from the admin panel are stored in the watchlist with the time they were made.</li>
+      <li><strong>Server logs:</strong> Cloudflare, as the host, processes standard request data — IP address, user agent, requested URL and response status — to deliver the site and protect it. The application does not write those logs to its database.</li>
+    </ul>
+  </div>
+
+  <div class="doc-card">
+    <h2>Rate limiting</h2>
+    <p>Submissions are rate-limited so the suggestion list cannot be flooded. The limiter counts recent writes per connection in memory and does not store IP addresses in the database or associate them with an entry. A successful submission records only the entry fields listed above.</p>
+  </div>
+
+  <div class="doc-card">
+    <h2>Third parties</h2>
+    <ul>
+      <li><strong>Cloudflare</strong> hosts the site and the database.</li>
+      <li><strong>TMDB</strong> supplies film and series metadata and hosts poster images; <strong>TVmaze</strong> supplies episode data and hosts poster images; <strong>Watchmode</strong> supplies streaming-release data; <strong>OMDb</strong> supplies ratings. Those lookups are made by the site's server functions, except poster images, which your browser loads from <code>image.tmdb.org</code> or <code>static.tvmaze.com</code> and which therefore see your IP address as any image request does.</li>
+      <li><strong>IMDb</strong> is a link target, not an embedded service. Following a title link takes you to IMDb under IMDb's own privacy policy.</li>
+    </ul>
+    <p>There are no advertising networks, no social widgets, no fonts loaded from a third-party CDN and no analytics pixels on any page.</p>
+  </div>
+
+  <div class="doc-card">
+    <h2>Your choices</h2>
+    <ul>
+      <li>Clear the site's storage in your browser to remove the local state listed above.</li>
+      <li>Email <a href="mailto:soni.soni.parth@gmail.com">soni.soni.parth@gmail.com</a> to ask for a suggestion you submitted to be removed, or to correct a watchlist entry. Include the title and the date so the row can be found.</li>
+      <li>Because there are no accounts, there is no profile to delete: nothing is tied to your identity unless you chose to put it in a suggestion note.</li>
+    </ul>
+    <p>The site is a personal media log rather than a service aimed at children, and it collects no information from visitors beyond what is described here. If this policy changes, the date below changes with it; there is no mailing list, so this page is the notice.</p>
+    <p class="doc-meta">Last updated: 21 October 2026. Questions: <a href="/contact">contact page</a>.</p>
+  </div>
+</main>
+
+<footer class="doc-foot">
+  <a href="/">Dashboard</a><span class="doc-foot-sep">·</span>
+  <a href="/about">About</a><span class="doc-foot-sep">·</span>
+  <a href="/contact">Contact</a><span class="doc-foot-sep">·</span>
+  <a href="/privacy">Privacy</a><span class="doc-foot-sep">·</span>
+  <a href="/privacy.md">Markdown</a><span class="doc-foot-sep">·</span>
+  <a href="/llms.txt">llms.txt</a><span class="doc-foot-sep">·</span>
+  <a href="/sitemap.xml">Sitemap</a>
+</footer>
+</body>
+</html>

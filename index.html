@@ -1,13 +1,22 @@
 <!DOCTYPE html>
-<html lang="en">
+<!-- `no-js` is removed by theme-init.js before the first paint. With it in place
+     the loading overlay is hidden and the static introduction inside #app is
+     the page a visitor without JavaScript gets: real headings and real text,
+     rather than "Loading your watchlist…" forever. -->
+<html lang="en" class="no-js">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="theme-color" content="#f7faf8">
   <meta name="google-site-verification" content="rMJwu8nMy93VQ4XmpsnjZ4ssIM8n52YLyu6-655mA6s" />
-  <title>Content Tracker</title>
-  <meta name="description" content="A personal media analytics dashboard: every show and movie I watch, tracked with genre, platform and year-over-year trends.">
+  <title>Content Tracker — media watchlist &amp; analytics dashboard</title>
+  <meta name="description" content="Content Tracker is a personal media watchlist and analytics dashboard: films and series tracked by genre, platform, screentime and watch date, with year-over-year viewing trends.">
   <link rel="canonical" href="https://contenttrackerdashboard.pages.dev/">
+  <!-- The same page as text, at a stable URL and through Accept negotiation.
+       Both relations are from the llms.txt proposal: `alternate` names the
+       Markdown representation, `describedby` names the map of the whole site. -->
+  <link rel="alternate" type="text/markdown" href="/index.md" title="Content Tracker as Markdown">
+  <link rel="describedby" href="/llms.txt" type="text/plain" title="How agents should use this site">
 
   <!-- Icons (SVG first, PNG apple-touch fallback for iOS) -->
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
@@ -16,20 +25,107 @@
   <!-- Share preview (Open Graph / Twitter) -->
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="Content Tracker">
-  <meta property="og:title" content="Content Tracking Dashboard">
-  <meta property="og:description" content="Every show and movie I watch, tracked in one place — genres, platforms, and how my viewing changes year over year.">
+  <meta property="og:title" content="Content Tracker — media watchlist &amp; analytics dashboard">
+  <meta property="og:description" content="Every film and series I watch, tracked with genre, platform and screentime — and the viewing trends that come out of it.">
   <meta property="og:url" content="https://contenttrackerdashboard.pages.dev/">
   <meta property="og:image" content="https://contenttrackerdashboard.pages.dev/og-image.png">
   <meta property="og:image:width" content="1200">
   <meta property="og:image:height" content="630">
   <meta property="og:image:alt" content="Content Tracking Dashboard — a personal media tracker">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="Content Tracking Dashboard">
-  <meta name="twitter:description" content="Every show and movie I watch, tracked in one place — genres, platforms, and how my viewing changes year over year.">
+  <meta name="twitter:title" content="Content Tracker — media watchlist &amp; analytics dashboard">
+  <meta name="twitter:description" content="Every film and series I watch, tracked with genre, platform and screentime — and the viewing trends that come out of it.">
   <meta name="twitter:image" content="https://contenttrackerdashboard.pages.dev/og-image.png">
+
+  <!-- Who the site is, in the form a crawler can read: the project, the person
+       behind it, the website and the application. Organization carries a real
+       contact point and a locality rather than a street address, because this
+       is a personal project and no more precise address is published. -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "Organization",
+        "@id": "https://contenttrackerdashboard.pages.dev/#organization",
+        "name": "Content Tracker",
+        "alternateName": "Content Tracking Dashboard",
+        "url": "https://contenttrackerdashboard.pages.dev/",
+        "description": "A personal media watchlist and analytics dashboard tracking films and series by genre, platform, screentime and watch date.",
+        "email": "soni.soni.parth@gmail.com",
+        "logo": "https://contenttrackerdashboard.pages.dev/icon-180.png",
+        "founder": { "@id": "https://contenttrackerdashboard.pages.dev/#person" },
+        "contactPoint": {
+          "@type": "ContactPoint",
+          "contactType": "technical support",
+          "email": "soni.soni.parth@gmail.com",
+          "url": "https://contenttrackerdashboard.pages.dev/contact",
+          "availableLanguage": "English"
+        },
+        "address": {
+          "@type": "PostalAddress",
+          "addressLocality": "Dublin",
+          "addressCountry": "IE"
+        },
+        "sameAs": [
+          "https://github.com/parth-soni-10/ContentTrackerDashboard"
+        ]
+      },
+      {
+        "@type": "Person",
+        "@id": "https://contenttrackerdashboard.pages.dev/#person",
+        "name": "Parth Shirish Soni",
+        "jobTitle": "Data Analyst",
+        "email": "soni.soni.parth@gmail.com",
+        "url": "https://parth-portfolio-wb.pages.dev/",
+        "address": {
+          "@type": "PostalAddress",
+          "addressLocality": "Dublin",
+          "addressCountry": "IE"
+        },
+        "sameAs": [
+          "https://github.com/parth-soni-10",
+          "https://www.linkedin.com/in/parth-soni-1a6025191/",
+          "https://parth-portfolio-wb.pages.dev/"
+        ]
+      },
+      {
+        "@type": "WebSite",
+        "@id": "https://contenttrackerdashboard.pages.dev/#website",
+        "url": "https://contenttrackerdashboard.pages.dev/",
+        "name": "Content Tracker",
+        "description": "A personal media watchlist and analytics dashboard.",
+        "inLanguage": "en",
+        "publisher": { "@id": "https://contenttrackerdashboard.pages.dev/#organization" }
+      },
+      {
+        "@type": "SoftwareApplication",
+        "@id": "https://contenttrackerdashboard.pages.dev/#application",
+        "name": "Content Tracker",
+        "alternateName": "Content Tracking Dashboard",
+        "applicationCategory": "DataVisualizationApplication",
+        "operatingSystem": "Web",
+        "url": "https://contenttrackerdashboard.pages.dev/",
+        "description": "A free web dashboard that turns a personal watch history into titles, screentime, platform and genre statistics, filters, a release calendar and year-over-year comparisons.",
+        "image": "https://contenttrackerdashboard.pages.dev/og-image.png",
+        "author": { "@id": "https://contenttrackerdashboard.pages.dev/#person" },
+        "publisher": { "@id": "https://contenttrackerdashboard.pages.dev/#organization" },
+        "isPartOf": { "@id": "https://contenttrackerdashboard.pages.dev/#website" },
+        "offers": { "@type": "Offer", "price": "0", "priceCurrency": "EUR" },
+        "featureList": [
+          "Watchlist with genre, platform, episode count, screentime and watch date",
+          "Year-over-year viewing comparisons over the same months",
+          "Release calendar for films and TV episodes on tracked streaming platforms",
+          "Searchable, sortable watchlist table with CSV export"
+        ]
+      }
+    ]
+  }
+  </script>
 
   <link rel="stylesheet" href="glide-select.css">
   <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="doc-page.css">
   <!-- Deliberately not deferred: this has to run before the first paint or a
        dark-mode visitor sees a white flash. An external file rather than an
        inline script so the CSP stays script-src 'self'. -->
@@ -87,7 +183,60 @@
   </button>
 </nav>
 
-<main id="app" tabindex="-1"></main>
+<main id="app" tabindex="-1">
+  <!-- The static representation of the Readme page. app.js replaces this
+       section when it paints the live dashboard, so it is what a crawler, an
+       agent, or a visitor without JavaScript reads. It reuses the readme's own
+       classes, so with JavaScript the two renders look alike; with none, this
+       is the page. Keep the headings in order and the copy factual — the live
+       figures (counts, hours) are deliberately not here, because they change. -->
+  <div class="readme-hero">
+    <div class="readme-top">
+      <div>
+        <h1><em>Content Tracker</em>Personal media watchlist &amp; analytics dashboard</h1>
+        <p class="readme-desc">Content Tracker is a personal media watchlist and analytics dashboard. Every film and series is logged once — with its genre, streaming platform, episode count, screentime and watch date — and the dashboard turns that history into the numbers behind the viewing.</p>
+      </div>
+    </div>
+  </div>
+  <div class="readme-main static-doc">
+    <div>
+      <h2>Every film and series I watch, measured</h2>
+      <p>The watchlist holds roughly 380 entries, one per film or per season of television. Nothing is estimated: an entry exists because it was watched, and its screentime is the minutes spent on it. From those rows the site answers the questions a list cannot.</p>
+
+      <h3>What each entry records</h3>
+      <p>A title, its season, whether it is a film or a series, its genre, the platform it was watched on, the episode count, the screentime in minutes and the watch date. Future-dated rows are planned watches; they appear in the Data page and the calendar but are kept out of the &ldquo;recently watched&rdquo; figures.</p>
+
+      <h3>Questions the dashboard answers</h3>
+      <ul>
+        <li>How many titles and hours were watched this year, and on which platforms?</li>
+        <li>Which genres dominate the watchlist, and which months were the heaviest?</li>
+        <li>How does this year compare with the <em>same months</em> of the previous year?</li>
+        <li>Which films and episodes are releasing on the streaming services the watchlist follows?</li>
+        <li>Which unwatched title should come next, picked at random from the list?</li>
+      </ul>
+
+      <h2>The pages</h2>
+      <p>Current Year and All Time carry the charts; Data is the searchable, sortable table with CSV export; Timeline is the history month by month; Calendar is the release calendar; Random Pick chooses from the watchlist; Submit is the suggestion box. The navigation above is the same list, and any page can be linked directly by its hash.</p>
+
+      <h2>Reading this site as an agent</h2>
+      <p>Every page has a Markdown representation. Send <code>Accept: text/markdown</code> to this URL and the response is Markdown with <code>Content-Type: text/markdown</code> and <code>Vary: Accept</code>; the static copies are at <a href="/index.md">/index.md</a>, <a href="/about.md">/about.md</a>, <a href="/contact.md">/contact.md</a> and <a href="/privacy.md">/privacy.md</a>. <a href="/llms.txt">llms.txt</a> explains when this site is worth using and how to read the public watchlist JSON; the <a href="/sitemap.xml">sitemap</a> lists every page; and the JSON-LD in this page's head describes the site, its author and the application.</p>
+
+      <h2>About, contact and privacy</h2>
+      <p>Content Tracker is built and maintained by <a href="/about">Parth Shirish Soni</a>, a data analyst in Dublin. The <a href="/contact">contact page</a> explains how to report a correction or an accessibility problem, and the <a href="/privacy">privacy page</a> lists exactly what the site stores — including the local storage keys it uses and the third parties it fetches media metadata from.</p>
+    </div>
+    <aside>
+      <div class="fact-card">
+        <div class="fact-title">At a glance</div>
+        <div class="fact-row"><div class="fact-l">Owner</div><div class="fact-r">Parth Shirish Soni</div></div>
+        <div class="fact-row"><div class="fact-l">Built with</div><div class="fact-r">Cloudflare Pages + D1</div></div>
+        <div class="fact-row"><div class="fact-l">Data</div><div class="fact-r">~380 watch entries</div></div>
+        <div class="fact-row"><div class="fact-l">Cost</div><div class="fact-r">Free, no accounts</div></div>
+        <div class="fact-row"><div class="fact-l">Markdown</div><div class="fact-r"><a href="/index.md">/index.md</a></div></div>
+        <div class="fact-row"><div class="fact-l">Agent guide</div><div class="fact-r"><a href="/llms.txt">/llms.txt</a></div></div>
+      </div>
+    </aside>
+  </div>
+</main>
 
 <!-- Vendored, not from a CDN: a compromised third-party response would run as
      first-party script on a page whose admin panel can then be driven with the

@@ -1,0 +1,71 @@
+/* The static shell and the written pages.
+ *
+ * index.html, about.html, contact.html, privacy.html and 404.html all load this
+ * sheet after styles.css. It is deliberately separate from styles.css: that
+ * file is the application's, and these pages exist whether or not the
+ * application runs.
+ *
+ * Nothing here is inline, because the deployed CSP is style-src 'self' with no
+ * 'unsafe-inline' — a <style> block would be dropped and the page would render
+ * as bare markup on exactly the pages that have no script to fall back on. */
+
+/* The loader is a fixed overlay; without JavaScript nothing would ever hide it.
+   theme-init.js removes `no-js` from <html> before the first paint, and while
+   the class is present the static introduction inside #app is the page. */
+.no-js #loading { display: none; }
+
+/* ── THE STATIC README ─────────────────────────────────────────────────────
+   The same boxes the application paints, so the hand-over from the static
+   introduction to the live dashboard does not change the layout. */
+.static-doc { align-items: start; }
+.static-doc h2 { font-family: "Inter", sans-serif; font-size: 19px; font-weight: 700; letter-spacing: -.2px; color: var(--text); margin: 26px 0 10px; }
+.static-doc h2:first-child { margin-top: 0; }
+.static-doc h3 { font-family: "Inter", sans-serif; font-size: 14.5px; font-weight: 600; color: var(--text); margin: 18px 0 6px; }
+.static-doc p, .static-doc li { font-size: 14px; line-height: 1.75; color: var(--text-mid); }
+.static-doc p + p { margin-top: 10px; }
+.static-doc ul { margin: 8px 0 0; padding-left: 20px; display: grid; gap: 6px; }
+.static-doc a { color: var(--green); text-decoration: underline; text-underline-offset: 2px; }
+.static-doc code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12.5px; background: var(--surface-soft); border: 1px solid var(--border); border-radius: 5px; padding: 1px 5px; }
+
+/* ── WRITTEN PAGES ─────────────────────────────────────────────────────────
+   /about, /contact and /privacy. One readable column, the same header band as
+   the app's pages, and cards for the body so the pages belong to the site. */
+.doc-main { max-width: 900px; width: 100%; margin: 0 auto; padding: 32px 32px 48px; display: flex; flex-direction: column; gap: 20px; }
+.doc-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r); box-shadow: var(--shadow-sm); padding: 26px 30px; }
+.doc-card h2 { font-family: "Inter", sans-serif; font-size: 19px; font-weight: 700; letter-spacing: -.2px; color: var(--text); margin-bottom: 10px; }
+.doc-card h3 { font-family: "Inter", sans-serif; font-size: 15px; font-weight: 600; color: var(--text); margin: 20px 0 6px; }
+.doc-card h3:first-of-type { margin-top: 14px; }
+.doc-card p, .doc-card li { font-size: 14px; line-height: 1.75; color: var(--text-mid); }
+.doc-card p + p { margin-top: 10px; }
+.doc-card ul { margin: 8px 0 0; padding-left: 20px; display: grid; gap: 8px; }
+.doc-card a { color: var(--green); text-decoration: underline; text-underline-offset: 2px; }
+.doc-card code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12.5px; background: var(--surface-soft); border: 1px solid var(--border); border-radius: 5px; padding: 1px 5px; word-break: break-word; }
+.doc-lead { font-size: 15px !important; color: var(--text) !important; }
+.doc-meta { font-size: 12.5px; color: var(--text-soft); margin-top: 14px; }
+
+/* The error page has no header band and no nav: one card, centred. */
+.doc-error { min-height: calc(100dvh - var(--nav-h)); display: grid; place-items: center; padding: 32px 20px 56px; }
+.doc-error .doc-card { max-width: 560px; text-align: center; }
+.doc-error .doc-code { font-family: "Inter", sans-serif; font-size: 44px; font-weight: 750; letter-spacing: -2px; color: var(--green); line-height: 1; margin-bottom: 8px; }
+.doc-error .doc-card p { margin-top: 10px; }
+.doc-error .doc-actions { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; margin-top: 20px; }
+.doc-error .doc-actions a { display: inline-flex; align-items: center; gap: 6px; padding: 9px 14px; border-radius: 8px; border: 1px solid var(--border-mid); background: var(--surface-soft); color: var(--text); text-decoration: none; font-size: 13px; font-weight: 600; }
+.doc-error .doc-actions a:hover { border-color: var(--green); color: var(--green); }
+
+/* ── SHARED FOOTER ─────────────────────────────────────────────────────── */
+.doc-foot { max-width: 900px; width: 100%; margin: 0 auto; padding: 0 32px 44px; display: flex; flex-wrap: wrap; gap: 8px 18px; align-items: center; font-size: 13px; color: var(--text-soft); }
+.doc-foot a { color: var(--text-soft); text-decoration: underline; text-underline-offset: 2px; }
+.doc-foot a:hover { color: var(--green); }
+.doc-foot .doc-foot-sep { color: var(--border-mid); }
+
+@media (max-width: 900px) {
+  .doc-main { padding: 24px 20px 40px; }
+  .doc-foot { padding: 0 20px 36px; }
+}
+
+@media (max-width: 600px) {
+  .doc-main { padding: 18px 16px 32px; gap: 14px; }
+  .doc-card { padding: 20px 18px; }
+  .doc-foot { padding: 0 16px 32px; }
+  .static-doc h2 { font-size: 17px; }
+}

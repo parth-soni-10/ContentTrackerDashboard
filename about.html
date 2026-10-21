@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#f7faf8">
+  <title>About Content Tracker — a personal media analytics dashboard</title>
+  <meta name="description" content="About Content Tracker: why this personal media watchlist and analytics dashboard exists, what it tracks, how it is built, and who maintains it.">
+  <link rel="canonical" href="https://contenttrackerdashboard.pages.dev/about">
+  <link rel="alternate" type="text/markdown" href="/about.md" title="About Content Tracker as Markdown">
+  <link rel="describedby" href="/llms.txt" type="text/plain" title="How agents should use this site">
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+  <link rel="apple-touch-icon" href="/icon-180.png">
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "AboutPage",
+        "@id": "https://contenttrackerdashboard.pages.dev/about#page",
+        "url": "https://contenttrackerdashboard.pages.dev/about",
+        "name": "About Content Tracker",
+        "description": "Why Content Tracker exists, what it tracks, how it is built and who maintains it.",
+        "isPartOf": { "@id": "https://contenttrackerdashboard.pages.dev/#website" },
+        "about": { "@id": "https://contenttrackerdashboard.pages.dev/#organization" },
+        "inLanguage": "en"
+      },
+      {
+        "@type": "Organization",
+        "@id": "https://contenttrackerdashboard.pages.dev/#organization",
+        "name": "Content Tracker",
+        "url": "https://contenttrackerdashboard.pages.dev/",
+        "email": "soni.soni.parth@gmail.com",
+        "contactPoint": {
+          "@type": "ContactPoint",
+          "contactType": "technical support",
+          "email": "soni.soni.parth@gmail.com",
+          "url": "https://contenttrackerdashboard.pages.dev/contact"
+        },
+        "address": {
+          "@type": "PostalAddress",
+          "addressLocality": "Dublin",
+          "addressCountry": "IE"
+        }
+      }
+    ]
+  }
+  </script>
+  <link rel="stylesheet" href="/styles.css">
+  <link rel="stylesheet" href="/doc-page.css">
+  <script src="/theme-init.js"></script>
+</head>
+<body>
+<a class="skip-link" href="#doc">Skip to content</a>
+
+<nav>
+  <a class="nav-brand" href="/" aria-label="Content Tracker home"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="20" height="15" x="2" y="7" rx="2" ry="2"/><polyline points="17 2 12 7 7 2"/></svg> Content Tracker</a>
+  <div class="nav-tabs">
+    <a class="nav-tab" href="/">Dashboard</a>
+    <a class="nav-tab active" href="/about" aria-current="page">About</a>
+    <a class="nav-tab" href="/contact">Contact</a>
+    <a class="nav-tab" href="/privacy">Privacy</a>
+  </div>
+</nav>
+
+<header class="page-header">
+  <div class="ph-left">
+    <h1>About Content Tracker</h1>
+    <p>A personal media watchlist and analytics dashboard, built and maintained by Parth Shirish Soni</p>
+  </div>
+</header>
+
+<main id="doc" class="doc-main">
+  <div class="doc-card">
+    <h2>What this site is</h2>
+    <p class="doc-lead">Content Tracker is a personal media watchlist and analytics dashboard. It exists to answer a simple question honestly: what have I actually been watching, and what does the pattern look like once it is measured? One person's viewing history is recorded properly, then turned into titles, hours, genres, platforms and year-over-year comparisons.</p>
+    <p>It is not a catalogue of everything that exists, a ratings database, or a recommendation service for other people. A title is in the list because it was watched, and the figures describe that list rather than an audience.</p>
+  </div>
+
+  <div class="doc-card">
+    <h2>Why it exists</h2>
+    <p>The tracker began as a Google Sheet: one row per season of television, or per film, filled in after watching. A spreadsheet stores rows well and answers questions badly, so a dashboard grew on top of it. The rows then moved from the sheet to a managed Postgres database, and finally to Cloudflare D1, which is where they live today. The dashboard is the part that was always the point: the same rows, asked different questions.</p>
+    <p>Keeping the history has a second use. Because every entry carries a date, the site can say what a year actually looked like — which months were heavy, which service earned the most hours, whether this year is ahead of or behind the same months of the last one. That needs complete history rather than a snapshot, which is why the older rows were recovered and imported field for field when the database moved.</p>
+  </div>
+
+  <div class="doc-card">
+    <h2>What it tracks</h2>
+    <p>Each entry records a title, its season, whether it is a film or a series, its genre, the streaming platform it was watched on, the episode count, the screentime in minutes and the watch date. Around 380 entries are stored. Seasons are separate rows, so a show watched across four seasons counts as four entries and its total screentime is the sum of those rows.</p>
+    <p>Only viewing data is stored. There are no visitor accounts, no profiles, no advertising and no analytics scripts. The local storage the page uses is listed on the <a href="/privacy">privacy page</a>, along with the third parties that supply media metadata.</p>
+  </div>
+
+  <div class="doc-card">
+    <h2>How it is built</h2>
+    <p>The site is a static HTML shell, a vanilla JavaScript application and a stylesheet, served by Cloudflare Pages. A Pages Function under <code>/.netlify/functions/*</code> answers the data reads and the admin writes, backed by a D1 database. Film and episode metadata come from TMDB and TVmaze, streaming arrivals from the Watchmode release feed, and ratings from OMDb; each is fetched server-side and cached. Charts are drawn with Chart.js, which is vendored rather than loaded from a CDN. There is no build step and no tracking script.</p>
+    <p>Every page also has a Markdown representation for agents and crawlers, and a public JSON endpoint exposes the watchlist. The <a href="/llms.txt">llms.txt</a> file explains when the site is worth using and how to call it.</p>
+  </div>
+
+  <div class="doc-card">
+    <h2>Who maintains it</h2>
+    <p>Content Tracker is built and maintained by <strong>Parth Shirish Soni</strong>, a data analyst based in Dublin, Ireland, who works with SQL, Python, Power BI and Tableau and builds small, finished data products like this one. The code is public at <a href="https://github.com/parth-soni-10/ContentTrackerDashboard">github.com/parth-soni-10/ContentTrackerDashboard</a>, the professional profile is on <a href="https://www.linkedin.com/in/parth-soni-1a6025191/">LinkedIn</a>, and other projects are at <a href="https://parth-portfolio-wb.pages.dev/">parth-portfolio-wb.pages.dev</a>.</p>
+    <p class="doc-meta">Last updated: 21 October 2026.</p>
+  </div>
+</main>
+
+<footer class="doc-foot">
+  <a href="/">Dashboard</a><span class="doc-foot-sep">·</span>
+  <a href="/about">About</a><span class="doc-foot-sep">·</span>
+  <a href="/contact">Contact</a><span class="doc-foot-sep">·</span>
+  <a href="/privacy">Privacy</a><span class="doc-foot-sep">·</span>
+  <a href="/about.md">Markdown</a><span class="doc-foot-sep">·</span>
+  <a href="/llms.txt">llms.txt</a><span class="doc-foot-sep">·</span>
+  <a href="/sitemap.xml">Sitemap</a>
+</footer>
+</body>
+</html>

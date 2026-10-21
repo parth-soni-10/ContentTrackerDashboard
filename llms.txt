@@ -1,0 +1,57 @@
+# Content Tracker
+
+> Content Tracker is a personal media watchlist and analytics dashboard at https://contenttrackerdashboard.pages.dev. It records every film and series its author watches — with genre, platform, episode count, screentime and watch date — and turns that history into viewing statistics, filters and year-over-year comparisons.
+
+Content Tracker is one person's viewing history (about 380 entries), not a public catalogue or a ratings database. Browsers get the HTML application; agents can request the Markdown representation of any page, or read the public watchlist JSON. There are no accounts, no advertising and no analytics.
+
+## When to use this
+
+Use Content Tracker when the question is about **this author's viewing history or this site's data**:
+
+- What has Parth Shirish Soni watched recently, this year, or in a given year — titles, seasons, genres and platforms.
+- How many hours or titles were watched in a period, and how that compares with the same months of the previous year.
+- Which streaming platform or genre dominates the watchlist, or which months were the heaviest.
+- Whether a specific film or series is already in the watchlist, and on which date and platform it was watched.
+- What is releasing on the streaming services the watchlist follows, for a given month and region (the Calendar pages and the calendar endpoint).
+- Questions about how the dashboard is built, what it stores, or how to report a correction (the About, Privacy and Contact pages).
+
+Do not use Content Tracker as a general film database: it only covers titles its author watched, so absence means "not watched or not logged", not "does not exist". It has no box-office, audience or industry figures, and it is not a recommendations service for third parties. For catalogues and ratings use TMDB or IMDb instead.
+
+How an agent should call it:
+
+1. For prose pages, prefer Markdown. Send `Accept: text/markdown` to the page URL and read the `text/markdown` body; the response carries `Vary: Accept`. Plain equivalents exist at /index.md, /about.md, /contact.md and /privacy.md.
+2. For data, read `GET https://contenttrackerdashboard.pages.dev/.netlify/functions/watchlist`. It needs no key or session and returns the complete watchlist as a JSON array.
+3. For releases, read `GET https://contenttrackerdashboard.pages.dev/.netlify/functions/calendar?from=YYYY-MM-DD&to=YYYY-MM-DD&region=US&include=movies`. Sources are best-effort and the response reports gaps in `warnings`.
+4. Treat the site as read-only: never call the admin endpoints, and never attempt writes. The only public write is the suggestion form, and it is rate-limited.
+5. Cache JSON reads for a few minutes: the watchlist endpoint is served with a five-minute cache, so a read can be that old.
+
+## Pages
+
+- [Homepage](https://contenttrackerdashboard.pages.dev/): what Content Tracker is, what the watchlist records, and what the dashboard shows.
+- [Homepage as Markdown](https://contenttrackerdashboard.pages.dev/index.md): the same content without the application shell.
+- [About](https://contenttrackerdashboard.pages.dev/about): why the site exists, what it tracks, how it is built, and who maintains it.
+- [Contact](https://contenttrackerdashboard.pages.dev/contact): how to report a data correction, an accessibility problem, a broken link or a security issue, and what to include.
+- [Privacy](https://contenttrackerdashboard.pages.dev/privacy): the local storage keys the page uses, the data stored in D1, the admin cookie, rate limiting and the third parties that supply metadata.
+
+## Machine-readable
+
+- [Watchlist JSON](https://contenttrackerdashboard.pages.dev/.netlify/functions/watchlist): a JSON array of every entry. Fields are `_row` (entry id), `Name`, `Season`, `Type`, `Details/Genre`, `Platform`, `Episode Count`, `Screentime`, `Watch Date`, `Month` and `Year`.
+- [Suggestions JSON](https://contenttrackerdashboard.pages.dev/.netlify/functions/watchlist?sheet=Suggestions): titles visitors have suggested, stored separately from the watchlist.
+- [Release calendar JSON](https://contenttrackerdashboard.pages.dev/.netlify/functions/calendar?from=2026-10-01&to=2026-10-31&region=US&include=movies): films and TV episodes releasing on the tracked platforms in a window. `from` defaults to today, `to` to 61 days later, and `region` to `US`.
+- [Sitemap](https://contenttrackerdashboard.pages.dev/sitemap.xml): every indexable page.
+- [Robots](https://contenttrackerdashboard.pages.dev/robots.txt): everything published is crawlable.
+
+## Facts an answer should get right
+
+- `Screentime` is stored in minutes. A series entry is one season, so a show with several seasons appears once per season.
+- `Watch Date` reads as `D-Mon-YY` (for example `1-Jan-24`); `Month` and `Year` are derived from it.
+- A future-dated row is a planned watch. It appears in the table and calendar but not in "recently watched" figures.
+- Year-over-year figures compare the same months on both sides, and leave out a month that is still running.
+- The release calendar only covers the streaming platforms the watchlist itself uses; a service outside that list is deliberately excluded.
+- The homepage HTML carries JSON-LD for the site, its author and the application. The Organization has a contact point and a locality, not a street address.
+- An unknown path returns HTTP 404, and with `Accept: text/markdown` its body is Markdown that links the sitemap and this file.
+
+## Optional
+
+- [Source code](https://github.com/parth-soni-10/ContentTrackerDashboard): the site's repository, including the Pages Function that negotiates these representations.
+- [Portfolio](https://parth-portfolio-wb.pages.dev/): the author's other projects and background.

@@ -23,11 +23,12 @@
  *               and the rest exactly as they always did.
  *
  *   routing     The paths the frontend already calls, /.netlify/functions/*, are
- *               served from here; anything else is handed to the assets layer
- *               below. On Pages every request arrives at this code — the
- *               catch-all function hands it on — which is why that fallback is
- *               the whole routing contract rather than a run_worker_first
- *               pattern.
+ *               served from here; anything else goes through serveDocument()
+ *               below, which negotiates HTML/Markdown and otherwise hands the
+ *               request to the assets layer. On Pages every request arrives at
+ *               this code — the catch-all function hands it on — which is why
+ *               that fallback is the whole routing contract rather than a
+ *               run_worker_first pattern.
  *
  *   client IP   The throttle damper keys its buckets on the caller's address. It
  *               looks for Netlify's header first and x-forwarded-for second, so
@@ -50,6 +51,16 @@ import tmdbSearchModule from "../netlify/functions/tmdb-search.js";
 import imdbIdModule from "../netlify/functions/imdb-id.js";
 import calendarModule from "../netlify/functions/calendar.js";
 import db from "../netlify/functions/lib/db.js";
+import {
+  canonicalPath,
+  documentLinkHeader,
+  htmlAssetFor,
+  isMarkdownPath,
+  markdownFor,
+  negotiateRepresentation,
+  notAcceptableBody,
+  notFoundMarkdown,
+} from "./_documents.js";
 
 const ROUTES = {
   "/.netlify/functions/watchlist": watchlistModule,
@@ -98,11 +109,126 @@ const jsonError = (status, message) =>
     headers: { "Content-Type": "application/json", "Cache-Control": "no-store" },
   });
 
+/* ── DOCUMENT NEGOTIATION ────────────────────────────────────────────────────
+ * The pages of this site are HTML files painted by app.js, and the text an
+ * agent wants is in `_documents.js`. Every request that is not a function
+ * route passes through serveDocument(), which chooses between the two
+ * representations from the request's Accept header and always says so with
+ * Vary: Accept — without that header a shared cache is free to hand a browser
+ * the Markdown blob, or an agent the HTML, because it keyed the entry on the
+ * URL alone.
+ *
+ * The `.md` addresses (/index.md, /about.md, …) are Markdown by definition and
+ * need no negotiation; the llms.txt proposal asks for them so a linker has a
+ * stable Markdown URL to point at.
+ *
+ * A 404 is negotiated too. The status is still 404 — an agent must be able to
+ * tell a missing page from an empty one — and the body explains the miss and
+ * links the sitemap and llms.txt for recovery.
+ */
+const MARKDOWN_TYPE = "text/markdown; charset=utf-8";
+
+/** Append Accept to a response's Vary, without dropping what is already there. */
+function addVary(headers) {
+  const current = headers.get("Vary");
+  if (!current) headers.set("Vary", "Accept");
+  else if (!/(^|,)\s*accept\s*(,|$)/i.test(current)) headers.set("Vary", current + ", Accept");
+}
+
+/** A Markdown response: the negotiated representation and its .md alias share it. */
+function markdownResponse(request, body, status, extraHeaders = {}) {
+  const headers = new Headers({
+    "Content-Type": MARKDOWN_TYPE,
+    "Cache-Control": "public, max-age=0, must-revalidate",
+    "X-Content-Type-Options": "nosniff",
+    ...extraHeaders,
+  });
+  addVary(headers);
+  const payload = request.method === "HEAD" ? null : body;
+  return new Response(payload, { status, headers });
+}
+
+/** Fetch one asset by path, keeping this request's method and headers. */
+function assetAt(request, env, pathname) {
+  // Built from method + headers rather than the whole Request: a navigation
+  // request's mode is not a valid RequestInit, and this lookup only needs to
+  // name an asset on the same origin.
+  return env.ASSETS.fetch(
+    new Request(new URL(pathname, request.url), {
+      method: request.method,
+      headers: request.headers,
+      // Pages canonicalises /about.html to /about and /index.html to / with a
+      // 308. The lookup wants the asset, so it follows that hop internally
+      // rather than handing the redirect to the client.
+      redirect: "follow",
+    })
+  );
+}
+
+/** Add the negotiation headers to an HTML response without touching its body. */
+function withDocumentHeaders(response, alternatePath) {
+  const headers = new Headers(response.headers);
+  addVary(headers);
+  if (alternatePath) headers.set("Link", documentLinkHeader(alternatePath));
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+  });
+}
+
+async function serveDocument(request, env, url) {
+  if (request.method !== "GET" && request.method !== "HEAD") return env.ASSETS.fetch(request);
+
+  const pathname = url.pathname;
+  const canonical = canonicalPath(pathname);
+  const markdown = markdownFor(pathname);
+  const htmlAsset = htmlAssetFor(pathname);
+  const mdAddress = isMarkdownPath(pathname) || /\.md$/i.test(pathname);
+  const choice = mdAddress ? "markdown" : negotiateRepresentation(request.headers.get("accept"));
+
+  // A Markdown address is always Markdown; an unknown one is a 404 in Markdown.
+  if (markdown && (mdAddress || choice === "markdown")) {
+    return markdownResponse(request, markdown, 200, {
+      Link: `</llms.txt>; rel="describedby"`,
+    });
+  }
+
+  if (choice === "none") {
+    const headers = new Headers({
+      "Content-Type": "text/plain; charset=utf-8",
+      "Cache-Control": "no-store",
+      "X-Content-Type-Options": "nosniff",
+    });
+    addVary(headers);
+    return new Response(request.method === "HEAD" ? null : notAcceptableBody(pathname), {
+      status: 406,
+      headers,
+    });
+  }
+
+  const response = await assetAt(request, env, htmlAsset || pathname);
+
+  if (response.status === 404) {
+    if (mdAddress || choice === "markdown") {
+      return markdownResponse(request, notFoundMarkdown(pathname), 404, {
+        Link: `</llms.txt>; rel="describedby"`,
+      });
+    }
+    return withDocumentHeaders(response, null);
+  }
+
+  // Only the pages this module knows about get the alternate/describedby links;
+  // every other asset (CSS, JS, images, robots.txt) is served untouched.
+  if (!htmlAsset) return response;
+  return withDocumentHeaders(response, canonical);
+}
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
     const mod = ROUTES[url.pathname];
-    if (!mod) return env.ASSETS.fetch(request);
+    if (!mod) return serveDocument(request, env, url);
 
     wireBindings(env);
 
