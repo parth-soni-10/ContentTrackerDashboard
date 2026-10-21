@@ -38,6 +38,8 @@
 // preview, and a local function runner (netlify dev, or a static server with
 // its own function host) has no Netlify environment at all.
 const { TMDB_BASE: TMDB_API_BASE, pickMatch } = require('./lib/tmdb');
+const { createWatchmode, releaseFilm, serviceFilms } = require('./lib/watchmode');
+const db = require('./lib/db');
 
 const TMDB_BASE = TMDB_API_BASE;
 const TVMAZE_BASE = 'https://api.tvmaze.com';
@@ -50,6 +52,34 @@ const YEAR_PAGES = 3; // 60 by popularity: a year at a glance, not a full dump
 const BATCH = 5; // concurrent TMDB requests
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const REGION_RE = /^[A-Z]{2}$/;
+
+// ── THE STREAMING HALF ────────────────────────────────────────────────────
+// Watchmode owns the one class of release nothing else here can see: a film
+// that arrives on a service with no cinema run *and* with no TMDB
+// watch-provider tag. "YOU ME US" (Netflix, 29 Oct 2026) is the measured
+// case — TMDB has it as a type-4 digital release and lists no watch provider
+// for it in any region, so no provider-filtered query can return it, and
+// TVmaze is episodes-only. What Watchmode has is the *feed* the calendar was
+// missing: what landed on a service, on which service, and on what date.
+//
+// What it costs: one credit a request (2,500 a month on the free plan, 120
+// requests a minute), so the budget below is what one invocation may spend,
+// and the answers that do not change are cached in D1 (see lib/db.js) — which
+// is what makes the second load of a month free.
+//
+// The feed's dates are US-first — the endpoint documents them as "primarily US
+// release dates, though most major services release globally on the same day"
+// — so it dates the US. Another region gets its platforms from TMDB's own
+// provider sweeps, which are region-aware.
+const WM_CALL_BUDGET = 8; // Watchmode requests — one credit each
+const WM_DETAIL_BUDGET = 10; // TMDB records fetched for the films only the feed knows
+const WM_BUDGET_MS = 6000; // the wall clock the feed and the records share
+// How many pages one platform's sweep may walk. A window that is short
+// enough to be listed to the day is walked in release-date order, which is
+// what makes it complete; a popularity page is a ranking, not an index, and
+// it loses films (measured on the US October 2026 window: 28 of the 34 films
+// on the watchlist's platforms arrived, 6 did not).
+const MAX_SWEEP_PAGES = 6;
 
 // ── ONE REGION, OR ALL OF THEM ───────────────────────────────────────────
 // `region=all` is the union of the regions the page's picker offers, which the
@@ -75,6 +105,14 @@ const MAX_UNION_REGIONS = 30;
 const REGION_BUDGET_MS = 20000;
 const UNION_BUDGET_MS = 9000;
 const TMDB_CALL_BUDGET = 40;
+// The platform's own ceiling on one invocation's external subrequests, counted
+// across every source in it — TMDB, the release feed, and the records the
+// feed's own films need. Past it the request is killed with nothing to show,
+// so each source stops before it rather than being cut off in it.
+const SUBREQUEST_CAP = 50;
+// What the release feed leaves for the rest of the invocation: the TMDB
+// records the films it found need, and the episode half that runs beside it.
+const WM_SUBREQUEST_RESERVE = 12;
 // How many regions are worked on at once. The ceiling that matters is the total
 // in-flight upstream requests — this times BATCH, the fan-out inside one region —
 // because TMDB's documented upper limit is "somewhere in the 40 requests per
@@ -307,6 +345,24 @@ async function mapLimit(items, limit, worker) {
   return out;
 }
 
+// One TMDB call outside a region's own budget: counted against the same
+// invocation-wide total, and refused outright once the wall clock has run out
+// of the time the platform allows.
+async function tmdbJSON(url, warnings, label, usage, deadline) {
+  if (usage) {
+    // The shared subrequest count: past the platform's cap the invocation is
+    // killed, so the work stops before it instead of being lost with it.
+    if (usage.limit && (usage.total || 0) >= usage.limit) {
+      warn(warnings, label + ' · the request budget was spent');
+      return null;
+    }
+    usage.tmdb++;
+    usage.total = (usage.total || 0) + 1;
+  }
+  if (deadline && Date.now() > deadline) return null;
+  return fetchJSON(url, warnings, label);
+}
+
 const round1 = value => {
   const n = Number(value);
   return Number.isFinite(n) && n > 0 ? Math.round(n * 10) / 10 : 0;
@@ -373,9 +429,12 @@ async function regionMovies(from, to, region, deadline, warnings, movies, report
   // Every TMDB call in this invocation is counted here, and past the budget no
   // new work starts — the guard lives beside the time deadline because on the
   // free plan the count is what runs out first.
-  const spent = () => (usage ? usage.tmdb >= TMDB_CALL_BUDGET : false);
+  const spent = () => (usage ? usage.tmdb >= TMDB_CALL_BUDGET || (usage.limit && (usage.total || 0) >= usage.limit) : false);
   const tmdbGet = (url, label) => {
-    if (usage) usage.tmdb++;
+    if (usage) {
+      usage.tmdb++;
+      usage.total = (usage.total || 0) + 1;
+    }
     return fetchJSON(url, warnings, label);
   };
   if (Date.now() > deadline || spent()) { stop('cut'); return; }
@@ -458,30 +517,233 @@ async function regionMovies(from, to, region, deadline, warnings, movies, report
   if (!wanted.length) report.noPlatforms.push(region);
 
   if (Date.now() > deadline || spent()) { stop('partial'); return; }
-  const sweeps = await mapLimit(wanted, BATCH, provider =>
-    tmdbGet(
-      tmdbUrl('/discover/movie', {
-        ...windowParams,
-        with_release_type: RELEASE_TYPES,
-        with_watch_providers: String(provider.id),
-        with_watch_monetization_types: 'flatrate|free|ads',
-        watch_region: region,
-        sort_by: 'popularity.desc',
-        page: '1',
-      }),
-      'TMDB films on ' + provider.label
-    ).then(payload => ({ provider: provider.label, payload }))
-  );
-
-  for (const sweep of sweeps) {
-    if (!sweep || !sweep.payload) continue;
-    for (const item of sweep.payload.results || []) {
-      if (!item.release_date || item.release_date < from || item.release_date > to) continue;
-      // A film only on a service is a real entry here — that is the service's
-      // own list — so it is merged in, not merely labelled.
-      mergeFilm(movies, item, false, sweep.provider);
+  // The sweep is walked in release-date order, not read off the first page of a
+  // popularity ranking. That is the whole difference between a list of the
+  // films that arrived on a service and a list of the most popular ones that
+  // did: a ranking has no tail, and the films it drops are exactly the ones
+  // nobody is searching for. Measured on the US October 2026 window, 6 of the
+  // 34 films on the watchlist's platforms were missing from the first page of
+  // every sweep, and a busier month loses more. A window too long to be
+  // listed to the day keeps the popularity page, because that view is a
+  // glance and says so.
+  //
+  // One round of pages at a time, so the concurrency stays at BATCH however
+  // many pages a platform needs.
+  const sweepPages = spanDays(from, to) <= DATED_DAYS ? MAX_SWEEP_PAGES : 1;
+  const sweepSort = sweepPages > 1 ? 'release_date.asc' : 'popularity.desc';
+  const perPlatform = wanted.map(provider => ({ provider, items: [], done: false }));
+  let sweepCut = false;
+  for (let number = 1; number <= sweepPages; number++) {
+    const live = perPlatform.filter(entry => !entry.done);
+    if (!live.length) break;
+    if (Date.now() > deadline || spent()) { sweepCut = true; break; }
+    const round = await mapLimit(live, BATCH, entry =>
+      tmdbGet(
+        tmdbUrl('/discover/movie', {
+          ...windowParams,
+          with_release_type: RELEASE_TYPES,
+          with_watch_providers: String(entry.provider.id),
+          with_watch_monetization_types: 'flatrate|free|ads',
+          watch_region: region,
+          sort_by: sweepSort,
+          page: String(number),
+        }),
+        'TMDB films on ' + entry.provider.label
+      ).then(payload => ({ entry, payload }))
+    );
+    for (const { entry, payload } of round) {
+      const items = (payload && payload.results) || [];
+      for (const item of items) {
+        if (!item.release_date || item.release_date < from || item.release_date > to) continue;
+        // A film only on a service is a real entry here — that is the
+        // service's own list — so it is merged in, not merely labelled.
+        mergeFilm(movies, item, false, entry.provider.label);
+      }
+      // A short page is TMDB's last one for this query.
+      if (items.length < 20) entry.done = true;
     }
   }
+  if (sweepCut) stop('partial');
+}
+
+// The TMDB record of a film the feed named, folded into the entry the calendar
+// shows: the poster, the rating, the popularity, and the canonical title. A
+// title can be listed under its original name — "YOU ME US" is "Noi un po'
+// meglio" in Watchmode — so the title the page shows is TMDB's, not the
+// feed's, wherever the two disagree.
+function applyLookup(film, record) {
+  if (!film || !record) return;
+  if (record.title) film.title = record.title;
+  if (record.poster) film.poster = record.poster;
+  if (record.rating) film.rating = record.rating;
+  if (record.popularity) film.popularity = record.popularity;
+}
+
+// The cache the Watchmode client reads and writes. The answers are keyed by
+// the request that produced them, so a window that is asked for twice costs
+// one credit the second time and none at all once the D1 migration has been
+// applied.
+const wmCache = {
+  get: (key, maxAge) => db.readWmCache(key, maxAge),
+  set: (key, value) => db.writeWmCache(key, value),
+};
+
+// The services carrying a title, in the watchlist's own spelling, for the
+// region asked about — and for another region, whatever Watchmode knows.
+function servicesForRegion(rows, region) {
+  const wanted = String(region || '').toUpperCase();
+  const mine = (rows || []).filter(row => String(row.region || '').toUpperCase() === wanted);
+  return serviceFilms(mine.length ? mine : rows || [], platformFor);
+}
+
+// ── THE RELEASE FEED ──────────────────────────────────────────────────────
+// The streaming half of the calendar, and the one source that can see a title
+// no provider filter can reach: what landed on a service, on which service,
+// and on what date.
+//
+// The join is by id and never by name. A title can be listed under its
+// original name, so a name join fails on exactly the films this step exists to
+// find — and it is also why the TMDB record is fetched by id afterwards: the
+// feed's name for a film is not always the name the page should show.
+//
+// The feed's dates are the service's own, and the service's own dates are
+// US-first — the endpoint documents them as "primarily US release dates, though
+// most major services release globally on the same day". So it dates the US.
+// Another region gets its platforms from TMDB's provider sweeps, which are
+// region-aware, and the feed is not asked for it.
+async function loadWatchmode(from, to, regions, warnings, usage, deadline, movies, coverage, today) {
+  // The feed's own budget is a count of credits (one a request, 2,500 a month
+  // on the free plan), and the platform's cap on the invocation's subrequests
+  // is a separate thing it leaves room in: the reserve is what the films the
+  // feed found and the episode half running beside it need.
+  const client = createWatchmode({
+    warnings,
+    deadline,
+    maxCalls: WM_CALL_BUDGET,
+    usage,
+    today,
+    cache: wmCache,
+    reserve: WM_SUBREQUEST_RESERVE,
+  });
+  const report = {
+    enabled: client.enabled,
+    arrivals: 0,
+    added: 0,
+    resolved: 0,
+    pending: 0,
+    other: 0,
+    series: 0,
+    noId: 0,
+    window: null,
+    truncated: false,
+    cut: false,
+    calls: 0,
+    cached: 0,
+  };
+  coverage.watchmode = report;
+  if (!client.enabled) return report;
+  if (regions.indexOf('US') === -1) {
+    report.skipped = 'the feed dates the US';
+    return report;
+  }
+
+  const { rows, truncated, from: feedFrom, to: feedTo, beyond } = await client.releases(from, to);
+  report.truncated = truncated;
+  report.window = { from: feedFrom, to: feedTo };
+  // A window the feed does not reach — next year, seen from this year — is
+  // answered for the close weeks instead. The page says which weeks those
+  // were, rather than claiming a coverage of a year it does not have.
+  report.beyond = Boolean(beyond);
+
+  const arrivals = [];
+  const seen = new Set();
+  for (const row of rows) {
+    const arrival = releaseFilm(row);
+    // A season drop is a series premiere, and the episode half is TVmaze's:
+    // one the episode source does not carry is counted, not faked.
+    if (arrival.series) { report.series++; continue; }
+    // A film the feed names with no TMDB id cannot be joined to anything: the
+    // poster, the rating and the IMDb link all come from TMDB. It is counted
+    // rather than dropped in silence, so the gap is a number and not a hole.
+    if (!arrival.id) { report.noId++; continue; }
+    if (!arrival.date || arrival.date < from || arrival.date > to) continue;
+    // A service this calendar is not for is dropped at the fetch boundary,
+    // like every other source's.
+    const platform = platformFor(arrival.platform);
+    if (!platform) { report.other++; continue; }
+    if (isExcludedTitle(arrival.title)) continue;
+    const key = arrival.id + '|' + platform;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    arrivals.push({ ...arrival, platform });
+  }
+  report.arrivals = arrivals.length;
+
+  const pending = [];
+  for (const arrival of arrivals) {
+    const existing = movies.get(arrival.id);
+    if (existing) {
+      // The label is the win here: TMDB may know the film and not the service
+      // it is on.
+      if (existing.providers.length < 3 && !existing.providers.includes(arrival.platform)) {
+        existing.providers.push(arrival.platform);
+      }
+      // A cinema release outranks a service one — a calendar means the date a
+      // film arrives, and a cinema release is the earliest of them.
+      if (!existing.theater && arrival.date < existing.date) existing.date = arrival.date;
+      continue;
+    }
+    // A film TMDB's own passes never returned: it carries no watch provider,
+    // so no provider-filtered query can reach it. It goes in with the feed's
+    // own date and service, and TMDB's record is fetched by id below.
+    movies.set(arrival.id, {
+      id: arrival.id,
+      title: arrival.title,
+      date: arrival.date,
+      poster: null,
+      rating: 0,
+      popularity: 0,
+      providers: [arrival.platform],
+      theater: false,
+    });
+    report.added++;
+    pending.push(arrival);
+  }
+
+  // The films only the feed knows need TMDB's own record: the poster, the
+  // rating, and the canonical title. Each record is fetched once and kept, so
+  // the second load of a month costs nothing, and the films still waiting are
+  // counted rather than left to look like films with no poster at all.
+  let budget = WM_DETAIL_BUDGET;
+  for (const arrival of pending) {
+    const film = movies.get(arrival.id);
+    if (!film) continue;
+    const cached = await db.readWmLookup(arrival.id);
+    if (cached) {
+      applyLookup(film, cached);
+      report.resolved++;
+      continue;
+    }
+    if (budget <= 0) break;
+    budget--;
+    const details = await tmdbJSON(tmdbUrl('/movie/' + arrival.id, {}), warnings, 'TMDB film', usage, deadline);
+    if (!details) continue;
+    const record = {
+      tmdbId: arrival.id,
+      title: details.title || '',
+      poster: details.poster_path ? IMG_BASE + details.poster_path : '',
+      rating: round1(details.vote_average),
+      popularity: Math.round(Number(details.popularity) || 0),
+    };
+    await db.writeWmLookup(record);
+    applyLookup(film, record);
+    report.resolved++;
+  }
+  report.pending = pending.length - report.resolved;
+  report.calls = client.calls.calls;
+  report.cached = client.calls.cached;
+  report.cut = client.calls.cut;
+  return report;
 }
 
 // The film half of one window: one region, or every region the picker offers
@@ -493,10 +755,11 @@ async function regionMovies(from, to, region, deadline, warnings, movies, report
 // fans the union out itself — one movies request per region — so that each
 // invocation stays inside the platform's subrequest cap; several regions in one
 // call still works, bounded the same way.
-async function loadMovies(from, to, regions, warnings, state, usage) {
+async function loadMovies(from, to, regions, warnings, state, usage, coverage, today) {
   const union = regions.length > 1;
   if (state) state.complete = true;
-  const deadline = Date.now() + (union ? UNION_BUDGET_MS : REGION_BUDGET_MS);
+  const started = Date.now();
+  const deadline = started + (union ? UNION_BUDGET_MS : REGION_BUDGET_MS);
   const movies = new Map();
   const report = { cut: [], partial: [], noPlatforms: [] };
   await mapLimit(regions, union ? UNION_BATCH : BATCH, region =>
@@ -513,14 +776,29 @@ async function loadMovies(from, to, regions, warnings, state, usage) {
   }
   if (state) state.complete = !report.cut.length && !report.partial.length;
 
+  // The streaming half, and the source that can see what the sweeps cannot.
+  // It runs inside the same wall-clock budget as the rest of the window, so
+  // the invocation cannot overrun the platform's limit by adding to it.
+  const wmDeadline = Math.min(Date.now() + WM_BUDGET_MS, started + (union ? UNION_BUDGET_MS : REGION_BUDGET_MS));
+  const wm = await loadWatchmode(from, to, regions, warnings, usage, wmDeadline, movies, coverage, today);
+  if (wm.enabled && (wm.cut || wm.truncated)) {
+    if (state) state.complete = false;
+    warn(warnings, 'Watchmode · the release feed was cut short (' + wm.calls + ' requests) — some arrivals are missing until the next load');
+  }
+
   // Nothing gets in that is neither in cinemas nor on one of the platforms: a
   // film with no provider label that no theatre pass found is a title on some
   // service this calendar is not for. Cinema releases are labelled, so the
   // platform filter can ask for them (and the badge says how it arrives).
-  return [...movies.values()]
+  const list = [...movies.values()]
     .filter(movie => (movie.theater || movie.providers.length) && !isExcludedTitle(movie.title))
     .map(movie => (movie.theater ? { ...movie, providers: movie.providers.concat(THEATER) } : movie))
     .sort((a, b) => a.date.localeCompare(b.date) || b.popularity - a.popularity);
+  if (coverage) {
+    coverage.films = list.length;
+    coverage.tmdb = list.length - (coverage.watchmode ? coverage.watchmode.added : 0);
+  }
+  return list;
 }
 
 // ── EPISODES ──────────────────────────────────────────────────────────────
@@ -724,7 +1002,7 @@ async function loadEpisodes(from, to, today, warnings, backfill) {
 // render it and add it like any other listing. The platform is the watchlist's
 // own spelling of whatever TMDB lists, and 'Other' — the watchlist's word for
 // "no platform recorded" — when TMDB lists none.
-async function searchTitle(title, warnings) {
+async function searchTitle(title, warnings, region, usage) {
   const text = String(title || '').trim();
   if (!text) return null;
   const key = String(process.env.TMDB_API_KEY || '').trim();
@@ -760,6 +1038,32 @@ async function searchTitle(title, warnings) {
       const label = platformFor(entry.provider_name);
       if (label && !names.includes(label)) names.push(label);
     }));
+  });
+  // TMDB lists no service for some titles — the measured case being a film
+  // whose provider it has not attached, which is why it is invisible in the
+  // calendar at all. Watchmode indexes by service, so it is the one source
+  // that can say where such a title is watchable; without it the answer would
+  // be "Other", which is a guess dressed as a fact.
+  if (!names.length) {
+    const client = createWatchmode({ warnings, maxCalls: 2, usage, cache: wmCache });
+    if (client.enabled) {
+      const sources = await client.titleSources(match.id, 0, isMovie ? 'movie' : 'tv');
+      const labels = servicesForRegion(sources, region);
+      labels.forEach(label => {
+        if (!names.includes(label)) names.push(label);
+      });
+    }
+  }
+  // The record this search already holds is kept: a film the release feed names
+  // later is the same film, and the poster, the rating and the popularity have
+  // not changed in between. The table is what makes the second load of a
+  // month cost nothing.
+  await db.writeWmLookup({
+    tmdbId: match.id,
+    title: match.title || match.name || text,
+    poster: match.poster_path ? IMG_BASE + match.poster_path : '',
+    rating: round1(match.vote_average),
+    popularity: Math.round(Number(match.popularity) || 0),
   });
   return {
     id: match.id,
@@ -804,25 +1108,27 @@ exports.handler = async event => {
 
   const warnings = [];
   const films = { complete: true };
-  const usage = { tmdb: 0 };
+  const usage = { tmdb: 0, calls: 0, total: 0, limit: SUBREQUEST_CAP };
+  const coverage = { films: 0, tmdb: 0, watchmode: null };
   const tmdbKey = String(process.env.TMDB_API_KEY || '').trim();
 
   // A title asked for by name: one lookup, no window, no episodes. This is the
   // way past TMDB's discover index (see searchTitle).
   if (include === 'search') {
-    const found = await searchTitle(params.title, warnings);
+    const found = await searchTitle(params.title, warnings, region, usage);
     return json(200, {
       range: { from, to, region, regions: regions.length > 1 ? regions : undefined },
       generatedAt: new Date().toISOString(),
       movies: found ? [found] : [],
       episodes: [],
+      coverage,
       warnings,
     }, { 'Cache-Control': 'public, max-age=3600, stale-while-revalidate=86400' });
   }
 
   try {
     const [movies, episodes] = await Promise.all([
-      wantMovies && tmdbKey ? loadMovies(from, to, regions, warnings, films, usage) : Promise.resolve([]),
+      wantMovies && tmdbKey ? loadMovies(from, to, regions, warnings, films, usage, coverage, today) : Promise.resolve([]),
       wantEpisodes ? loadEpisodes(from, to, today, warnings, backfill) : Promise.resolve([]),
     ]);
     if (wantMovies && !tmdbKey) {
@@ -849,6 +1155,10 @@ exports.handler = async event => {
         generatedAt: new Date().toISOString(),
         movies,
         episodes,
+        // Where the films came from, and what is still to come. The page shows
+        // it under the summary: a month that is short because a source was cut
+        // has to say so rather than looking like a month with nothing in it.
+        coverage,
         warnings,
       },
       // The window's contents change slowly (TVmaze's own copy of the schedule

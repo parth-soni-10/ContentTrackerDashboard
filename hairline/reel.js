@@ -2,7 +2,7 @@
  *
  * The tiles are the six most recent rows the tracker has already loaded, so the
  * figure cannot show a title the Timeline does not. Pointing at a tile raises it
- * and reads its type and rating; the real Timeline list stays the accessible
+ * and reads its title and type; the real Timeline list stays the accessible
  * path to every row.
  *
  * Wrapped in an IIFE: the engine's figures are written at top level, and two of
@@ -49,7 +49,7 @@ function mount({ stage, svg, read }, value) {
     stage.setAttribute(
       'aria-label',
       n
-        ? `${n} recent watches on a film strip. Point at a tile to read its type and rating.`
+        ? `${n} recent watches on a film strip. Point at a tile to read its title and type.`
         : 'No watch history has loaded yet.',
     );
   }
@@ -116,6 +116,8 @@ function mount({ stage, svg, read }, value) {
       return;
     }
     const item = tiles[i].item;
+    // The watchlist schema carries no rating column, so the suffix is drawn
+    // only for a row that has one; nothing here invents a score.
     const rating = item.rating === '' || item.rating == null ? '' : ` · ★ ${item.rating}`;
     read.textContent = `${item.title} · ${item.type || 'Title'}${rating}`;
   }
@@ -155,7 +157,7 @@ function mount({ stage, svg, read }, value) {
 
 hairline({
   name: 'reel',
-  means: 'Recent watches on a film strip; point at a tile to read its type and rating.',
+  means: 'Recent watches on a film strip; point at a tile to read its title and type.',
   rules: [1, 4, 6, 8],
   range: [0, 6, 1],
   tour: [[150, 150], [200, 120], [260, 160], [310, 200], null],

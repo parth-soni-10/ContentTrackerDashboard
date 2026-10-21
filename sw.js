@@ -16,7 +16,7 @@
  * Reload" and only then posts SKIP_WAITING, so nobody is swapped onto new code
  * mid-read while the admin panel is open.
  */
-var CACHE = 'content-tracker-v2';
+var CACHE = 'content-tracker-v3';
 var SHELL = [
   './',
   './styles.css',

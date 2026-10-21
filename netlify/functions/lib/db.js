@@ -323,6 +323,118 @@ async function setGoal(hrs, year) {
   return { status: 'ok', goal: goal ? { hrs: goal.hrs, year: goal.year } : { hrs: 0, year: '' } };
 }
 
+// ── The Watchmode cache ────────────────────────────────────────────────────
+// Watchmode is the one source that answers "which service is this title on,
+// and when did it land there", and every call to it costs a credit. So the
+// answers that do not change are written down here and read back instead of
+// being asked for again.
+//
+// Every one of these fails soft, and that is the point: a migration is not
+// run by a deploy, so a site whose 0002_watchmode.sql has not been applied
+// yet must still answer a calendar request. The first failure remembers that
+// the tables are not there and stops trying, so a missing migration costs one
+// failed statement rather than one per request.
+let wmTables = null;
+
+async function wmReady() {
+  if (wmTables !== null) return wmTables;
+  if (!dbEnabled()) {
+    wmTables = false;
+    return wmTables;
+  }
+  try {
+    await rows('SELECT 1 FROM wm_cache LIMIT 1');
+    wmTables = true;
+  } catch (error) {
+    wmTables = false;
+  }
+  return wmTables;
+}
+
+/**
+ * A cached Watchmode answer, or null when there is none (or no table to keep
+ * it in). `maxAgeMinutes` is how old the answer is allowed to be: a release
+ * window that has been and gone is worth a week, one that is still running an
+ * hour, a title's id a month.
+ */
+async function readWmCache(key, maxAgeMinutes) {
+  if (!(await wmReady())) return null;
+  try {
+    const result = await rows('SELECT value, updated_at FROM wm_cache WHERE key = ?', [key]);
+    if (!result.length) return null;
+    const age = (Date.now() - Date.parse(String(result[0].updated_at || ''))) / 60000;
+    if (!Number.isFinite(age) || age > maxAgeMinutes) return null;
+    return String(result[0].value || '');
+  } catch (error) {
+    return null;
+  }
+}
+
+async function writeWmCache(key, value) {
+  if (!(await wmReady())) return false;
+  try {
+    await write(
+      'INSERT INTO wm_cache (key, value, updated_at) VALUES (?, ?, ?) ON CONFLICT (key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at',
+      [key, String(value == null ? '' : value), nowIso()]
+    );
+    return true;
+  } catch (error) {
+    return false;
+  }
+}
+
+/**
+ * The TMDB record of a film the release feed named: its canonical title, its
+ * poster, its rating and its popularity. A poster and an id never change, so
+ * a row here is written once and read forever — the second load of a month
+ * costs no credits at all.
+ */
+async function readWmLookup(tmdbId) {
+  if (!(await wmReady())) return null;
+  try {
+    const result = await rows(
+      'SELECT tmdb_id, title, poster, rating, popularity, updated_at FROM wm_lookups WHERE tmdb_id = ?',
+      [Number(tmdbId) || 0]
+    );
+    if (!result.length) return null;
+    const row = result[0];
+    return {
+      tmdbId: Number(row.tmdb_id) || 0,
+      title: String(row.title || ''),
+      poster: String(row.poster || ''),
+      rating: Number(row.rating) || 0,
+      popularity: Number(row.popularity) || 0,
+      updatedAt: String(row.updated_at || ''),
+    };
+  } catch (error) {
+    return null;
+  }
+}
+
+async function writeWmLookup(entry) {
+  if (!(await wmReady())) return false;
+  const tmdbId = Number(entry && entry.tmdbId) || 0;
+  if (!tmdbId) return false;
+  try {
+    await write(
+      'INSERT INTO wm_lookups (tmdb_id, title, poster, rating, popularity, updated_at) VALUES (?, ?, ?, ?, ?, ?) ' +
+        'ON CONFLICT (tmdb_id) DO UPDATE SET title = excluded.title, poster = excluded.poster, ' +
+        'rating = excluded.rating, popularity = excluded.popularity, updated_at = excluded.updated_at',
+      [
+        tmdbId,
+        String(entry.title || ''),
+        String(entry.poster || ''),
+        Number(entry.rating) || 0,
+        Number(entry.popularity) || 0,
+        nowIso(),
+      ]
+    );
+    return true;
+  } catch (error) {
+    return false;
+  }
+}
+
 module.exports = {
   setDatabase,
   dbEnabled,
@@ -336,6 +448,12 @@ module.exports = {
   appendSuggestion,
   readGoal,
   setGoal,
+  // The Watchmode cache. Exported so the calendar can read and write it
+  // without knowing the schema.
+  readWmCache,
+  writeWmCache,
+  readWmLookup,
+  writeWmLookup,
   // Exported for the importer and for the duplicate rule's own tests.
   duplicateKey,
   seasonKey,

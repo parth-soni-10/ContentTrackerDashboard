@@ -233,7 +233,11 @@
     figure.type = 'button';
     figure.className = 'ct-figure';
     figure.innerHTML = finalHTML;
-    figure.setAttribute('aria-label', (finalText + ' — ' + view.action).replace(/\s+/g, ' ').trim());
+    // The figure's own label is part of its name. Three figures reading "0"
+    // are three buttons a screen reader cannot tell apart, so the name is
+    // "<figure> <label> - <what it opens>".
+    var figureLabel = text(el.querySelector('.recap-lbl') || el.querySelector('.rs-label, .kpi-label, .stat-label')).trim();
+    figure.setAttribute('aria-label', (finalText + (figureLabel ? ' ' + figureLabel : '') + ' — ' + view.action).replace(/\s+/g, ' ').trim());
     figure.addEventListener('click', function () { openView(view.hash, view.params); });
     el.innerHTML = '';
     el.appendChild(figure);
@@ -639,14 +643,20 @@
      resize by the class change, which it observes itself. */
   function chartCard(card) {
     mark(card, 'analytics-chart');
-    var toggle = document.createElement('button');
-    toggle.type = 'button';
-    toggle.className = 'ct-chart-expand';
-    toggle.setAttribute('aria-label', 'Expand chart');
-    toggle.textContent = '⤢';
-    toggle.addEventListener('click', function () {
-      var on = card.classList.toggle('is-expanded');
-      toggle.setAttribute('aria-label', on ? 'Collapse chart' : 'Expand chart');
+      var toggle = document.createElement('button');
+      toggle.type = 'button';
+      toggle.className = 'ct-chart-expand';
+      // The chart's own title is part of the name. Three charts on one page
+      // all reading "Expand chart" is three buttons a screen reader cannot
+      // tell apart.
+      var titleEl = card.querySelector('h1, h2, h3, h4, .ct-chart-title, .card-title');
+      var title = titleEl ? text(titleEl).trim() : '';
+      var named = title ? ' chart: ' + title : '';
+      toggle.setAttribute('aria-label', 'Expand' + named);
+      toggle.textContent = '?';
+      toggle.addEventListener('click', function () {
+        var on = card.classList.toggle('is-expanded');
+        toggle.setAttribute('aria-label', (on ? 'Collapse' : 'Expand') + named);
       window.dispatchEvent(new Event('resize'));
     });
     card.appendChild(toggle);

@@ -3136,6 +3136,10 @@ function calIndex(payload, win) {
     // asked about), then the busiest networks.
     platforms: [...platformCounts.values()].sort((a, b) => Number(b.streaming) - Number(a.streaming) || b.count - a.count || a.name.localeCompare(b.name)),
     warnings: Array.isArray(payload.warnings) ? payload.warnings : [],
+    // Where the films came from. The service feed is the one source that can
+    // see a film no provider filter reaches, so the count it contributed is
+    // worth naming rather than leaving as an invisible extra.
+    coverage: payload.coverage && typeof payload.coverage === 'object' ? payload.coverage : null,
     generatedAt: payload.generatedAt || ''
   };
 }
@@ -3736,6 +3740,36 @@ function calUpdatedHTML() {
 function calSummaryHTML(parts) {
   return parts.filter(Boolean).join(' · ');
 }
+// Where the films in this window came from, when one of the sources is worth
+// naming. The service feed (Watchmode) is the one that reaches a film no
+// provider filter can, so a month that got films from it says so — otherwise
+// the extra titles look like they came from nowhere.
+function calCoverageHTML() {
+  const data = calState.data;
+  const coverage = data && data.coverage;
+  if (!coverage) return '';
+  const wm = coverage.watchmode;
+  if (!wm || !wm.enabled || !wm.added) return '';
+  const parts = ['<strong>' + wm.added + '</strong> ' + calWord(wm.added, 'film') + ' from the service feed'];
+  if (wm.pending) parts.push(wm.pending + ' still waiting for their poster');
+  if (wm.other) parts.push(wm.other + ' on services this calendar is not for');
+  if (wm.noId) parts.push(wm.noId + ' with no catalogue id');
+  if (wm.series) parts.push(wm.series + ' season drops');
+  return parts.join(' · ');
+}
+// The weeks the service feed answered for, when they are not the weeks on
+// screen. The feed dates a service's arrivals a few weeks out — it is the
+// close months it knows — so a window beyond that (next year, seen from this
+// year) is answered for the close weeks instead, and the page says which
+// weeks those were rather than claiming a year of coverage it does not have.
+function calFeedWindowHTML() {
+  const data = calState.data;
+  const coverage = data && data.coverage;
+  const wm = coverage && coverage.watchmode;
+  if (!wm || !wm.enabled || !wm.beyond || !wm.window) return '';
+  const label = iso => new Date(iso + 'T00:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+  return 'the service feed answered for ' + label(wm.window.from) + ' – ' + label(wm.window.to);
+}
 // Which filters are in force, named in the summary line. The view opens on
 // whatever was chosen last, so a month that is short because of a filter has to
 // say so rather than looking like a month with nothing in it.
@@ -3785,7 +3819,7 @@ function calMonthBarHTML(days) {
   const monthDays = Object.keys(days).filter(date => date >= month.first && date <= month.last);
   const counts = calDayCounts(monthDays.flatMap(date => days[date]));
   const summary = calState.status === 'ready'
-    ? calSummaryHTML([calFilterFlagHTML()].concat(calCountParts(counts, true), ['in ' + escapeHTML(month.label)])) + calUpdatedHTML()
+    ? calSummaryHTML([calFilterFlagHTML()].concat(calCountParts(counts, true), ['in ' + escapeHTML(month.label)], [calCoverageHTML()])) + calUpdatedHTML()
     : '';
   return '<div class="cal-month-bar"><div class="cal-month-tabs" role="tablist" aria-label="Month">' + tabs + '</div>' +
     '<div class="cal-month-sum" id="cal-summary">' + summary + '</div></div>';
@@ -3794,7 +3828,7 @@ function calYearSummaryHTML(days) {
   const win = calNextYearWindow();
   const counts = calDayCounts(Object.keys(days).filter(date => date >= win.from && date <= win.to).flatMap(date => days[date]));
   const summary = calState.status === 'ready'
-    ? calSummaryHTML([calFilterFlagHTML()].concat(calCountParts(counts, true), ['dated so far in ' + win.year])) + calUpdatedHTML()
+    ? calSummaryHTML([calFilterFlagHTML()].concat(calCountParts(counts, true), ['dated so far in ' + win.year], [calCoverageHTML()], [calFeedWindowHTML()])) + calUpdatedHTML()
     : '';
   return '<div class="cal-month-bar"><div class="cal-month-sum" id="cal-summary">' + summary + '</div></div>';
 }
@@ -4174,7 +4208,7 @@ function renderCalendar() {
   calState.opener = null;
   document.getElementById('app').innerHTML =
     '<div class="page-header">' +
-      '<div class="ph-left"><h1>Release Calendar</h1><p>Rolling: this year month by month, next year at a glance · films from TMDB, episodes from TVmaze</p></div>' +
+      '<div class="ph-left"><h1>Release Calendar</h1><p>Rolling: this year month by month, next year at a glance · films from TMDB and the Watchmode service feed, episodes from TVmaze</p></div>' +
       '<div class="ph-right">' +
         '<div class="dh-pill">🎬 <strong id="cal-mcount">—</strong> films</div>' +
         '<div class="dh-pill">📺 <strong id="cal-ecount">—</strong> episodes</div>' +
