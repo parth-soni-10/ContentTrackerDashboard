@@ -3752,7 +3752,12 @@ function calScopeBarHTML() {
       ' data-act="calendarAction" data-cal="scope" data-scope="' + scope + '">' +
       '<span class="cal-scope-year">' + year + '</span><span class="cal-scope-note">' + note + '</span></button>';
   };
-  return '<div class="cal-scopes" role="tablist" aria-label="Year">' +
+  // The two year scopes are a single-choice pair, so they take Rubber Segment:
+  // the thumb crosses from one year to the next and lands on it. The month
+  // strip below keeps Jelly Radio, so the calendar has one of each.
+  return '<div class="cal-scopes" role="tablist" aria-label="Year"' +
+    ' data-rubber-segment data-rs-key="cal-scopes" data-rs-size="md"' +
+    ' data-rs-inset="0" data-rs-radius="10" data-rs-stretch="90" data-rs-squash="2">' +
     tab('year', String(now.getFullYear()), 'month by month') +
     tab('next', String(now.getFullYear() + 1), 'the year ahead') +
     '</div>';

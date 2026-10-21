@@ -548,6 +548,21 @@ html.dark .cal-drawer-top { background: linear-gradient(115deg, #123526, #1d4a36
 .cal-scope-tab.active { border-color: var(--green); background: var(--green-pale); }
 .cal-scope-tab.active .cal-scope-year, .cal-scope-tab.active .cal-scope-note { color: var(--green); }
 html.dark .cal-scope-tab.active { background: rgba(64, 145, 108, .18); }
+/* The year scopes are adopted by Rubber Segment (calScopeBarHTML in app.js):
+   the thumb is the green wash, so the tabs give up their own fill and shadow
+   and the thumb can be seen crossing from one year to the next. Their greens
+   and their two-line labels stay exactly as they were. */
+.cal-scopes[data-rubber-segment] { --rs-thumb: var(--green-pale); }
+html.dark .cal-scopes[data-rubber-segment] { --rs-thumb: rgba(64, 145, 108, .18); }
+.cal-scopes[data-rubber-segment] .cal-scope-tab {
+  background: transparent;
+  box-shadow: none;
+  min-height: 0;
+}
+.cal-scopes[data-rubber-segment] .cal-scope-tab.active,
+html.dark .cal-scopes[data-rubber-segment] .cal-scope-tab.active {
+  background: transparent;
+}
 /* Twelve month names never fit a strip; they scroll, and the active one is kept
    in view by the render. */
 .cal-month-tabs { max-width: 100%; overflow-x: auto; scrollbar-width: none; }
