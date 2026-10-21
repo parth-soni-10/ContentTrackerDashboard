@@ -4810,13 +4810,20 @@ function applyDelegated(el, event, attr) {
     const other = document.querySelector('#dat-pag [data-page-step="' + (forward ? 'prev' : 'next') + '"]');
     const target = same && !same.disabled ? same : (other && !other.disabled ? other : null);
     if (target) target.focus({ preventScroll: true });
-    // The scroll behaviour is left to the stylesheet (html { scroll-behavior:
-    // smooth }), which flips to auto under prefers-reduced-motion. Passing
-    // 'smooth' here would override that and animate for a reader who asked
-    // not to be moved. The table carries the scroll margin that parks its
-    // first row under the sticky nav.
+    // The scroll position is computed rather than left to scrollIntoView:
+    // #dat-table is the horizontal scrollport, so it is a scroll container
+    // itself, and a scroll container's own scroll-margin is not applied when
+    // it is the scrollIntoView target — the table landed at the very top of
+    // the viewport, behind the sticky nav. The offset reads --nav-h, the
+    // same token the sticky header and the timeline jump bar are built from.
+    // No behaviour is passed, so the stylesheet owns it: html { scroll-
+    // behavior: smooth } and its prefers-reduced-motion override to auto.
     const table = document.getElementById('dat-table');
-    if (table) table.scrollIntoView({ block: 'start' });
+    if (table) {
+      const navH = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--nav-h')) || 0;
+      const top = Math.max(0, window.scrollY + table.getBoundingClientRect().top - navH - 12);
+      window.scrollTo({ top: top });
+    }
     return;
   }
   if (attr === 'data-chars') {

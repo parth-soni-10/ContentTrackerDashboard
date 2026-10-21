@@ -307,11 +307,6 @@ tbody tr:last-child td { border-bottom: none; }
 .type-pill       { display: inline-flex; align-items: center; padding: 2px 10px; border-radius: 20px; font-size: 11px; font-weight: 500; }
 .type-pill.movie { background: var(--gold-pale);  color: var(--gold); }
 .type-pill.show  { background: var(--green-pale); color: var(--green); }
-/* Paging the table scrolls its top back into view (the page-step handler in
-   app.js), and the sticky nav sits over the top of the viewport — the scroll
-   margin parks the table's first row just under the nav instead of behind it.
-   It reads --nav-h so the phone height (73px) is covered by the same rule. */
-#dat-table { scroll-margin-top: calc(var(--nav-h) + 12px); }
 .pagination { display: flex; justify-content: space-between; align-items: center; margin-top: 14px; }
 .pag-info { font-size: 13px; color: var(--text-soft); }
 .pag-btns { display: flex; gap: 8px; }
