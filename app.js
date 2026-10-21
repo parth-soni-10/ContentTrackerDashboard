@@ -4796,8 +4796,22 @@ function applyDelegated(el, event, attr) {
     return;
   }
   if (attr === 'data-page-step') {
-    dataPageNum += el.dataset.pageStep === 'next' ? 1 : -1;
+    const forward = el.dataset.pageStep === 'next';
+    dataPageNum += forward ? 1 : -1;
     updateDataTable();
+    // Stepping to another page replaces the whole table and the pagination
+    // bar, so the reader is left at the bottom of a page of rows they have
+    // already read — and the button they pressed is gone, taking the focus
+    // with it. Put the focus back on the same step (the other one takes it
+    // when that one is now disabled) and bring the top of the table into
+    // view, which is where the rows they have not read yet begin. The focus
+    // is restored with preventScroll so it cannot undo that scroll.
+    const same = document.querySelector('#dat-pag [data-page-step="' + (forward ? 'next' : 'prev') + '"]');
+    const other = document.querySelector('#dat-pag [data-page-step="' + (forward ? 'prev' : 'next') + '"]');
+    const target = same && !same.disabled ? same : (other && !other.disabled ? other : null);
+    if (target) target.focus({ preventScroll: true });
+    const table = document.getElementById('dat-table');
+    if (table) table.scrollIntoView({ behavior: 'smooth', block: 'start' });
     return;
   }
   if (attr === 'data-chars') {
