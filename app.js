@@ -693,8 +693,8 @@ function renderAdminForm() {
       <h2 class="submit-heading" id="admin-form-heading">New Watchlist Entry</h2><p class="submit-sub" id="admin-form-sub">Saved through the protected admin service.</p>
       <form id="admin-entry-form">
         <div class="sf-field"><label class="sf-lbl" for="admin-name">Name <span class="sf-req">*</span></label><div class="admin-name-row"><input id="admin-name" name="name" class="sf-input" maxlength="160" required><button id="admin-check-name" class="try-btn admin-check-btn" type="button">Check watchlist</button><button id="admin-autofill" class="try-btn admin-autofill-btn" type="button">Autofill</button></div><div id="admin-name-result" class="admin-name-result" aria-live="polite"></div></div>
-        <div class="sf-row"><div class="sf-field"><label class="sf-lbl" for="admin-type">Type <span class="sf-req">*</span></label><select id="admin-type" name="type" class="sf-input"><option>Movie</option><option>Series/Show</option></select></div><div class="sf-field"><label class="sf-lbl" for="admin-season">Season</label><input id="admin-season" name="season" class="sf-input" maxlength="20"></div></div>
-        <div class="sf-row"><div class="sf-field"><label class="sf-lbl" for="admin-genre">Genre</label><select id="admin-genre" name="genre" class="sf-input"><option value="">Select genre</option>${genreOpts}<option value="Other">Other</option></select><input id="admin-genre-custom" class="sf-input sf-custom-value" type="text" maxlength="80" placeholder="Enter a genre" aria-label="Custom genre" hidden></div><div class="sf-field"><label class="sf-lbl" for="admin-platform">Platform</label><select id="admin-platform" name="platform" class="sf-input"><option value="">Select platform</option>${platOpts}<option value="Other">Other</option></select><input id="admin-platform-custom" class="sf-input sf-custom-value" type="text" maxlength="160" placeholder="Enter a platform" aria-label="Custom platform" hidden></div></div>
+        <div class="sf-row"><div class="sf-field"><label class="sf-lbl" for="admin-type">Type <span class="sf-req">*</span></label><select id="admin-type" name="type" class="sf-input" data-glide data-glide-menu-width="200"><option>Movie</option><option>Series/Show</option></select></div><div class="sf-field"><label class="sf-lbl" for="admin-season">Season</label><input id="admin-season" name="season" class="sf-input" maxlength="20"></div></div>
+        <div class="sf-row"><div class="sf-field"><label class="sf-lbl" for="admin-genre">Genre</label><select id="admin-genre" name="genre" class="sf-input" data-glide data-glide-menu-width="240" data-glide-placeholder="Select genre"><option value="">Select genre</option>${genreOpts}<option value="Other">Other</option></select><input id="admin-genre-custom" class="sf-input sf-custom-value" type="text" maxlength="80" placeholder="Enter a genre" aria-label="Custom genre" hidden></div><div class="sf-field"><label class="sf-lbl" for="admin-platform">Platform</label><select id="admin-platform" name="platform" class="sf-input" data-glide data-glide-menu-width="240" data-glide-placeholder="Select platform"><option value="">Select platform</option>${platOpts}<option value="Other">Other</option></select><input id="admin-platform-custom" class="sf-input sf-custom-value" type="text" maxlength="160" placeholder="Enter a platform" aria-label="Custom platform" hidden></div></div>
         <div class="sf-row"><div class="sf-field"><label class="sf-lbl" for="admin-episodes">Episodes</label><input id="admin-episodes" name="episodes" class="sf-input" type="number" min="0" max="9999" inputmode="numeric"></div><div class="sf-field"><label class="sf-lbl" for="admin-screentime">Screentime (mins)</label><input id="admin-screentime" name="screentime" class="sf-input" type="number" min="0" max="100000" inputmode="numeric"></div></div>
         <div class="sf-field"><label class="sf-lbl" for="admin-date">Watch Date</label><input id="admin-date" name="watchDate" class="sf-input" type="date"></div>
         <div id="admin-edit-bar" class="admin-edit-bar" hidden><span>Editing entry <strong id="admin-edit-row"></strong></span><button class="try-btn admin-edit-cancel" id="admin-cancel-edit" type="button">Cancel edit</button></div>
@@ -1881,7 +1881,7 @@ function optTags(items, allLabel) {
 // both are read by the delegated dispatcher at the end of this file.
 function phFilter(label, id, target, rebuild, optionsHtml) {
   return `<div class="ph-filter"><label class="ph-filter-label" for="${id}">${label}</label>`
-       + `<select id="${id}" data-filter="${target}" data-rebuild="${rebuild}">${optionsHtml}</select></div>`;
+       + `<select id="${id}" data-glide data-glide-size="sm" data-glide-menu-width="190" data-filter="${target}" data-rebuild="${rebuild}">${optionsHtml}</select></div>`;
 }
 
 // Re-select a persisted filter value in a rebuilt <select>; if that option
@@ -2189,7 +2189,7 @@ function renderData() {
         <div class="data-count" id="dat-count"></div>
         <div class="data-tools">
           <label class="tool-select" title="How many rows to show at once">Rows
-            <select id="data-per">
+            <select id="data-per" aria-label="Rows per page" data-glide data-glide-size="sm" data-glide-menu-width="110">
               <option value="25">25</option>
               <option value="50">50</option>
               <option value="100">100</option>
@@ -4104,15 +4104,15 @@ function calShellHTML() {
   const regionOptions = '<option value="' + CAL_REGION_ALL + '">All regions</option>' +
     CAL_REGIONS.map(region => '<option value="' + region[0] + '">' + escapeHTML(region[1]) + '</option>').join('');
   return '<div class="data-filters cal-filters">' +
-      '<div class="df-select"><select id="cal-scope" aria-label="Show" data-filter="calFilters.scope" data-rebuild="calendar">' +
+      '<div class="df-select"><select id="cal-scope" aria-label="Show" data-glide data-glide-menu-width="200" data-filter="calFilters.scope" data-rebuild="calendar">' +
         '<option value="new">New &amp; notable</option>' +
         '<option value="episodes" title="Every episode releasing. Left out: films, news and talk shows, and anything that airs every day">Episode releases</option>' +
         '<option value="all">Everything</option></select></div>' +
-      '<div class="df-select"><select id="cal-type" aria-label="Type" data-filter="calFilters.type" data-rebuild="calendar">' +
+      '<div class="df-select"><select id="cal-type" aria-label="Type" data-glide data-glide-menu-width="180" data-filter="calFilters.type" data-rebuild="calendar">' +
         '<option value="all">Films &amp; TV</option><option value="movie">Films only</option><option value="episode">TV only</option></select></div>' +
-      '<div class="df-select"><select id="cal-plat" aria-label="Platform" data-filter="calFilters.platform" data-rebuild="calendar">' +
+      '<div class="df-select"><select id="cal-plat" aria-label="Platform" data-glide data-glide-menu-width="220" data-filter="calFilters.platform" data-rebuild="calendar">' +
         '<option value="all">All platforms</option></select></div>' +
-      '<div class="df-select"><select id="cal-region" aria-label="Film release region">' + regionOptions + '</select></div>' +
+      '<div class="df-select"><select id="cal-region" aria-label="Film release region" data-glide data-glide-menu-width="220">' + regionOptions + '</select></div>' +
       '<div class="df-divider"></div>' +
       '<div class="df-search">' +
         '<svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle cx="6.5" cy="6.5" r="5" stroke="#7a9e8a" stroke-width="1.5"/><path d="M10.5 10.5L14 14" stroke="#7a9e8a" stroke-width="1.5" stroke-linecap="round"/></svg>' +
@@ -4193,13 +4193,13 @@ function renderSuggestions() {
         <div class="sugg-filters">
           <div>
             <label class="sf-label" for="sg-genre">Genre</label>
-            <select id="sg-genre" class="sf-select" data-change="updateSuggCount">
+            <select id="sg-genre" class="sf-select" data-glide data-glide-size="sm" data-glide-menu-width="200" data-change="updateSuggCount">
               <option value="all">All Genres</option>${genreOptions}
             </select>
           </div>
           <div>
             <label class="sf-label" for="sg-type">Type</label>
-            <select id="sg-type" class="sf-select" data-change="updateSuggCount">
+            <select id="sg-type" class="sf-select" data-glide data-glide-size="sm" data-glide-menu-width="200" data-change="updateSuggCount">
               <option value="all">All Types</option>${typeOptions}
             </select>
           </div>
@@ -4451,14 +4451,14 @@ function renderSubmit() {
           <div class="sf-row">
             <div class="sf-field">
               <label class="sf-lbl" for="sf-type">Type <span class="sf-req">*</span></label>
-              <select id="sf-type" class="sf-input" required aria-required="true">
+              <select id="sf-type" class="sf-input" required aria-required="true" data-glide data-glide-menu-width="180">
                 <option value="Show">Show</option>
                 <option value="Movie">Movie</option>
               </select>
             </div>
             <div class="sf-field">
               <label class="sf-lbl" for="sf-genre">Genre</label>
-              <select id="sf-genre" class="sf-input">
+              <select id="sf-genre" class="sf-input" data-glide data-glide-menu-width="220" data-glide-placeholder="Select genre">
                 <option value="">— Select —</option>
                 ${genreOpts}
               </select>
@@ -4467,7 +4467,7 @@ function renderSubmit() {
 
           <div class="sf-field">
             <label class="sf-lbl" for="sf-plat">Platform</label>
-            <select id="sf-plat" class="sf-input">
+            <select id="sf-plat" class="sf-input" data-glide data-glide-menu-width="220" data-glide-placeholder="Select platform">
               <option value="">— Select —</option>
               ${platOpts}
               <option value="Other">Other</option>
@@ -4578,7 +4578,9 @@ async function submitSuggestion() {
     msg.innerHTML = '<div class="sf-success">✓ Suggestion submitted! It\'s now in the suggestions list.</div>';
     // Clear form
     ['sf-title','sf-why'].forEach(id => document.getElementById(id).value = '');
-    ['sf-genre','sf-plat'].forEach(id => document.getElementById(id).selectedIndex = 0);
+    // value= (not selectedIndex=) so the GlideSelect chip re-reads the empty
+    // option and drops its old label along with the native control.
+    ['sf-genre','sf-plat'].forEach(id => { document.getElementById(id).value = ''; });
     document.getElementById('sf-chars').textContent = '0';
     // Reload sidebar
     await loadSuggestions();

@@ -1056,3 +1056,106 @@ html.dark .df-select .glide-select__trigger {
 .glide-select__option[aria-selected='true'] {
   font-weight: 600;
 }
+
+/* The calendar, the suggestion filters and the Admin form carry the same picker;
+   only the surface under it differs, so the chip copies the control it replaced
+   instead of the Data row's 34px pill. */
+.sugg-filters .glide-select,
+.sf-field .glide-select {
+  display: block;
+  width: 100%;
+}
+
+/* A select sitting in a flex row keeps the chip from stretching the row. */
+.sf-field > .glide-select {
+  max-width: 100%;
+}
+
+/* The Current Year / All Time headers carried the same shape as a page-header
+   filter: a 30px pill holding a native select. The chip brings its own surface,
+   so the wrapper keeps only the label. */
+.ph-filter:has(> .glide-select) {
+  height: auto;
+  padding: 0;
+  border: 0;
+  background: none;
+  gap: 8px;
+  cursor: default;
+}
+
+.ph-filter .glide-select {
+  --gs-surface: rgba(255,255,255,.12);
+  --gs-highlight: rgba(255,255,255,.22);
+  --gs-text: #fff;
+  --gs-accent: var(--gold);
+}
+
+.ph-filter .glide-select__trigger {
+  height: 28px;
+  border: 1px solid rgba(255,255,255,.2);
+  border-radius: 8px;
+  font-family: "Inter", sans-serif;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.ph-filter .glide-select__menu,
+.tool-select .glide-select__menu {
+  --gs-surface: var(--surface);
+  --gs-highlight: var(--green-pale);
+  --gs-text: var(--text);
+  --gs-accent: var(--green);
+}
+
+/* The Rows control keeps its inline "Rows" word; the chip sits beside it. */
+.tool-select .glide-select {
+  display: inline-block;
+  --gs-surface: var(--surface-soft);
+  --gs-highlight: var(--green-pale);
+  --gs-text: var(--text-mid);
+  --gs-accent: var(--green);
+}
+
+.tool-select .glide-select__trigger {
+  height: 28px;
+  padding: 0 8px 0 10px;
+  border: 1px solid var(--border-mid);
+  border-radius: 6px;
+  font-family: "Inter", sans-serif;
+  font-size: 13px;
+}
+
+.sugg-filters .glide-select__trigger {
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid var(--border-mid);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--text);
+  font-family: "Inter", sans-serif;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.sf-field .glide-select__trigger {
+  width: 100%;
+  height: 42px;
+  padding: 0 12px;
+  border: 1px solid var(--border-mid);
+  border-radius: 8px;
+  background: var(--surface-soft);
+  color: var(--text);
+  font-family: "Inter", sans-serif;
+  font-size: 14px;
+}
+
+html.dark .sf-field .glide-select__trigger {
+  background: var(--surface-soft);
+  border-color: var(--border-mid);
+}
+
+/* The field is as wide as the form; its menu opens to the same width so the
+   list lines up with the control instead of floating as a narrow column. */
+.sf-field .glide-select__menu {
+  width: 100%;
+}
