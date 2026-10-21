@@ -402,28 +402,18 @@ async function setSharedGoal(hrs, year, options) {
 // old local goal, migrate it up once so it starts syncing to other devices.
 // If the server can't answer (offline / not configured), fall back to
 // whatever this browser last saved locally so the card still works.
-// `fromRows` is the goal that arrived with the watchlist rows (see loadData): the
-// two reads are one request now, so passing it here is what saves the second
-// round trip. With nothing to pass — an endpoint that answered the older shape,
-// a bare array, or any other caller — the goal is still asked for on its own,
-// exactly as before.
-async function loadGoal(fromRows) {
+async function loadGoal() {
   let serverReachable = false;
-  if (fromRows && typeof fromRows.hrs !== 'undefined') {
-    goalState = { hrs: Number(fromRows.hrs) || 0, year: String(fromRows.year || '') };
-    serverReachable = true;
-  } else {
-    try {
-      const res = await fetch(WATCHLIST_URL + '?goal=1', { redirect: 'follow', mode: 'cors', cache: 'no-store' });
-      if (res.ok) {
-        const data = await res.json();
-        if (data && typeof data.hrs !== 'undefined') {
-          goalState = { hrs: Number(data.hrs) || 0, year: String(data.year || '') };
-          serverReachable = true;
-        }
+  try {
+    const res = await fetch(WATCHLIST_URL + '?goal=1', { redirect: 'follow', mode: 'cors', cache: 'no-store' });
+    if (res.ok) {
+      const data = await res.json();
+      if (data && typeof data.hrs !== 'undefined') {
+        goalState = { hrs: Number(data.hrs) || 0, year: String(data.year || '') };
+        serverReachable = true;
       }
-    } catch (e) { /* fall through to the local fallback */ }
-  }
+    }
+  } catch (e) { /* fall through to the local fallback */ }
   let localHrs = 0, localYear = '';
   try {
     localHrs = parseFloat(localStorage.getItem('ct-goal') || '0') || 0;
@@ -511,7 +501,7 @@ async function bootData() {
   const page = () => window.location.hash.slice(1) || 'readme';
   const repaintIfChanged = () => {
     if (!loadFailed && dataSignature(rawData) !== beforeSig && page() !== 'admin' && page() !== 'submit') {
-      navigateTo(page(), { focus: false });
+      navigateTo(page());
     }
   };
   navigateTo(page()); // instant first paint from the snapshot
@@ -528,6 +518,7 @@ async function bootData() {
 
 async function loadData(skipRerender, bust) {
   try {
+    goalReady = loadGoal();
     const controller = new AbortController();
     // The CDN normally answers in a blink; give a slow upstream room to
     // finish rather than aborting early, so the fetch surfaces the
@@ -539,18 +530,9 @@ async function loadData(skipRerender, bust) {
     // bust for the same reason: the watchlist endpoint caches for five
     // minutes, and a plain re-read would show the numbers from before.
     const fresh = new URLSearchParams(location.search).get('fresh');
-    // `rows=1&goal=1`: the watchlist and the goal in one request. The dashboard
-    // used to ask for the goal separately — the 15 Oct 2026 sweep measured the
-    // first load as two reads of the same store, 384 ms and 396 ms — and this is
-    // the half of that fix the browser owns. The endpoint answers `{ rows, goal }`
-    // to this pair; a bare array means rows only, which the code below accepts
-    // too, so a deployment that has not been updated still works.
-    const params = new URLSearchParams();
-    if (fresh) params.set('fresh', fresh);
-    else if (bust) params.set('fresh', String(Date.now()));
-    params.set('rows', '1');
-    params.set('goal', '1');
-    const url = WATCHLIST_URL + '?' + params.toString();
+    const url = fresh
+      ? WATCHLIST_URL + '?fresh=' + encodeURIComponent(fresh)
+      : bust ? WATCHLIST_URL + '?fresh=' + Date.now() : WATCHLIST_URL;
     const res = await fetch(url, { redirect: 'follow', mode: 'cors', signal: controller.signal, cache: 'default' });
     clearTimeout(timeout);
     if (fresh) {
@@ -563,23 +545,15 @@ async function loadData(skipRerender, bust) {
       } catch (e) {}
     }
     if (!res.ok) throw new Error('Data service returned ' + res.status);
-    const payload = await res.json();
-    // Two shapes: `{ rows, goal }` from this endpoint's combined read, and a bare
-    // array from anything that answers the older way.
-    const rows = Array.isArray(payload) ? payload : (payload && payload.rows);
-    if (!Array.isArray(rows)) throw new Error('Data service returned an unexpected shape');
-    rawData = mapRows(rows);
+    const json = await res.json();
+    rawData = mapRows(json);
     loadFailed = false;
-    // The goal came with the rows, so there is nothing left to wait for before
-    // the readme can render with it. `goalReady` stays a promise — the render
-    // path awaits it — and still falls back to its own read when this response
-    // carried no goal.
-    goalReady = loadGoal(Array.isArray(payload) ? null : payload.goal);
+    // The goal read is fast (Script Properties, no sheet), so waiting for it
+    // here means the readme renders with the synced goal on the first paint.
     await goalReady;
     // Keep a snapshot so the next visit can paint instantly from cache while
-    // this fetch refreshes underneath (see bootData). The snapshot holds rows,
-    // which is what readDataSnapshot() and bootData() expect.
-    saveDataSnapshot(rows);
+    // this fetch refreshes underneath (see bootData).
+    saveDataSnapshot(json);
   } catch (e) {
     console.warn('Data load failed:', e);
     // Keep the rows already loaded (the snapshot painted on this visit, or an
@@ -642,14 +616,7 @@ function destroyCharts() {
   charts = {};
 }
 
-// `options.focus: false` is for a repaint, not a navigation: the page did not
-// change, so moving focus to the heading would pull a keyboard user out of the
-// row or control they were on. Default stays true for a real navigation.
-function navigateTo(page, options) {
-  // A fresh page is being built: the component layer has not upgraded it yet.
-  // `window.__ctReady` is set by that layer's scan, so a verification waits for
-  // the page it is about to check instead of the container before it.
-  window.__ctReady = false;
+function navigateTo(page) {
   destroyCharts();
   // The calendar keeps work outside the page container: its day drawer lives on
   // <body>, and its auto-update timers would otherwise keep polling from a page
@@ -659,15 +626,7 @@ function navigateTo(page, options) {
   document.getElementById('app').innerHTML = '';
   const pages = { readme: renderReadme, current: renderCurrentYear, alltime: renderAllTime, data: renderData, timeline: renderTimeline, calendar: renderCalendar, suggestions: renderSuggestions, submit: renderSubmit, admin: renderAdmin };
   (pages[page] || renderReadme)();
-  document.getElementById('app').insertAdjacentHTML('beforeend',
-    '<footer class="site-footer">Built by <a href="https://parth-portfolio-wb.pages.dev/" target="_blank" rel="noopener">Parth</a>.</footer>');
-  // The page's own name, not the container: a screen reader announces the
-  // heading when focus lands on it, which is what a full page load does. The
-  // container stays the fallback for a rendered page without one.
-  const heading = document.querySelector('#app h1');
-  const target = heading || document.getElementById('app');
-  if (heading && !heading.hasAttribute('tabindex')) heading.setAttribute('tabindex', '-1');
-  if (!options || options.focus !== false) target.focus({ preventScroll: true });
+  document.getElementById('app').focus({ preventScroll: true });
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
@@ -2502,43 +2461,6 @@ function updateDataTable() {
     '</div>';
 
   updateRatingStatus();
-
-  // ── Back to top button ──────────────────────────────────────────────
-  var backToTop = null;
-  function initBackToTop() {
-    if (!backToTop) {
-      backToTop = document.createElement('button');
-      backToTop.type = 'button';
-      backToTop.className = 'pag-btn data-back-to-top';
-      backToTop.ariaLabel = 'Back to top';
-      backToTop.textContent = '↑';
-      Object.assign(backToTop.style, {
-        position: 'fixed',
-        bottom: '24px',
-        right: '24px',
-        opacity: 0,
-        pointerEvents: 'none',
-        transition: 'opacity .2s',
-        zIndex: 100
-      });
-      document.body.appendChild(backToTop);
-      // Show when scrolled past the nav
-      window.addEventListener('scroll', function() {
-        const navH = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--nav-h')) || 0;
-        backToTop.style.opacity = (window.scrollY > navH + 60 ? 1 : 0);
-        backToTop.style.pointerEvents = window.scrollY > navH + 60 ? 'auto' : 'none';
-      });
-      // Scroll to top of data table when clicked
-      backToTop.addEventListener('click', function() {
-        const table = document.getElementById('dat-table');
-        if (!table) return;
-        const navH = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--nav-h')) || 0;
-        const top = Math.max(0, window.scrollY + table.getBoundingClientRect().top - navH - 12);
-        window.scrollTo({ top: top, behavior: 'smooth' });
-      });
-    }
-  }
-  initBackToTop();
 }
 
 // ── RATINGS ───────────────────────────────────────────────────────────────
@@ -2663,16 +2585,9 @@ function renderTimeline() {
 
   document.getElementById('app').innerHTML =
     '<div class="page-header"><div class="ph-left"><h1>Timeline</h1><p>Your watch history, month by month</p></div></div>' +
-    '<div class="hairline-card timeline-reel" aria-label="Recent watches as a film strip">' +
-      '<div class="hairline-figure" id="content-reel"></div>' +
-      '<p class="hairline-read" data-hairline-read aria-live="polite">rest</p>' +
-    '</div>' +
     '<div class="timeline">' + jumpBar + sections + '</div>';
 
   bindTimelineNav();
-  // The figure reads the same rows this render just sorted; the Timeline list
-  // below it remains the complete, keyboard-accessible history.
-  if (window.mountContentReel) window.mountContentReel(rawData);
 }
 
 // Jump bar + month expanders for the timeline.
@@ -4443,37 +4358,9 @@ function hexToRgba(hex, alpha) {
   if (!isFinite(n)) return 'rgba(45,106,79,' + alpha + ')';
   return 'rgba(' + ((n >> 16) & 255) + ',' + ((n >> 8) & 255) + ',' + (n & 255) + ',' + alpha + ')';
 }
-/* Chart.js is vendored, not fetched, but it is ~200 KB that only the two
-   chart pages use — so it is loaded on demand instead of on every visit. The
-   loader is shared, so two charts on one page cost one script tag, and a failed
-   load leaves the page without a chart rather than throwing during a render. */
-let chartLibPromise = null;
-function loadChartLib() {
-  if (window.Chart) return Promise.resolve(window.Chart);
-  if (chartLibPromise) return chartLibPromise;
-  chartLibPromise = new Promise((resolve, reject) => {
-    const script = document.createElement('script');
-    script.src = 'vendor/chart.umd.js';
-    script.onload = () => (window.Chart ? resolve(window.Chart) : reject(new Error('Chart.js did not register')));
-    script.onerror = () => reject(new Error('Chart.js failed to load'));
-    document.head.appendChild(script);
-  }).catch((error) => {
-    // One retry is allowed on the next render: the promise is cleared so a
-    // transient failure does not poison every later visit.
-    chartLibPromise = null;
-    console.warn(error.message);
-    return null;
-  });
-  return chartLibPromise;
-}
-
-async function initLineChart(canvasId, labels, data) {
-  const Chart = await loadChartLib();
-  if (!Chart) return;
-  // The page can re-render while the script is in flight, which replaces the
-  // canvas; drawing into the detached one would leave an empty card behind.
+function initLineChart(canvasId, labels, data) {
   const el = document.getElementById(canvasId);
-  if (!el || !document.contains(el)) return;
+  if (!el) return;
   if (charts[canvasId]) { try { charts[canvasId].destroy(); } catch (e) {} }
   const lineColor = cssVar('--green', '#2d6a4f');
   const gridColor = cssVar('--border', '#e0ede6');
@@ -4607,22 +4494,6 @@ function renderSubmit() {
             <div class="submit-side-title">Loading suggestions…</div>
           </div>
         </div>
-        <div class="submit-side-card" data-component="feedback">
-          <div class="submit-side-title">Something else?</div>
-          <p class="submit-sub">A bug, a missing view, a number that looks wrong — this goes to me, not into the suggestions list.</p>
-          <div class="sf-field">
-            <label class="sf-lbl" for="fb-what">Your feedback</label>
-            <textarea id="fb-what" class="sf-input sf-ta" maxlength="2000" data-chars="fb-chars" placeholder="What should change?"></textarea>
-            <div class="sf-chars"><span id="fb-chars">0</span> / 2000</div>
-          </div>
-          <div class="sf-field">
-            <label class="sf-lbl" for="fb-email">Email <span class="sf-opt">optional</span></label>
-            <input id="fb-email" class="sf-input" type="email" maxlength="254" placeholder="Only if you want a reply">
-          </div>
-          <label class="fb-hp">Leave this empty<input id="fb-hp" type="text" tabindex="-1" autocomplete="off"></label>
-          <div id="fb-msg"></div>
-          <button class="sf-submit-btn" data-act="sendFeedback"><span>✉</span> Send feedback</button>
-        </div>
         <div class="note-card">
           <div class="note-icon">💡</div>
           <div class="note-body"><strong>How it works</strong>Submissions go straight into my suggestions list — they won't automatically appear in the main tracker, they're a wishlist to pick from.</div>
@@ -4720,60 +4591,6 @@ async function submitSuggestion() {
   btn.innerHTML = '<span>✦</span> Submit Suggestion';
 }
 
-/* The feedback box on the Submit page. Separate from submitSuggestion on
-   purpose: that one appends a title to the wishlist, this one is the visitor
-   telling the owner something is wrong, and it posts to /api/feedback — the
-   one route this site added that never existed on Netlify.
-
-   Every failure is shown with the server's own sentence when it gives one: a
-   503 means the deployment has no `SITE_FEEDBACK` binding, and "could not send"
-   would send someone hunting for a bug in their browser instead. */
-async function sendFeedback(el) {
-  const what  = document.getElementById('fb-what').value.trim();
-  const email = document.getElementById('fb-email').value.trim();
-  const trap  = document.getElementById('fb-hp').value;
-  const msg   = document.getElementById('fb-msg');
-
-  if (what.length < 3) {
-    msg.innerHTML = '<div class="sf-error">Tell me what to fix or add — a few words is enough.</div>';
-    document.getElementById('fb-what').focus();
-    return;
-  }
-  if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-    msg.innerHTML = '<div class="sf-error">That email address does not look right (or leave it empty).</div>';
-    document.getElementById('fb-email').focus();
-    return;
-  }
-
-  const label = el.innerHTML;
-  el.disabled = true;
-  el.innerHTML = '<span>⏳</span> Sending…';
-  msg.textContent = '';
-
-  try {
-    const res  = await fetch('/api/feedback', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ suggestion: what, email, kind: 'ui', page: window.location.hash || '#submit', 'bot-field': trap }),
-    });
-    const json = await res.json().catch(() => null);
-
-    if (!res.ok || !json || json.ok !== true) {
-      msg.innerHTML = '<div class="sf-error">' + escapeHTML((json && json.error) || 'Could not send that just now. Please try again.') + '</div>';
-    } else {
-      msg.innerHTML = '<div class="sf-success">✓ Thanks — that reached me.</div>';
-      document.getElementById('fb-what').value = '';
-      document.getElementById('fb-email').value = '';
-      document.getElementById('fb-chars').textContent = '0';
-    }
-  } catch (e) {
-    msg.innerHTML = '<div class="sf-error">Could not send that — check your connection and try again.</div>';
-  }
-
-  el.disabled = false;
-  el.innerHTML = label;
-}
-
 // ── INIT ──────────────────────────────────────────────────────────────────
 
 /* ── Delegated markup handlers ────────────────────────────────────────────
@@ -4802,7 +4619,7 @@ async function sendFeedback(el) {
        suggSpin reads clientX/clientY off that event to place its ripple.
      * data-act and data-change both name a function in ACTIONS; which attribute an
        element carries is what decides the event it fires on. */
-const ACTIONS = { suggSpin, suggTryAgain, submitSuggestion, sendFeedback, updateSuggCount, calendarAction, applyUpdate, dismissUpdate };
+const ACTIONS = { suggSpin, suggTryAgain, submitSuggestion, updateSuggCount, calendarAction };
 
 // Read the live bindings, so a reassignment of any filter object is picked up.
 const filterByName = () => ({ curFilters, allFilters, datFilters, calFilters });
@@ -4847,20 +4664,13 @@ function applyDelegated(el, event, attr) {
     const other = document.querySelector('#dat-pag [data-page-step="' + (forward ? 'prev' : 'next') + '"]');
     const target = same && !same.disabled ? same : (other && !other.disabled ? other : null);
     if (target) target.focus({ preventScroll: true });
-    // The scroll position is computed rather than left to scrollIntoView:
-    // #dat-table is the horizontal scrollport, so it is a scroll container
-    // itself, and a scroll container's own scroll-margin is not applied when
-    // it is the scrollIntoView target — the table landed at the very top of
-    // the viewport, behind the sticky nav. The offset reads --nav-h, the
-    // same token the sticky header and the timeline jump bar are built from.
-    // No behaviour is passed, so the stylesheet owns it: html { scroll-
-    // behavior: smooth } and its prefers-reduced-motion override to auto.
+    // The scroll behaviour is left to the stylesheet (html { scroll-behavior:
+    // smooth }), which flips to auto under prefers-reduced-motion. Passing
+    // 'smooth' here would override that and animate for a reader who asked
+    // not to be moved. The table carries the scroll margin that parks its
+    // first row under the sticky nav.
     const table = document.getElementById('dat-table');
-    if (table) {
-      const navH = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--nav-h')) || 0;
-      const top = Math.max(0, window.scrollY + table.getBoundingClientRect().top - navH - 12);
-      window.scrollTo({ top: top });
-    }
+    if (table) table.scrollIntoView({ block: 'start' });
     return;
   }
   if (attr === 'data-chars') {
@@ -4923,77 +4733,7 @@ new MutationObserver(records => {
   }
 }).observe(document.body, { childList: true, subtree: true });
 
-/* ── Service worker and update prompt ──────────────────────────────────────
-   There was no worker on this site before, so an offline visit was a blank tab.
-   Registration is deliberately quiet: it waits for `load` (the watchlist fetch
-   matters more than the cache), and it never reloads the page on its own.
-
-   An update is offered, not applied. The worker waits; the bar below is the only
-   thing that posts SKIP_WAITING, and only the Reload button posts it. A visitor
-   reading the Data tab, or an admin halfway through an edit, keeps the code they
-   started with until they choose otherwise. */
-function registerWorker() {
-  if (!('serviceWorker' in navigator)) return;
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('sw.js', { scope: './' }).then(reg => {
-      // "Is an update waiting?" asked in one place, because the answer arrives
-      // through two races: the worker may already be waiting from a previous
-      // visit, and the `installed` state can land before the listener below is
-      // attached. Checking `reg.waiting` at every entry point makes the bar
-      // appear whichever of those won.
-      const announce = () => {
-        if (reg.waiting && navigator.serviceWorker.controller) offerUpdate();
-      };
-
-      announce();
-      reg.addEventListener('updatefound', () => {
-        const next = reg.installing;
-        if (next) {
-          next.addEventListener('statechange', () => {
-            if (next.state === 'installed') announce();
-          });
-        }
-        announce();
-      });
-    }).catch(() => { /* an unsupported or blocked worker is not an error the page needs to show */ });
-  });
-
-  window.addEventListener('sw:apply', () => {
-    navigator.serviceWorker.getRegistration().then(reg => {
-      const worker = reg && (reg.waiting || reg.active);
-      if (worker) worker.postMessage('SKIP_WAITING');
-      // Reload once the new worker controls this page; the timeout covers the
-      // case where controllerchange never fires because nothing was waiting.
-      setTimeout(() => window.location.reload(), 400);
-    });
-  });
-}
-
-function offerUpdate() {
-  if (document.getElementById('sw-update')) return;
-  const bar = document.createElement('div');
-  bar.id = 'sw-update';
-  bar.className = 'sw-update';
-  bar.setAttribute('role', 'status');
-  bar.innerHTML =
-    '<span class="sw-update-text">A new version of the dashboard is ready.</span>' +
-    '<button type="button" class="sw-update-go" data-act="applyUpdate">Reload</button>' +
-    '<button type="button" class="sw-update-x" data-act="dismissUpdate" aria-label="Dismiss update notice">✕</button>';
-  document.body.appendChild(bar);
-}
-
-function applyUpdate() {
-  window.dispatchEvent(new Event('sw:apply'));
-}
-
-function dismissUpdate(event) {
-  // Called from ACTIONS with `this` bound to the clicked button.
-  const bar = (event && event.target && event.target.closest) ? event.target.closest('.sw-update') : this && this.closest && this.closest('.sw-update');
-  if (bar) bar.remove();
-}
-
 bindNavigation();
 initTheme();
-registerWorker();
 window.addEventListener('hashchange', () => navigateTo(window.location.hash.slice(1) || 'readme'));
 bootData();

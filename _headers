@@ -27,15 +27,9 @@
 # form-action is 'self' rather than 'none' because the admin panel contains real
 # <form> elements; they are handled in JS, but a policy that forbids submission
 # outright would break the no-JS path rather than improve it.
-#
-# worker-src is 'self' because the site now registers sw.js for its offline
-# shell. It is not optional and it does not fall back usefully here: without a
-# worker-src, a worker is checked against child-src and then default-src, which
-# is 'none' on this site — so registration is refused and the page silently keeps
-# no offline behaviour, with the only evidence a console line.
 
 /*
-  Content-Security-Policy: default-src 'none'; script-src 'self'; style-src 'self'; worker-src 'self'; img-src 'self' data: https://image.tmdb.org https://static.tvmaze.com; font-src 'self'; connect-src 'self'; base-uri 'self'; form-action 'self'; object-src 'none'; frame-ancestors 'self' https://dashboards-home-portal.pages.dev
+  Content-Security-Policy: default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data: https://image.tmdb.org https://static.tvmaze.com; font-src 'self'; connect-src 'self'; base-uri 'self'; form-action 'self'; object-src 'none'; frame-ancestors 'self' https://dashboards-home-portal.pages.dev
   # frame-ancestors is the one directive a <meta> tag cannot carry. It names the
   # Dashboard Portal alongside 'self': the portal shows this dashboard in a
   # preview frame, and 'none' made every preview refuse to load. The legacy

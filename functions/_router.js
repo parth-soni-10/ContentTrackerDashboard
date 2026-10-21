@@ -49,7 +49,6 @@ import adminImportModule from "../netlify/functions/admin-import.js";
 import tmdbSearchModule from "../netlify/functions/tmdb-search.js";
 import imdbIdModule from "../netlify/functions/imdb-id.js";
 import calendarModule from "../netlify/functions/calendar.js";
-import feedbackModule from "./api/feedback.js";
 import db from "../netlify/functions/lib/db.js";
 
 const ROUTES = {
@@ -62,11 +61,6 @@ const ROUTES = {
   "/.netlify/functions/tmdb-search": tmdbSearchModule,
   "/.netlify/functions/imdb-id": imdbIdModule,
   "/.netlify/functions/calendar": calendarModule,
-  // The feedback box is not a Netlify function: it never existed on Netlify, so
-  // it has no legacy spelling to keep alive. It lives in this directory because
-  // that is where new routes belong, and is listed here so both entry styles
-  // answer from one table.
-  "/api/feedback": feedbackModule,
 };
 
 /** Hand this request's bindings to the code that expects Netlify's shape. */
@@ -79,9 +73,6 @@ function wireBindings(env) {
     }
   }
   if (env.DB) db.setDatabase(env.DB);
-  // KV handles are objects, not strings, so they cannot ride on process.env;
-  // the feedback route is handed its namespace the same way lib/db.js is.
-  feedbackModule.setStore(env.SITE_FEEDBACK);
 }
 
 /** Build the event the functions are written against out of this request. */
