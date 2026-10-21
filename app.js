@@ -4810,8 +4810,13 @@ function applyDelegated(el, event, attr) {
     const other = document.querySelector('#dat-pag [data-page-step="' + (forward ? 'prev' : 'next') + '"]');
     const target = same && !same.disabled ? same : (other && !other.disabled ? other : null);
     if (target) target.focus({ preventScroll: true });
+    // The scroll behaviour is left to the stylesheet (html { scroll-behavior:
+    // smooth }), which flips to auto under prefers-reduced-motion. Passing
+    // 'smooth' here would override that and animate for a reader who asked
+    // not to be moved. The table carries the scroll margin that parks its
+    // first row under the sticky nav.
     const table = document.getElementById('dat-table');
-    if (table) table.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    if (table) table.scrollIntoView({ block: 'start' });
     return;
   }
   if (attr === 'data-chars') {
