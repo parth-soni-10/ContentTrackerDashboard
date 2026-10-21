@@ -347,7 +347,7 @@ html.dark .rm-badge.genre { background: #24382c; color: var(--text-mid); }
 .spin-btn .sbi { font-size: 20px; }
 .spin-btn.spinning .sbi { animation: spinIcon .6s ease-out; }
 @keyframes spinIcon { 0% { transform: rotate(0) scale(1) } 50% { transform: rotate(200deg) scale(1.3) } 100% { transform: rotate(360deg) scale(1) } }
-.try-btn { width: 100%; padding: 11px; background: transparent; color: var(--green-lite); border: 1.5px solid var(--border-mid); border-radius: var(--r); font-family: "Inter", sans-serif; font-size: 14px; cursor: pointer; transition: color .2s, background-color .2s, border-color .2s; display: flex; align-items: center; justify-content: center; gap: 8px; }
+.try-btn { width: 100%; padding: 11px; background: transparent; color: var(--green); border: 1.5px solid var(--border-mid); border-radius: var(--r); font-family: "Inter", sans-serif; font-size: 14px; cursor: pointer; transition: color .2s, background-color .2s, border-color .2s; display: flex; align-items: center; justify-content: center; gap: 8px; }
 .try-btn:hover:not(:disabled) { border-color: var(--green-lite); background: var(--green-pale); color: var(--green); }
 .try-btn:disabled { opacity: .3; cursor: not-allowed; }
 .try-btn .arr { font-size: 16px; transition: transform .3s; }
@@ -1092,6 +1092,9 @@ html.dark .sw-update-go { color: var(--bg); }
 .hairline-figure > svg :where(.dot.m) { fill: var(--hairline-edge); }
 .hairline-figure > svg :where(.dot.off) { fill: var(--hairline-lo); }
 .hairline-card { display: grid; gap: 8px; }
+/* The figure is drawn at 400px wide; centre it and its read-out in the reel. */
+.hairline-card .hairline-figure { margin-inline: auto; }
+.hairline-card .hairline-read { justify-self: center; }
 .timeline-reel { max-width: 960px; margin: 18px auto; padding: 0 24px; }
 .hairline-read {
   margin: 0;
