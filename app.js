@@ -3773,7 +3773,9 @@ function calMonthBarHTML(days) {
   const summary = calState.status === 'ready'
     ? calSummaryHTML([calFilterFlagHTML()].concat(calCountParts(counts, true), ['in ' + escapeHTML(month.label)], [calCoverageHTML()])) + calUpdatedHTML()
     : '';
-  return '<div class="cal-month-bar"><div class="cal-month-tabs" role="tablist" aria-label="Month">' + tabs + '</div>' +
+  return '<div class="cal-month-bar"><div class="cal-month-tabs" role="tablist" aria-label="Month"' +
+    ' data-jelly-radio data-jelly-bare data-jelly-size="sm" data-jelly-radius="999"' +
+    ' data-jelly-swell="0.12" data-jelly-barge="3" data-jelly-shrink="0.04" data-jelly-stagger="14">' + tabs + '</div>' +
     '<div class="cal-month-sum" id="cal-summary">' + summary + '</div></div>';
 }
 function calYearSummaryHTML(days) {
