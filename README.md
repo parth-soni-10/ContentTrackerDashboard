@@ -24,3 +24,5 @@ The release calendar's data comes from three public sources — **TMDB** for fil
 ## Built with
 
 Plain **HTML / CSS / JavaScript**, **Chart.js** for the charts, and **Cloudflare Pages** with a **D1** database behind its functions.
+
+## Streaming data powered by [Watchmode.com](https://watchmode.com)
