@@ -999,3 +999,60 @@ a.name-link:hover .title-cell { color: var(--green-mid); text-decoration: underl
 .td-mid  { color: var(--text-mid); }
 .td-soft { color: var(--text-soft); }
 .season-note { color: var(--text-soft); font-weight: 400; }
+
+/* --- GlideSelect ----------------------------------------------------------
+   The Data filters are chips with a gliding menu. The native <select> is still
+   what app.js reads and re-filters on; the chip replaced only its surface. --- */
+.glide-select {
+  --gs-surface: var(--surface);
+  --gs-highlight: var(--green-pale);
+  --gs-text: var(--text);
+  --gs-accent: var(--green);
+  --gs-radius: 10px;
+  --gs-inner-radius: 6px;
+}
+
+/* The old 34px pill around the native select would double-frame the chip. */
+.df-select:has(> .glide-select) {
+  height: auto;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: default;
+}
+
+.df-select > .glide-select {
+  display: block;
+}
+
+.df-select .glide-select__trigger {
+  height: 34px;
+  border: 1px solid var(--border-mid);
+  border-radius: 8px;
+  background: var(--surface-soft);
+  color: var(--text-mid);
+  font-family: "Inter", sans-serif;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+html.dark .df-select .glide-select__trigger {
+  background: var(--surface-soft);
+  border-color: var(--border-mid);
+  color: var(--text-mid);
+}
+
+.glide-select__menu {
+  border: 1px solid var(--border-mid);
+  box-shadow: var(--shadow-md);
+}
+
+.glide-select__option {
+  font-family: "Inter", sans-serif;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.glide-select__option[aria-selected='true'] {
+  font-weight: 600;
+}

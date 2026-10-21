@@ -2173,11 +2173,11 @@ function renderData() {
       </div>
     </div>
     <div class="data-filters">
-      <div class="df-select"><select id="df-year" aria-label="Year"  data-filter="datFilters.year" data-rebuild="dataTable" data-page-reset>${yearOpts}</select></div>
-      <div class="df-select"><select id="df-plat" aria-label="Platform"  data-filter="datFilters.platform" data-rebuild="dataTable" data-page-reset>${platOpts}</select></div>
-      <div class="df-select"><select id="df-type" aria-label="Type"  data-filter="datFilters.type" data-rebuild="dataTable" data-page-reset>${typeOpts}</select></div>
-      <div class="df-select"><select id="df-genre" aria-label="Genre" data-filter="datFilters.genre" data-rebuild="dataTable" data-page-reset>${genreOpts}</select></div>
-      <div class="df-select"><select id="df-month" aria-label="Month" data-filter="datFilters.month" data-rebuild="dataTable" data-page-reset>${monthOpts}</select></div>
+      <div class="df-select"><select id="df-year" aria-label="Year" data-glide data-glide-menu-width="150"  data-filter="datFilters.year" data-rebuild="dataTable" data-page-reset>${yearOpts}</select></div>
+      <div class="df-select"><select id="df-plat" aria-label="Platform" data-glide data-glide-menu-width="180"  data-filter="datFilters.platform" data-rebuild="dataTable" data-page-reset>${platOpts}</select></div>
+      <div class="df-select"><select id="df-type" aria-label="Type" data-glide data-glide-menu-width="150"  data-filter="datFilters.type" data-rebuild="dataTable" data-page-reset>${typeOpts}</select></div>
+      <div class="df-select"><select id="df-genre" aria-label="Genre" data-glide data-glide-menu-width="180" data-filter="datFilters.genre" data-rebuild="dataTable" data-page-reset>${genreOpts}</select></div>
+      <div class="df-select"><select id="df-month" aria-label="Month" data-glide data-glide-menu-width="150" data-filter="datFilters.month" data-rebuild="dataTable" data-page-reset>${monthOpts}</select></div>
       <div class="df-divider"></div>
       <div class="df-search">
         <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle cx="6.5" cy="6.5" r="5" stroke="#7a9e8a" stroke-width="1.5"/><path d="M10.5 10.5L14 14" stroke="#7a9e8a" stroke-width="1.5" stroke-linecap="round"/></svg>
