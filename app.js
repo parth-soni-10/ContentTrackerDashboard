@@ -2502,6 +2502,43 @@ function updateDataTable() {
     '</div>';
 
   updateRatingStatus();
+
+  // ── Back to top button ──────────────────────────────────────────────
+  var backToTop = null;
+  function initBackToTop() {
+    if (!backToTop) {
+      backToTop = document.createElement('button');
+      backToTop.type = 'button';
+      backToTop.className = 'pag-btn data-back-to-top';
+      backToTop.ariaLabel = 'Back to top';
+      backToTop.textContent = '↑';
+      Object.assign(backToTop.style, {
+        position: 'fixed',
+        bottom: '24px',
+        right: '24px',
+        opacity: 0,
+        pointerEvents: 'none',
+        transition: 'opacity .2s',
+        zIndex: 100
+      });
+      document.body.appendChild(backToTop);
+      // Show when scrolled past the nav
+      window.addEventListener('scroll', function() {
+        const navH = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--nav-h')) || 0;
+        backToTop.style.opacity = (window.scrollY > navH + 60 ? 1 : 0);
+        backToTop.style.pointerEvents = window.scrollY > navH + 60 ? 'auto' : 'none';
+      });
+      // Scroll to top of data table when clicked
+      backToTop.addEventListener('click', function() {
+        const table = document.getElementById('dat-table');
+        if (!table) return;
+        const navH = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--nav-h')) || 0;
+        const top = Math.max(0, window.scrollY + table.getBoundingClientRect().top - navH - 12);
+        window.scrollTo({ top: top, behavior: 'smooth' });
+      });
+    }
+  }
+  initBackToTop();
 }
 
 // ── RATINGS ───────────────────────────────────────────────────────────────
