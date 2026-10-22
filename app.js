@@ -791,12 +791,12 @@ function renderAdminEditResults(query) {
   }
   container.innerHTML = matches.map(item => {
     const meta = [escapeHTML(item.type), item.season ? 'S' + escapeHTML(item.season) : '', item.year].filter(Boolean).join(' · ');
-    return '<div class="admin-edit-item">' +
+    return '<div class="admin-edit-item" data-swipe-row data-swipe-label="Entry actions">' +
       '<div class="admin-edit-info"><div class="admin-edit-name">' + escapeHTML(item.name) + '</div>' +
       (meta ? '<div class="admin-edit-meta">' + meta + '</div>' : '') + '</div>' +
       '<div class="admin-edit-actions">' +
-        '<button class="try-btn admin-edit-btn" type="button" data-row="' + item.row + '">Edit</button>' +
-        '<button class="try-btn admin-del-btn" type="button" data-row="' + item.row + '">Delete</button>' +
+        '<button class="try-btn admin-edit-btn" type="button" data-row="' + item.row + '" data-swipe-action data-swipe-label="Edit">Edit</button>' +
+        '<button class="try-btn admin-del-btn" type="button" data-row="' + item.row + '" data-swipe-action data-swipe-label="Delete" data-swipe-tone="danger">Delete</button>' +
       '</div>' +
     '</div>';
   }).join('');
@@ -1084,9 +1084,9 @@ function renderDuplicateScan() {
         ? '<span class="dup-tag copy">duplicate of #' + row._dupOf + '</span>'
         : (hasCopies ? '<span class="dup-tag keep">keep</span>' : '');
       const del = row._dupCopy
-        ? '<button class="try-btn admin-del-btn dup-del-btn" type="button" data-row="' + row.row + '">Remove</button>'
+        ? '<button class="try-btn admin-del-btn dup-del-btn" type="button" data-row="' + row.row + '" data-swipe-action data-swipe-label="Remove" data-swipe-tone="danger">Remove</button>'
         : '';
-      return '<div class="dup-row">' + tag + '<span>' + escapeHTML(desc) + '</span>' + del + '</div>';
+      return '<div class="dup-row" data-swipe-row data-swipe-full="off" data-swipe-label="Duplicate actions">' + tag + '<span>' + escapeHTML(desc) + '</span>' + del + '</div>';
     }).join('');
     return '<div class="dup-group">' + head + rowHTML + '</div>';
   };
