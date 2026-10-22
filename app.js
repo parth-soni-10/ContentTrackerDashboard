@@ -838,7 +838,17 @@ function cancelAdminEdit() {
 async function deleteAdminEntry(rowNumber, button) {
   const item = rawData.find(r => r.row === rowNumber);
   const label = item ? item.name : 'this entry';
-  if (!window.confirm('Delete "' + label + '" from the watchlist? This cannot be undone.')) return;
+  // A slide, not confirm(): deleting a row here also removes its hours from
+  // every chart on the dashboard, so the gesture should be worth a moment.
+  const ok = await SlideCommit.ask({
+    title: 'Delete "' + label + '"?',
+    text: 'The entry leaves the watchlist and every chart behind it. This cannot be undone.',
+    label: 'Slide to delete',
+    busy: 'Deleting…',
+    done: 'Deleted',
+    doneText: 'Row deleted.',
+  });
+  if (!ok) return;
   if (button) { button.disabled = true; button.textContent = 'Deleting…'; }
   // The element disappears if the user navigates mid-request; writing to a
   // stand-in object is then a harmless no-op instead of a TypeError.

@@ -29,6 +29,16 @@
   --shadow-md: 0 12px 32px rgba(16,35,26,.12), 0 2px 6px rgba(16,35,26,.05);
   --r: 14px;
   --nav-h: 60px;
+
+  /* Slide Commit — the sheet that replaced confirm() on row deletion. The
+     accent is --red: every host for this control is destructive. */
+  --sc-sheet-bg: var(--surface);
+  --sc-sheet-ink: var(--text);
+  --sc-sheet-muted: var(--text-mid);
+  --sc-sheet-line: var(--border);
+  --sc-sheet-rail: var(--surface-soft);
+  --sc-sheet-accent: var(--red);
+  --sc-sheet-on-accent: #fff;
 }
 
 /* Dark theme — same variables re-scoped so every component flips automatically */
@@ -49,6 +59,8 @@ html.dark {
   --text-soft: #93b0a0;
   --red: #e7877a;
   --red-pale: #3a2421;
+  /* Dark reds here are light pastels: white on them would be 2.2:1. */
+  --sc-sheet-on-accent: #0c1410;
   --shadow-sm: 0 1px 2px rgba(0,0,0,.4), 0 4px 14px rgba(0,0,0,.3);
   --shadow-md: 0 12px 32px rgba(0,0,0,.5), 0 2px 6px rgba(0,0,0,.38);
 }
