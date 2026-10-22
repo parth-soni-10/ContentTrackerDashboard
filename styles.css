@@ -95,6 +95,12 @@ nav { background: rgba(255,255,255,.9); border-bottom: 1px solid var(--border); 
 
 /* ── THEME TOGGLE ── */
 .theme-toggle { margin-left: 12px; width: 36px; height: 36px; flex-shrink: 0; background: var(--surface); border: 1px solid var(--border-mid); border-radius: 10px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; transition: background .2s, border-color .2s, transform .1s; color: var(--text-mid); }
+
+/* The theme control is a switch now: the track is the whole skin, and the
+   sun/moon glyphs it used to carry are hidden by data-ss-bare. The 7px of
+   vertical padding keeps a 42px tap target around a 28px track. */
+.theme-switch { margin-left: 12px; flex: none; padding: 7px 0; --ss-track: #c3d3c8; --ss-track-on: var(--green); --ss-thumb-color: #fff; }
+html.dark .theme-switch { --ss-track: #2c3a32; --ss-track-on: var(--green); --ss-thumb-color: #eef5f0; }
 .theme-toggle:hover { border-color: var(--green); color: var(--green); background: var(--green-pale); }
 .theme-toggle:active { transform: scale(.94); }
 .theme-toggle svg { width: 17px; height: 17px; }

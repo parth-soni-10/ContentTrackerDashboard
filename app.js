@@ -136,7 +136,7 @@ function initTheme() {
   if (!btn) return;
   const apply = () => {
     const dark = document.documentElement.classList.contains('dark');
-    btn.setAttribute('aria-pressed', String(dark));
+    btn.setAttribute('aria-checked', String(dark));
     btn.querySelector('.icon-sun')?.classList.toggle('show', dark);
     btn.querySelector('.icon-moon')?.classList.toggle('show', !dark);
   };
