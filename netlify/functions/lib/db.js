@@ -256,7 +256,12 @@ async function createEntry(entry) {
   );
   if (meta.changes) return { id: Number(meta.last_row_id) };
   const existing = await rows('SELECT id FROM entries WHERE dup_key = ? AND type = ? LIMIT 1', [key, values.type]);
-  return { duplicate: existing.length ? Number(existing[0].id) : 0 };
+  if (existing.length) return { duplicate: Number(existing[0].id) };
+  // The statement changed nothing and no row claims the key: the write did not
+  // happen, and there is no id to report. Saying so is the only honest answer —
+  // a caller that reads a 200 out of this would tell the page an entry exists
+  // that is nowhere in the store.
+  throw new Error('The entry was not written');
 }
 
 // Returns the entry's id, or 0 when the id matches no row — the callers answer

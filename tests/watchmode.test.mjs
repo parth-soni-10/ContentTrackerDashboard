@@ -715,3 +715,94 @@ test("a title asked for by name is attributed when TMDB lists no service", async
     globalThis.fetch = original;
   }
 });
+
+test("a film record TMDB does not have is a fallback, not a warning", async () => {
+  // The measured case: the feed names a film TMDB has no /movie record for, so
+  // the record call answers 404. The feed's own row still carries a title, a
+  // date and the service — which is a release a calendar can show — so the film
+  // stays, nothing about it reaches the page, and the miss is written down so
+  // the id is never asked for again.
+  const { impl: upstream } = calendarUpstream([
+    {
+      id: 9,
+      title: "Noi un po' meglio",
+      type: "movie",
+      tmdb_id: 1541477,
+      tmdb_type: "movie",
+      source_release_date: "2026-10-29",
+      source_name: "Netflix",
+      is_original: 1,
+    },
+  ]);
+  let recordAsks = 0;
+  const impl = async (url, options) => {
+    if (/\/movie\/\d+\?/.test(String(url))) {
+      recordAsks++;
+      return { ok: false, status: 404, async json() { return {}; } };
+    }
+    return upstream(url, options);
+  };
+  const d1 = fakeD1();
+  db.setDatabase(d1.binding);
+  const original = globalThis.fetch;
+  globalThis.fetch = impl;
+  try {
+    const response = await withEnv({ TMDB_API_KEY: "tmdb-test", WATCHMODE_API_KEY: "wm-test" }, () =>
+      calendar.handler(calendarRequest()),
+    );
+    assert.equal(response.statusCode, 200);
+    const body = JSON.parse(response.body);
+    const film = body.movies.find(item => item.id === 1541477);
+    assert.ok(film, "the film is still a release");
+    assert.equal(film.title, "Noi un po' meglio", "the feed's own title stands in for the record's");
+    assert.equal(film.poster, null);
+    assert.deepEqual(film.providers, ["Netflix"]);
+    assert.equal(
+      body.warnings.some(text => /TMDB film/.test(text)),
+      false,
+      "a 404 on one film's record is not something the page is told",
+    );
+    assert.equal(d1.lookups.get(1541477).title, "", "the miss is written down");
+
+    // The second load of the month asks for no record at all: the miss is cached
+    // exactly like a hit, so a film without one is not re-queried forever.
+    recordAsks = 0;
+    await withEnv({ TMDB_API_KEY: "tmdb-test", WATCHMODE_API_KEY: "wm-test" }, () =>
+      calendar.handler(calendarRequest({ fresh: "2" })),
+    );
+    assert.equal(recordAsks, 0, "the cached miss is used instead of asking again");
+  } finally {
+    globalThis.fetch = original;
+    db.setDatabase(null);
+  }
+});
+
+test("a write that changed nothing is not reported as a saved entry", async () => {
+  // The failure this guards against: an insert that matched nothing and a read
+  // that then found no row. The old answer was `{ duplicate: 0 }`, which the
+  // caller read as a successful create and the page painted as a tick.
+  const statements = [];
+  const binding = {
+    prepare(sql) {
+      statements.push(sql.replace(/\s+/g, " ").trim());
+      return {
+        bind() {
+          return {
+            async all() { return { results: [] }; },
+            async run() { return { meta: { changes: 0, last_row_id: 0 } }; },
+          };
+        },
+      };
+    },
+  };
+  db.setDatabase(binding);
+  try {
+    await assert.rejects(
+      () => db.createEntry({ name: "You, Me, Us", type: "Movie", watchDate: "2026-10-29" }),
+      /not written/,
+      "a create that stored nothing has to say so",
+    );
+  } finally {
+    db.setDatabase(null);
+  }
+});

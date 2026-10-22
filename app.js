@@ -587,14 +587,23 @@ function uniqueVals(key) {
   return [...new Set(rawData.map(r => r[key]).filter(Boolean))].sort();
 }
 
+// A title, or a search box's text, reduced to its letters and digits. A comma
+// or a colon is not what anyone remembers about a title, so it cannot be what
+// decides a search misses the row that is sitting right there: "you me us" has
+// to find "You, Me, Us", and the calendar's own filter asks the same question.
+function titleKey(value) {
+  return String(value || '').toLowerCase().replace(/[^a-z0-9]+/g, '');
+}
+
 function filterData(d, f) {
+  const query = titleKey(f.search);
   return d.filter(r =>
     (!f.year     || f.year     === 'all' || r.year     == f.year) &&
     (!f.platform || f.platform === 'all' || r.platform === f.platform) &&
     (!f.genre    || f.genre    === 'all' || r.genre    === f.genre) &&
     (!f.type     || f.type     === 'all' || r.type     === f.type) &&
     (!f.month    || f.month    === 'all' || r.month    === f.month) &&
-    (!f.search   || r.name.toLowerCase().includes(f.search.toLowerCase()))
+    (!query      || titleKey(r.name).includes(query))
   );
 }
 
@@ -3143,8 +3152,8 @@ function calMatches(item, opts) {
     return false;
   }
   if (platform && platform !== 'all' && !onPlatform) return false;
-  const query = String(calFilters.search || '').trim().toLowerCase();
-  if (query && calTitle(item).toLowerCase().indexOf(query) === -1) return false;
+  const query = titleKey(calFilters.search);
+  if (query && titleKey(calTitle(item)).indexOf(query) === -1) return false;
   return true;
 }
 // What a day you have opened is: the whole day, not the month's noise dial. The
@@ -3324,6 +3333,23 @@ async function calFetchWindow(win, fresh) {
 // beside the month, with the same Add button the rest of the Admin calendar
 // carries. Without this, a title that exists can simply never be found.
 let calDirectTimer = null;
+// The window the calendar has on screen, read back from the cache key the load
+// was stored under ('from|to|region') — the same string the cache is keyed by,
+// so the two cannot disagree about what is loaded.
+function calLoadedRange() {
+  const parts = String(calState.key || '').split('|');
+  return parts.length >= 2 && parts[0] && parts[1] ? { from: parts[0], to: parts[1] } : null;
+}
+// A title found by name that belongs to the window on screen. It is painted on
+// its day like any other listing; the strip beside the calendar is for the one
+// that is outside the period being looked at.
+function calDirectOnScreen() {
+  const item = calState.direct;
+  if (!item || !item.date) return null;
+  const range = calLoadedRange();
+  if (!range) return null;
+  return item.date >= range.from && item.date <= range.to ? item : null;
+}
 function calDirectSearch(query) {
   const text = String(query || '').trim();
   clearTimeout(calDirectTimer);
@@ -3332,10 +3358,14 @@ function calDirectSearch(query) {
     return;
   }
   calDirectTimer = setTimeout(async () => {
+    // The answer already on screen is the answer: a second keystroke inside the
+    // same title would otherwise buy the same lookup again.
+    const shown = calState.direct;
+    if (shown && titleKey(shown.title).indexOf(titleKey(text)) !== -1) return;
     // A local match means the month already has it: no second lookup, and no
     // strip repeating what the grid says.
     const local = calState.data && Object.keys(calState.data.days).some(date =>
-      calState.data.days[date].some(item => String(item.title || '').toLowerCase().includes(text.toLowerCase())));
+      calState.data.days[date].some(item => titleKey(item.title).indexOf(titleKey(text)) !== -1));
     if (local) {
       if (calState.direct) { calState.direct = null; updateCalendar(); }
       return;
@@ -3368,7 +3398,9 @@ function calDirectSearch(query) {
 }
 function calDirectHTML() {
   const item = calState.direct;
-  if (!item) return '';
+  // In the window, it is already in the grid on its own day (see calFilteredDays),
+  // so the strip would be a second copy of one release.
+  if (!item || calDirectOnScreen()) return '';
   const day = new Date(item.date + 'T00:00:00').toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'long', year: 'numeric' });
   return '<div class="cal-direct">' +
     '<div class="cal-direct-label">Found by name &mdash; not in this month&rsquo;s list</div>' +
@@ -3534,35 +3566,85 @@ function calQuickAddPayload(item, date) {
     watchDate: date,
   };
 }
+// The POST, read the way the page needs it: the status, and the endpoint's own
+// JSON only when it really sent JSON. A 200 that is not that JSON — an edge
+// page, a cached shell answering in the endpoint's place — used to be read as
+// success, because the parse failure was swallowed; the tick appeared and
+// nothing had been stored. The content type is the cheapest way to tell the
+// two apart, and a body that will not parse is not a confirmation either.
+async function calPostEntry(payload) {
+  const response = await fetch('/.netlify/functions/admin-entry', { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin', body: JSON.stringify(payload) });
+  let result = null;
+  if (String(response.headers.get('content-type') || '').indexOf('json') !== -1) {
+    try { result = await response.json(); } catch (e) { result = null; }
+  }
+  return { response: response, result: result };
+}
+// What the endpoint counts as saved: a new row's id, or the id of the row the
+// duplicate rule already had. Anything else is not a write, whatever the status.
+const calEntrySaved = saved => Boolean(saved && saved.response && saved.response.ok && saved.result &&
+  (Number(saved.result.rowNumber) > 0 || saved.result.duplicate === true));
+// The row, in the list this visit has read back. This is what the ✓ stands for:
+// a tick the store cannot back is how a listing ends up "saved" and nowhere.
+function calRowSaved(payload) {
+  const key = dupNormTitle(payload.name);
+  return rawData.some(row => dupNormTitle(row.name) === key &&
+    (!payload.watchDate || dupDateKey(row.watchDate) === dupDateKey(payload.watchDate)));
+}
 async function calQuickAdd(button) {
-  const item = calFindItem(button.dataset.id || '', button.dataset.date || '');
+  const date = button.dataset.date || '';
+  const item = calFindItem(button.dataset.id || '', date);
   if (!item) return;
   const idle = button.classList.contains('cal-row-add') ? '＋ Add' : '＋';
+  const payload = calQuickAddPayload(item, date);
   button.disabled = true;
   button.textContent = '…';
   button.title = 'Adding to your watchlist…';
   try {
-    const response = await fetch('/.netlify/functions/admin-entry', { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin', body: JSON.stringify(calQuickAddPayload(item, button.dataset.date)) });
-    const result = await response.json().catch(() => ({}));
-    if (response.status === 401 && result.code === 'SESSION_INVALID') {
+    // Every list on the site reads a row's year off its watch date, so a
+    // listing with no release day would be stored as a row nobody can see.
+    if (!payload.watchDate) throw new Error('That listing has no release date to save');
+    let saved = await calPostEntry(payload);
+    // The status is the whole answer here: a 401 from this endpoint means the
+    // cookie it was given is not a valid admin session, whatever its body says.
+    if (saved.response.status === 401) {
       expireAdminSession('Your admin session has ended.');
       return;
     }
-    if (!response.ok) throw new Error(result.error || 'Unable to save entry');
+    // One retry: a single refused POST is usually the edge rather than the
+    // store, and the server's duplicate rule makes asking twice harmless.
+    if (!calEntrySaved(saved)) saved = await calPostEntry(payload);
+    if (!calEntrySaved(saved)) throw new Error((saved.result && saved.result.error) || 'The entry was not saved');
     // The server's own duplicate rule is the guard here — there is no add-time
     // gate on a one-click add — so an "already saved" answer is a done state,
     // not an error.
     calAdded.add(dupNormTitle(item.title));
     // The write is in the store but not in this visit's snapshot, so a search
-    // right after the click would miss it. Re-read quietly (no repaint, so the
-    // form and the calendar state are untouched) past the CDN cache, and then
-    // repaint the calendar.
+    // right after the click would miss it. Re-read past the CDN cache (no
+    // repaint, so the form and the calendar state are untouched), then check the
+    // row is really in that list before the page calls it saved.
     try { await loadData(true, true); } catch (e) {}
+    if (!loadFailed && !calRowSaved(payload)) {
+      await new Promise(resolve => setTimeout(resolve, 900));
+      try { await loadData(true, true); } catch (e) {}
+    }
+    if (!loadFailed && !calRowSaved(payload)) {
+      calAdded.delete(dupNormTitle(item.title));
+      calState.notice = 'That add did not reach your watchlist — nothing was saved. Try again.';
+      updateCalendar();
+      return;
+    }
+    calState.notice = '';
     updateCalendar();
   } catch (error) {
+    const message = (error && error.message) || 'Unable to save entry';
+    calState.notice = message;
+    // The repaint rebuilds the button from the calendar's own state, so this is
+    // where it goes back to its idle face — and the notice above says why.
     button.disabled = false;
     button.textContent = idle;
-    button.title = (error && error.message) || 'Unable to save entry';
+    button.title = message;
+    updateCalendar();
   }
 }
 function calItemHTML(item, date) {
@@ -3605,12 +3687,29 @@ function calDayCounts(list) {
 }
 // Filtered items for every day in the window: the single source the grid, the
 // agenda and the counts all read from, so they can never disagree.
+//
+// A title found by name joins it when its date is inside the window. That is
+// what makes a film TMDB's discover lists cannot see — no watch provider in any
+// region, so no provider-filtered query returns it — a release *in the month*
+// rather than a footnote beside it: it lands on its own day, counts in the
+// day's figure, opens the day's drawer and sorts with the rest of that day.
 function calFilteredDays() {
   const days = {};
   if (!calState.data) return days;
-  Object.keys(calState.data.days).forEach(date => {
-    const list = calState.data.days[date].filter(calMatches);
-    if (list.length) days[date] = list;
+  const direct = calDirectOnScreen();
+  const dates = Object.keys(calState.data.days);
+  if (direct && dates.indexOf(direct.date) === -1) dates.push(direct.date);
+  dates.forEach(date => {
+    let list = calState.data.days[date] || [];
+    if (direct && direct.date === date) {
+      // One release, one tile: the month's own record of the film wins when it
+      // is already there under a title that differs only in punctuation.
+      const key = titleKey(direct.title);
+      const known = list.some(entry => entry.media === 'movie' && titleKey(entry.title) === key);
+      if (!known) list = list.concat([direct]);
+    }
+    const kept = list.filter(calMatches);
+    if (kept.length) days[date] = kept;
   });
   return days;
 }
@@ -3953,16 +4052,19 @@ function updateCalendar() {
   if (mCount) mCount.textContent = counts.films;
   if (eCount) eCount.textContent = counts.episodes;
 
-  const warnings = data.warnings.length
-    ? '<div class="cal-warn"><strong>Partially loaded</strong>' + escapeHTML(data.warnings.join(' · ')) + '</div>'
-    : '';
+  // Nothing about the upstream is shown here. A calendar's reader cannot act on
+  // "TMDB film · HTTP 404", and a source that dropped one film is not the
+  // reader's problem: the function falls back (the release feed's own title,
+  // date and service stand in for a record TMDB does not have), what did arrive
+  // is painted, and Refresh asks again. The one thing worth a line is the result
+  // of something the reader just did, which is `calState.notice`.
   const notice = calState.notice ? '<div class="cal-notice">' + escapeHTML(calState.notice) + '</div>' : '';
   if (calState.scope === 'next') {
-    main.innerHTML = warnings + notice + calDirectHTML() + calYearHTML(days);
+    main.innerHTML = notice + calDirectHTML() + calYearHTML(days);
   } else {
     const monthDays = Object.keys(days).filter(date => date >= month.first && date <= month.last);
     const none = monthDays.length ? '' : '<div class="cal-none">Nothing matches these filters in ' + escapeHTML(month.label) + ' — try “Everything” or a different platform.</div>';
-    main.innerHTML = warnings + notice + calDirectHTML() + calGridHTML(month, days, today) + calAgendaHTML(month, days) + none;
+    main.innerHTML = notice + calDirectHTML() + calGridHTML(month, days, today) + calAgendaHTML(month, days) + none;
   }
   calPosters(main);
   paintCalDrawer();

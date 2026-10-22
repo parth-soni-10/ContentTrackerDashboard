@@ -102,9 +102,17 @@ const MAX_UNION_REGIONS = 30;
 // under 50 on their own. Past TMDB_CALL_BUDGET no new TMDB work starts and the
 // region lands in the partial/cut report below, instead of the tail of the
 // request arriving as a per-provider "Too many subrequests" warning.
+//
+// 30, not 40: a movies request also carries the release feed (up to WM_CALL_BUDGET
+// credits) and the TMDB records the films it found need (WM_DETAIL_BUDGET), and
+// those are subrequests of the *same* invocation. Spending 40 on sweeps left the
+// tail of the feed at the platform's ceiling — measured on the live October
+// window, three provider sweeps and the feed's own releases call came back "Too
+// many subrequests", so the streaming half of the calendar arrived empty. The
+// feed is the half nothing else can replace, so the sweeps give it the room.
 const REGION_BUDGET_MS = 20000;
 const UNION_BUDGET_MS = 9000;
-const TMDB_CALL_BUDGET = 40;
+const TMDB_CALL_BUDGET = 30;
 // The platform's own ceiling on one invocation's external subrequests, counted
 // across every source in it — TMDB, the release feed, and the records the
 // feed's own films need. Past it the request is killed with nothing to show,
@@ -112,7 +120,7 @@ const TMDB_CALL_BUDGET = 40;
 const SUBREQUEST_CAP = 50;
 // What the release feed leaves for the rest of the invocation: the TMDB
 // records the films it found need, and the episode half that runs beside it.
-const WM_SUBREQUEST_RESERVE = 12;
+const WM_SUBREQUEST_RESERVE = 14;
 // How many regions are worked on at once. The ceiling that matters is the total
 // in-flight upstream requests — this times BATCH, the fan-out inside one region —
 // because TMDB's documented upper limit is "somewhere in the 40 requests per
@@ -579,6 +587,49 @@ function applyLookup(film, record) {
   if (record.popularity) film.popularity = record.popularity;
 }
 
+// One TMDB record, by id, for a film the release feed named — the poster, the
+// rating and TMDB's own title.
+//
+// A 404 here is an ordinary answer, not a failure: the feed's id can name a
+// record TMDB does not have as a film, and the feed's own row still carries a
+// title, a date and the service the film arrived on, which is everything a
+// calendar needs. So the miss is written down as an empty record — one ask, then
+// never again — and nothing about it reaches the page: a reader cannot act on
+// "TMDB film · HTTP 404", and a title shown without a poster is the fallback
+// working rather than a fault to report.
+async function filmRecord(id, usage, deadline) {
+  if (usage) {
+    if (usage.limit && (usage.total || 0) >= usage.limit) return null;
+    usage.tmdb++;
+    usage.total = (usage.total || 0) + 1;
+  }
+  if (deadline && Date.now() > deadline) return null;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+  try {
+    const response = await fetch(tmdbUrl('/movie/' + id, {}).toString(), {
+      signal: controller.signal,
+      headers: { accept: 'application/json' },
+    });
+    if (response.status === 404) {
+      return { tmdbId: Number(id) || 0, title: '', poster: '', rating: 0, popularity: 0 };
+    }
+    if (!response.ok) return null;
+    const details = await response.json();
+    return {
+      tmdbId: Number(id) || 0,
+      title: details.title || '',
+      poster: details.poster_path ? IMG_BASE + details.poster_path : '',
+      rating: round1(details.vote_average),
+      popularity: Math.round(Number(details.popularity) || 0),
+    };
+  } catch (error) {
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 // The cache the Watchmode client reads and writes. The answers are keyed by
 // the request that produced them, so a window that is asked for twice costs
 // one credit the second time and none at all once the D1 migration has been
@@ -726,15 +777,12 @@ async function loadWatchmode(from, to, regions, warnings, usage, deadline, movie
     }
     if (budget <= 0) break;
     budget--;
-    const details = await tmdbJSON(tmdbUrl('/movie/' + arrival.id, {}), warnings, 'TMDB film', usage, deadline);
-    if (!details) continue;
-    const record = {
-      tmdbId: arrival.id,
-      title: details.title || '',
-      poster: details.poster_path ? IMG_BASE + details.poster_path : '',
-      rating: round1(details.vote_average),
-      popularity: Math.round(Number(details.popularity) || 0),
-    };
+    const record = await filmRecord(arrival.id, usage, deadline);
+    // No record to be had, or no budget left to ask: the feed's own title, date
+    // and service are already on the entry, so the calendar has a release to
+    // show either way — a missing poster is a smaller loss than a page that
+    // says something went wrong.
+    if (!record) continue;
     await db.writeWmLookup(record);
     applyLookup(film, record);
     report.resolved++;
