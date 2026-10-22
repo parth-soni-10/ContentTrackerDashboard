@@ -1,8 +1,9 @@
 const { pickMatch } = require('./lib/tmdb');
+const { clientIp, lookupState, recordLookup } = require('./lib/throttle');
 
-const json = (statusCode, body) => ({
+const json = (statusCode, body, headers = {}) => ({
   statusCode,
-  headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' },
+  headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', ...headers },
   body: JSON.stringify(body)
 });
 
@@ -30,13 +31,31 @@ exports.handler = async event => {
   if (event.httpMethod !== 'GET') return json(405, { error: 'Method not allowed' });
   if (!process.env.TMDB_API_KEY) return json(500, { error: 'TMDB is not configured' });
 
-  const title = clean(event.queryStringParameters?.title, 160);
-  const season = clean(event.queryStringParameters?.season, 10);
-  const type = clean(event.queryStringParameters?.type, 20);
+  const params = event.queryStringParameters || {};
+  const title = clean(params.title, 160);
+  const season = clean(params.season, 10);
+  const type = clean(params.type, 20);
   if (!title) return json(400, { error: 'Title is required' });
 
+  // This endpoint is world-callable and spends other people's quota — a TMDB
+  // search plus external_ids here, and up to details, providers and an OMDb call
+  // on the full path — while the one thing it does that anyone can reach is a
+  // single INSERT, and that one is limited. So is this: the light tier allows a
+  // whole ratings pass, the full tier (five upstream calls a request) is tighter.
+  // Checked after validation, so a malformed call costs nothing.
+  const light = params.light === '1';
+  const tier = light ? 'light' : 'full';
+  const ip = clientIp(event);
+  const limit = lookupState(ip, tier);
+  if (limit.limited) {
+    return json(429, {
+      error: `Too many lookups from this connection. Try again in ${limit.retryAfter} seconds.`
+    }, { 'Retry-After': String(limit.retryAfter) });
+  }
+  recordLookup(ip, tier);
+
   // Lightweight poster + rating lookup — one TMDB search, no details/providers.
-  if (event.queryStringParameters?.light === '1') {
+  if (light) {
     try {
       const searchUrl = new URL('https://api.themoviedb.org/3/search/multi');
       searchUrl.search = new URLSearchParams({ api_key: process.env.TMDB_API_KEY, query: title, include_adult: 'false', page: '1' });
@@ -74,11 +93,14 @@ exports.handler = async event => {
         }
         if (rating != null) rating = Math.max(0, Math.min(10, rating));
       }
+      // A poster and an IMDb id never change, and a rating changes by a tenth at
+      // most — so the answer is cacheable for a day, which is what makes the
+      // ceiling above about *distinct titles* rather than about clicks.
       return json(200, {
         poster: match && match.poster_path ? 'https://image.tmdb.org/t/p/w185' + match.poster_path : null,
         rating,
         imdbId
-      });
+      }, { 'Cache-Control': 'public, max-age=86400' });
     } catch (error) {
       return json(502, { error: 'Unable to reach the autofill service. Please try again.' });
     }

@@ -37,6 +37,10 @@ let loadRetried = false;
 // target and lock state). goalError carries a transient save-failure message.
 let goalState = { hrs: 0, year: '' };
 let goalError = '';
+// A goal this device remembers from an earlier visit. It is only ever offered as
+// a prefill for the Set input — never written back to the shared store on a read
+// (see loadGoal).
+let localGoalHint = null;
 let goalReady = Promise.resolve();
 
 function escapeHTML(value) {
@@ -377,8 +381,7 @@ function renderDataError() {
 // not "the network is down". That reason is left in goalError for the caller to
 // show; anything else is a plain failure and the card keeps working on this
 // device.
-async function setSharedGoal(hrs, year, options) {
-  const quiet = Boolean(options && options.quiet);
+async function setSharedGoal(hrs, year) {
   try {
     const res = await fetch('/.netlify/functions/goal', {
       method: 'POST',
@@ -387,7 +390,7 @@ async function setSharedGoal(hrs, year, options) {
       body: JSON.stringify({ hrs, year })
     });
     if (res.status === 401) {
-      if (!quiet) goalError = 'Sign in on the Admin page to set the shared goal.';
+      goalError = 'Sign in on the Admin page to set the shared goal.';
       return null;
     }
     const data = res.ok ? await res.json().catch(() => ({})) : null;
@@ -398,10 +401,20 @@ async function setSharedGoal(hrs, year, options) {
   return null;
 }
 
-// Fetch the shared goal. If the server has none yet but this browser has an
-// old local goal, migrate it up once so it starts syncing to other devices.
-// If the server can't answer (offline / not configured), fall back to
-// whatever this browser last saved locally so the card still works.
+// Fetch the shared goal. **Reading never writes.**
+//
+// This used to publish a device's remembered goal back into the store on a page
+// load. The badge on that is not "a visitor sees the goal they already had" — the
+// owner's browser holds a 30-day session, so the write lands. And the year's
+// lock is held against the *stored* year, so on 1 January it no longer applies:
+// the first visit from any device carrying an old ct-goal would define the new
+// year's goal by itself, for every device. A remembered value is offered as a
+// prefill (localGoalHint) instead; only the Set button, a real click behind the
+// admin gate, writes it.
+//
+// If the server can't answer (offline / not configured), fall back to whatever
+// this browser last saved locally so the card still reads sensibly — still
+// without sending anything.
 async function loadGoal() {
   let serverReachable = false;
   try {
@@ -419,17 +432,12 @@ async function loadGoal() {
     localHrs = parseFloat(localStorage.getItem('ct-goal') || '0') || 0;
     localYear = String(localStorage.getItem('ct-goal-year') || '');
   } catch (e) {}
-  if (!goalState.hrs && localHrs > 0) {
-    if (serverReachable) {
-      // Quiet: this is a page load, not a click. A visitor with an old local
-      // goal and no admin session gets the goal they are already seeing, not a
-      // sign-in prompt they did not ask for; the Set button says that when it is
-      // pressed.
-      const saved = await setSharedGoal(localHrs, localYear || String(new Date().getFullYear()), { quiet: true });
-      if (saved) goalState = saved;
-    } else {
-      goalState = { hrs: localHrs, year: localYear };
-    }
+  if (serverReachable) {
+    // The store is the truth even when it holds no goal. A remembered value is
+    // only ever a suggestion for the Set input.
+    localGoalHint = (!goalState.hrs && localHrs > 0) ? { hrs: localHrs, year: localYear } : null;
+  } else if (!goalState.hrs && localHrs > 0) {
+    goalState = { hrs: localHrs, year: localYear };
   }
 }
 
@@ -460,13 +468,24 @@ function mapRows(json) {
 
 // Cheap signature of the current dataset (rows + goal) used to tell whether a
 // network refresh actually changed anything worth repainting.
+//
+// Every field a page renders goes in. The old hash mixed in the name's *length*
+// and the screentime only, so an edit that changed a genre, a platform, the type
+// or an episode count kept the signature — the silent refresh fetched the new
+// rows, decided nothing had changed, and left the old paint on screen until the
+// next navigation. Screentime and date were in it, which is why the fill-in-zeros
+// write did repaint and this looked fine in testing.
 function dataSignature(rows, goal) {
   goal = goal || goalState;
   let hash = 5381;
-  rows.forEach(r => {
-    hash = ((hash * 33) ^ (r.row * 131 + (r.name || '').length + (r.watchDate || '').length + (Number(r.screentime) || 0))) >>> 0;
-  });
-  return hash + ':' + rows.length + ':' + goal.hrs + ':' + goal.year;
+  const text = rows.map(r => [r.row, r.name, r.season, r.type, r.genre, r.platform,
+    r.episodes, r.screentime, r.watchDate, r.month, r.year].join('\u0001')).join('\u0002');
+  for (let i = 0; i < text.length; i++) hash = ((hash * 33) ^ text.charCodeAt(i)) >>> 0;
+  // The goal card also changes when a remembered value arrives to prefill it, and
+  // that read resolves after the snapshot paint — so the hint is part of what the
+  // page shows, and part of what decides a repaint.
+  const hint = localGoalHint ? localGoalHint.hrs + '/' + localGoalHint.year : '';
+  return hash + ':' + rows.length + ':' + goal.hrs + ':' + goal.year + ':' + hint;
 }
 
 function saveDataSnapshot(json) {
@@ -723,7 +742,7 @@ function renderAdminForm() {
     </div>
     <div class="submit-form-card">
       <h2 class="submit-heading">Database Cleanup</h2>
-      <p class="submit-sub">Finds stored rows with no watch date and 0 minutes — rows the rest of the site never shows. Delete them to keep the database clean.</p>
+      <p class="submit-sub">Finds stored rows with no usable watch date — rows the rest of the site never shows, whatever their screentime. Delete them to keep the database clean.</p>
       <button class="try-btn admin-clean-btn" id="admin-clean-scan" type="button">Scan for invalid rows</button>
       <div id="admin-clean-msg" aria-live="polite"></div>
       <div id="admin-clean-results" class="admin-clean-results" aria-live="polite"></div>
@@ -941,7 +960,9 @@ function expireAdminSession(reason) {
 // identical screentime, compared seasons as raw text and ignored the media
 // type: it missed "S2" vs "2", let a same-named movie and series collide, and
 // waved through a rewatch without a word.
-function adminDuplicateCheck(payload) {
+// `excludeRow` is the row being edited: the duplicate rule is about *other*
+// rows, so the entry loaded into the form must never count as its own match.
+function adminDuplicateCheck(payload, excludeRow) {
   const found = { exact: [], exists: [] };
   const name = dupNormTitle(payload.name);
   if (!name) return found;
@@ -950,6 +971,7 @@ function adminDuplicateCheck(payload) {
   const date = dupDateKey(payload.watchDate);
   const screentime = Number(payload.screentime) || 0;
   rawData.forEach(item => {
+    if (excludeRow != null && item.row === excludeRow) return;
     if (dupNormTitle(item.name) !== name) return;
     if (dupKind(item.type) !== kind) return;
     if (dupSeasonKey(item.season) !== season) return;
@@ -1183,7 +1205,7 @@ function renderInvalidRows() {
   const container = document.getElementById('admin-clean-results');
   if (!container) return;
   if (!adminCleanupRows.length) {
-    container.innerHTML = '<div class="clean-clear">✓ No invalid rows found. The database is clean.</div>';
+    container.innerHTML = '<div class="clean-clear">✓ No unreachable rows found — every stored entry has a usable watch date.</div>';
     return;
   }
   const cell = value => escapeHTML(value === '' || value == null ? '—' : String(value));
@@ -1204,7 +1226,7 @@ function renderInvalidRows() {
     '</tr>'
   ).join('');
   container.innerHTML =
-    '<div class="clean-sub">' + adminCleanupRows.length + ' invalid row' + (adminCleanupRows.length === 1 ? '' : 's') + ' — no watch date and 0 minutes</div>' +
+    '<div class="clean-sub">' + adminCleanupRows.length + ' unreachable row' + (adminCleanupRows.length === 1 ? '' : 's') + ' — no usable watch date</div>' +
     '<div class="clean-table-wrap"><table class="clean-table"><thead><tr>' +
       '<th>ID</th><th>Name</th><th>Season</th><th>Type</th><th>Genre</th><th>Platform</th>' +
       '<th>Eps</th><th>Mins</th><th>Watch date</th><th>Added (UTC)</th><th></th>' +
@@ -1228,8 +1250,8 @@ async function deleteInvalidRow(rowNumber, button) {
     msg().innerHTML = '<div class="sf-success">Deleted row #' + escapeHTML(String(rowNumber)) +
       (row ? ' (' + escapeHTML(row.name) + ')' : '') + '. ' +
       (adminCleanupRows.length
-        ? adminCleanupRows.length + ' invalid row' + (adminCleanupRows.length === 1 ? '' : 's') + ' left.'
-        : 'The database is clean.') + '</div>';
+        ? adminCleanupRows.length + ' unreachable row' + (adminCleanupRows.length === 1 ? '' : 's') + ' left.'
+        : 'No unreachable rows left in this scan.') + '</div>';
   } catch (error) {
     msg().innerHTML = '<div class="sf-error">' + escapeHTML(error.message) + '</div>';
     if (button) { button.disabled = false; button.textContent = originalLabel; }
@@ -1293,9 +1315,30 @@ async function autofillAdminEntry() {
     // trusting bare popularity (see pickMatch on the function).
     if (typeSel) query.set('type', typeSel.value === 'Movie' ? 'movie' : 'tv');
     const response = await fetch('/.netlify/functions/tmdb-search?' + query.toString(), { credentials: 'same-origin' });
-    const data = await response.json();
+    const data = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(data.error || 'Could not find this title');
-    const fields = { 'admin-name': data.name || name, 'admin-type': data.type || 'Movie', 'admin-season': data.season || (data.type === 'Movie' ? '' : season || '1'), 'admin-genre': String(data.genre || 'Uncategorized').split(',')[0].trim(), 'admin-platform': String(data.platform || 'Unknown platform').split(',')[0].trim(), 'admin-episodes': data.episodes || (data.type === 'Movie' ? 0 : 1), 'admin-screentime': data.screentime || 0 };
+    const kind = data.type === 'Movie' ? 'Movie' : 'Series/Show';
+    // A season TMDB does not list yet answers with seasonOk: false, and then the
+    // function's own fallbacks describe the WRONG thing: the whole series' episode
+    // count (or a season count used as an episode count), and one episode's
+    // runtime as the season's screentime. The fill-in-zeros path refuses that and
+    // names the reason; this one used to write it into the form. Name, type and
+    // genre are known either way, so those are still filled — the numbers are
+    // left blank rather than wrong.
+    const seasonKnown = kind === 'Movie' || data.seasonOk !== false;
+    const fields = {
+      'admin-name': data.name || name,
+      'admin-type': kind,
+      'admin-season': data.season || (kind === 'Movie' ? '' : season || '1'),
+      'admin-genre': String(data.genre || 'Uncategorized').split(',')[0].trim()
+    };
+    // The platform is deliberately not filled: the lookup's pick is the first
+    // provider found in any region, which is the wrong region as often as not,
+    // and the form already offers the watchlist's own spellings.
+    if (seasonKnown) {
+      fields['admin-episodes'] = data.episodes || (kind === 'Movie' ? 0 : 1);
+      fields['admin-screentime'] = data.screentime || 0;
+    }
     Object.entries(fields).forEach(([id, value]) => {
       const field = document.getElementById(id);
       if (!field || value === undefined) return;
@@ -1304,8 +1347,11 @@ async function autofillAdminEntry() {
       }
       field.value = value;
     });
-    result.className = 'admin-name-result available';
-    result.textContent = 'Details filled from TMDB. Review them before saving.';
+    result.className = 'admin-name-result ' + (seasonKnown ? 'available' : 'found');
+    result.textContent = seasonKnown
+      ? 'Details filled from TMDB. Review them before saving. Platform left as it was.'
+      : 'Title, type and genre filled from TMDB. Episodes and screentime left blank — TMDB has no season ' +
+        (data.season || season || '1') + ' listed for this show yet, and its fallback would count the whole series. Enter them yourself; platform left as it was.';
   } catch (error) {
     result.className = 'admin-name-result found';
     result.textContent = error.message || 'Autofill could not find this title. Please try again.';
@@ -1511,23 +1557,36 @@ async function submitAdminEntry(event) {
     const custom = document.getElementById('admin-' + key + '-custom');
     if (select.value === 'Other' && custom.value.trim()) payload[key] = custom.value.trim();
   });
+  // The duplicate check comes first and is the gate: a title already in the
+  // list stops the add and says so, and only a row that is genuinely new (or an
+  // explicit "Add anyway" rewatch) reaches the service.
+  //
+  // An empty rawData would make that check a silent no-op, so the watchlist is
+  // read first — and a store that still cannot be read stops the save instead of
+  // letting an unchecked entry through. (skipRerender keeps the repaint from
+  // throwing away what is typed in the form.)
+  const needsCheck = isUpdate || !forced;
+  if (needsCheck && !rawData.length) await loadData(true);
+  if (needsCheck && !rawData.length) {
+    msg.innerHTML = '<div class="sf-error">Could not read the watchlist to check for duplicates, so nothing was saved. Check the connection and try again.</div>';
+    return;
+  }
   if (isUpdate) {
     payload.action = 'update';
     payload.row = adminEditRow;
-  } else if (!forced) {
-    // The duplicate check comes first and is the gate: a title already in the
-    // list stops the add and says so, and only a row that is genuinely new (or
-    // an explicit "Add anyway" rewatch) reaches the service.
-    //
-    // An empty rawData would make that check a silent no-op, so the watchlist is
-    // read first — and a store that still cannot be read stops the add instead
-    // of letting an unchecked entry through. (skipRerender keeps the repaint from
-    // throwing away what is typed in the form.)
-    if (!rawData.length) await loadData(true);
-    if (!rawData.length) {
-      msg.innerHTML = '<div class="sf-error">Could not read the watchlist to check for duplicates, so nothing was added. Check the connection and try again.</div>';
+    // An edit goes through the same rule the add does, excluding the row it is
+    // editing. Only the exact tier stops it: the same title on another date is
+    // a rewatch, which is a legitimate second row either way. The server guard
+    // stays as the last-resort check (a concurrent add can still land first).
+    const clash = adminDuplicateCheck(payload, adminEditRow);
+    if (clash.exact.length) {
+      msg.innerHTML = '<div class="sf-error admin-dup-stop"><strong>This edit would create a duplicate — nothing was changed.</strong>' +
+        '<div class="admin-dup-what">' + escapeHTML(String(payload.name || '').trim()) + '</div>' +
+        clash.exact.map(adminDuplicateRow).join('') +
+        '<div class="admin-dup-tail">That row already has the same title, season, watch date and screentime. Change the date or the screentime, or edit that row instead.</div></div>';
       return;
     }
+  } else if (!forced) {
     const duplicate = adminDuplicateCheck(payload);
     if (duplicate.exact.length || duplicate.exists.length) {
       renderAdminDuplicateWarning(payload, duplicate);
@@ -1549,11 +1608,18 @@ async function submitAdminEntry(event) {
       throw new Error((result.error || 'Unable to save entry') + (result.code ? ` [${result.code}]` : ''));
     }
     // Leave edit mode, then reload the whole page so the entry shows up everywhere.
-    adminEditRow = null;
     const where = result.rowNumber ? ` (#${escapeHTML(String(result.rowNumber))})` : '';
+    if (result.duplicate && isUpdate) {
+      // The server refused the edit on the same rule the check above applies
+      // (a concurrent add could have claimed the key first). Stay in edit mode
+      // with the form intact so the values can be changed.
+      msg.innerHTML = `<div class="sf-error">This edit would duplicate entry${where} — nothing was changed.</div>`;
+      return;
+    }
     document.getElementById('admin-entry-msg').innerHTML = result.duplicate
       ? `<div class="sf-success">That entry was already saved${where}. Nothing was added again. Reloading…</div>`
       : `<div class="sf-success">Entry ${isUpdate ? 'updated' : 'added'} successfully${where}. Reloading…</div>`;
+    adminEditRow = null;
     reloading = true;
     setTimeout(() => reloadFresh(), 900);
   } catch (error) {
@@ -1590,6 +1656,10 @@ function renderReadme() {
   let goalHrs = Number(goalState.hrs) || 0;
   const goalLocked = goalHrs > 0 && String(goalState.year || '') === String(cy);
   if (!(goalHrs > 0)) goalHrs = Math.round(prevST / 60) || 1;
+  // Offered, not published: the store has no goal for this year, and this
+  // device remembers one. Prefilling the Set input is honest; writing it on a
+  // page load was not.
+  const goalHint = !goalState.hrs && localGoalHint && String(localGoalHint.year || cy) === String(cy) ? localGoalHint.hrs : 0;
   const goalPct = Math.min(100, (cyrST / (goalHrs * 60)) * 100).toFixed(0);
 
   // ── Roadmap insights ────────────────────────────────────────────────────
@@ -1816,10 +1886,11 @@ function renderReadme() {
           <div class="goal-top"><div class="fact-title fact-title-flush">Watch Goal · ${cy}</div><div class="goal-count"><strong>${fmtHrs(cyrST)}</strong> / ${goalHrs} hrs</div></div>
           <div class="goal-track"><div class="goal-fill" data-w="${goalPct}"></div></div>
           ${goalLocked ? '' : `<div class="goal-edit">
-            <input id="goal-input" class="sf-input" type="number" aria-label="Target hours" inputmode="numeric" min="1" placeholder="Target hrs" value="${goalHrs}">
+            <input id="goal-input" class="sf-input" type="number" aria-label="Target hours" inputmode="numeric" min="1" placeholder="Target hrs" value="${goalHint || goalHrs}">
             <button class="try-btn btn-compact" id="goal-set" type="button">Set</button>
           </div>`}
           <div class="goal-note">${paceNote}</div>
+          ${goalHint ? `<div class="goal-note">💡 No goal is set for ${cy} yet. This device remembers ${goalHint} hrs — press Set to publish it, or type another target.</div>` : ''}
           ${goalLocked ? `<div class="goal-note goal-lock-note">🔒 Locked for ${cy} — unlocks to set a new target on 1 Jan.</div>` : ''}
         </div>
       </div>
@@ -1837,6 +1908,7 @@ function renderReadme() {
       const saved = await setSharedGoal(v, String(cy));
       if (saved) {
         goalState = saved;
+        localGoalHint = null;
       } else {
         // Server save unavailable (backend not redeployed yet / offline): keep
         // the card working on this device and say so instead of pretending.
@@ -2326,10 +2398,22 @@ function dataHeader(key, label) {
     (active ? '<span class="sort-arrow">' + arrow + '</span>' : '') + '</th>';
 }
 function buildDataCSV() {
+  // A 0 is a value, not an absence. `r.episodes || ''` wrote a legitimate zero as
+  // an empty cell — the same mistake dataVal() was fixed for — so a film's 0
+  // episodes and a blank column nobody had filled in exported identically.
+  const num = v => (v === 0 || (v !== '' && v != null && Number.isFinite(Number(v)))) ? String(Number(v)) : '';
   // Ratings fall back to the device cache, so the export covers every row we
   // already know a rating for — not just the ones on screen right now.
-  const rows = dataFiltered.map(r => [r.name, r.type, r.genre, r.platform, r.episodes || '', r.screentime || '', r.month || '', r.year || '', r.watchDate || '', r.rating || cachedRating(r.name) || '']);
-  const esc = s => { s = String(s == null ? '' : s); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
+  const rows = dataFiltered.map(r => [r.name, r.type, r.genre, r.platform, num(r.episodes), num(r.screentime), r.month || '', r.year || '', r.watchDate || '', r.rating || cachedRating(r.name) || '']);
+  // A cell starting with = + - @ (or a tab/CR) is a live formula when the file is
+  // opened in a spreadsheet, and these values are typed by hand or arrived from an
+  // import — so one is quoted with a leading apostrophe. Numbers cannot trip it
+  // (a screentime is never negative), so nothing numeric is turned into text.
+  const esc = s => {
+    s = String(s == null ? '' : s);
+    if (/^[=+\-@\t\r]/.test(s)) s = "'" + s;
+    return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+  };
   const head = ['Name','Type','Genre','Platform','Episodes','Screentime (mins)','Month','Year','Watch Date','Rating'].map(esc).join(',');
   return head + '\n' + rows.map(r => r.map(esc).join(',')).join('\n');
 }
@@ -2347,6 +2431,13 @@ function exportDataCSV() {
 // that reads as missing data.
 function applyDataFilters() {
   const qs = new URLSearchParams(location.search);
+  // The URL describes the whole filter state, so apply it to the defaults rather
+  // than on top of whatever this tab already had. Applying it on top meant that
+  // pasting a shared `?year=2026#data` link into a tab already filtered to
+  // platform=Netflix gave Netflix∩2026 while the address bar said only `year` —
+  // an empty table that reads as missing data, which is the failure this
+  // function's own value check exists to prevent.
+  datFilters = { year: 'all', platform: 'all', type: 'all', genre: 'all', month: 'all', search: '' };
   const known = {
     year: new Set(['all', ...rawData.map(r => String(r.year))]),
     platform: new Set(['all', ...rawData.map(r => r.platform)]),
@@ -4532,17 +4623,34 @@ function initLineChart(canvasId, labels, data) {
 
 // ── SUBMIT SUGGESTIONS ───────────────────────────────────────────────────
 let suggData = []; // loaded Suggestions rows
+// A read that failed is not an empty inbox. suggData alone cannot say which of
+// the two it is, and the sidebar renders a joke about nobody submitting anything
+// — so the distinction is kept here, the way loadData keeps loadFailed.
+let suggLoadFailed = false;
 
-async function loadSuggestions() {
+// `bust` reads past the CDN's (and the browser's) five-minute copy. A submit
+// just wrote to the store, so the cached list is the one from before it.
+async function loadSuggestions(bust) {
+  const url = WATCHLIST_URL + '?sheet=Suggestions' + (bust ? '&fresh=' + Date.now() : '');
   try {
-    const res  = await fetch(WATCHLIST_URL + '?sheet=Suggestions', { redirect: 'follow', mode: 'cors' });
+    const res = await fetch(url, { redirect: 'follow', mode: 'cors', cache: bust ? 'no-store' : 'default' });
+    if (!res.ok) throw new Error('Suggestion list returned ' + res.status);
     const json = await res.json();
     // Keep only rows shaped like suggestions (a Title column), so an
     // unexpected response can never render as fake suggestions.
-    suggData = Array.isArray(json) ? json.filter(r => r.Title !== undefined) : [];
+    if (!Array.isArray(json)) throw new Error('Unexpected suggestion list');
+    suggData = json.filter(r => r.Title !== undefined);
+    suggLoadFailed = false;
   } catch (e) {
     suggData = [];
+    suggLoadFailed = true;
   }
+}
+
+// The sidebar's retry: same read, past the cache, then the same paint.
+function suggRetry(button) {
+  if (button) { button.disabled = true; button.textContent = 'Retrying…'; }
+  loadSuggestions(true).then(renderSubmitSidebar);
 }
 
 function renderSubmit() {
@@ -4626,6 +4734,15 @@ function renderSubmit() {
 function renderSubmitSidebar() {
   const box = document.getElementById('submit-sidebar-content');
   if (!box) return; // user navigated away before the suggestions loaded
+  if (suggLoadFailed) {
+    box.innerHTML =
+      '<div class="submit-side-card">' +
+        '<div class="submit-side-title">Recent Suggestions</div>' +
+        '<div class="sr-empty">Couldn\'t load the suggestions just now — this is a failed read, not an empty list.</div>' +
+        '<div class="sr-retry"><button class="try-btn" type="button" data-act="suggRetry">↻ Try again</button></div>' +
+      '</div>';
+    return;
+  }
   const topGenre = (() => {
     const m = {};
     suggData.forEach(r => { if (r.Genre) m[r.Genre] = (m[r.Genre] || 0) + 1; });
@@ -4685,25 +4802,34 @@ async function submitSuggestion() {
 
   try {
     const res  = await fetch('/.netlify/functions/suggestions', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ Title: title, Type: type, Genre: genre, Platform: plat, Note: why, Date: today }) });
-    const json = await res.json();
+    // A 200 that is not the endpoint's JSON (an edge page in its place) reads as
+    // null here rather than throwing past the check into a generic message.
+    const json = await res.json().catch(() => null);
 
-    if (!json || json.status !== 'ok') {
-      msg.innerHTML = '<div class="sf-error">' + escapeHTML(json && json.error ? json.error : 'Could not save the suggestion. Please try again.') + '</div>';
+    if (!res.ok || !json || json.status !== 'ok') {
+      msg.innerHTML = '<div class="sf-error">' + escapeHTML(json && json.error ? json.error : 'Could not save the suggestion (' + res.status + '). Please try again.') + '</div>';
       btn.disabled = false;
       btn.innerHTML = '<span>✦</span> Submit Suggestion';
       return;
     }
 
-    msg.innerHTML = '<div class="sf-success">✓ Suggestion submitted! It\'s now in the suggestions list.</div>';
     // Clear form
     ['sf-title','sf-why'].forEach(id => document.getElementById(id).value = '');
     // value= (not selectedIndex=) so the GlideSelect chip re-reads the empty
     // option and drops its old label along with the native control.
     ['sf-genre','sf-plat'].forEach(id => { document.getElementById(id).value = ''; });
     document.getElementById('sf-chars').textContent = '0';
-    // Reload sidebar
-    await loadSuggestions();
+    // Re-read past the cache and only then say where the row is. The old line
+    // claimed "it's now in the suggestions list" while the list it painted came
+    // from a copy taken up to five minutes before the write.
+    await loadSuggestions(true);
     renderSubmitSidebar();
+    const landed = !suggLoadFailed && suggData.some(r => String(r.Title || '').trim().toLowerCase() === title.toLowerCase());
+    msg.innerHTML = landed
+      ? '<div class="sf-success">✓ Suggestion submitted! It\'s now in the suggestions list.</div>'
+      : '<div class="sf-success">✓ Suggestion saved.' + (suggLoadFailed
+        ? ' The list below could not be refreshed — reload the page to see it.</div>'
+        : ' It is not in the list just read back, which may be a moment behind — reload to check.</div>');
   } catch (e) {
     msg.innerHTML = '<div class="sf-error">Something went wrong. Please try again.</div>';
   }
@@ -4740,7 +4866,7 @@ async function submitSuggestion() {
        suggSpin reads clientX/clientY off that event to place its ripple.
      * data-act and data-change both name a function in ACTIONS; which attribute an
        element carries is what decides the event it fires on. */
-const ACTIONS = { suggSpin, suggTryAgain, submitSuggestion, updateSuggCount, calendarAction };
+const ACTIONS = { suggSpin, suggTryAgain, suggRetry, submitSuggestion, updateSuggCount, calendarAction };
 
 // Read the live bindings, so a reassignment of any filter object is picked up.
 const filterByName = () => ({ curFilters, allFilters, datFilters, calFilters });

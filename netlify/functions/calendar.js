@@ -51,7 +51,28 @@ const MAX_DATED_PAGES = 25; // 20 a page → 500 theatrical releases, the hard c
 const YEAR_PAGES = 3; // 60 by popularity: a year at a glance, not a full dump
 const BATCH = 5; // concurrent TMDB requests
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
-const REGION_RE = /^[A-Z]{2}$/;
+// ISO 3166-1 alpha-2, officially assigned codes. Two letters is not a region:
+// ZZ, XX and QQ all satisfied the old /^[A-Z]{2}$/ test, and each one bought a
+// full cinema sweep of a country that does not exist — plus a CDN cache entry —
+// instead of the documented fallback to US. This is the standard's own list, not
+// a copy of the page's picker (that one is the page's to define, and it is what a
+// union is asked for); a caller may legitimately name a region the dropdown does
+// not offer.
+const ISO_REGIONS = new Set((
+  'AD AE AF AG AI AL AM AO AQ AR AS AT AU AW AX AZ ' +
+  'BA BB BD BE BF BG BH BI BJ BL BM BN BO BQ BR BS BT BV BW BY BZ ' +
+  'CA CC CD CF CG CH CI CK CL CM CN CO CR CU CV CW CX CY CZ ' +
+  'DE DJ DK DM DO DZ EC EE EG EH ER ES ET ' +
+  'FI FJ FK FM FO FR GA GB GD GE GF GG GH GI GL GM GN GP GQ GR GS GT GU GW GY ' +
+  'HK HM HN HR HT HU ID IE IL IM IN IO IQ IR IS IT JE JM JO JP ' +
+  'KE KG KH KI KM KN KP KR KW KY KZ LA LB LC LI LK LR LS LT LU LV LY ' +
+  'MA MC MD ME MF MG MH MK ML MM MN MO MP MQ MR MS MT MU MV MW MX MY MZ ' +
+  'NA NC NE NF NG NI NL NO NP NR NU NZ OM PA PE PF PG PH PK PL PM PN PR PS PT PW PY ' +
+  'QA RE RO RS RU RW SA SB SC SD SE SG SH SI SJ SK SL SM SN SO SR SS ST SV SX SY SZ ' +
+  'TC TD TF TG TH TJ TK TL TM TN TO TR TT TV TW TZ UA UG UM US UY UZ ' +
+  'VA VC VE VG VI VN VU WF WS YE YT ZA ZM ZW'
+).split(' '));
+const isRegion = code => ISO_REGIONS.has(code);
 
 // ── THE STREAMING HALF ────────────────────────────────────────────────────
 // Watchmode owns the one class of release nothing else here can see: a film
@@ -129,10 +150,10 @@ const WM_SUBREQUEST_RESERVE = 14;
 const UNION_BATCH = 3;
 function requestedRegions(params) {
   const raw = String(params.region || '').trim().toUpperCase();
-  if (raw !== ALL_REGIONS.toUpperCase()) return [REGION_RE.test(raw) ? raw : 'US'];
+  if (raw !== ALL_REGIONS.toUpperCase()) return [isRegion(raw) ? raw : 'US'];
   const list = String(params.regions || '').split(',')
     .map(code => code.trim().toUpperCase())
-    .filter((code, index, all) => REGION_RE.test(code) && all.indexOf(code) === index)
+    .filter((code, index, all) => isRegion(code) && all.indexOf(code) === index)
     .slice(0, MAX_UNION_REGIONS);
   return list.length ? list : ['US'];
 }

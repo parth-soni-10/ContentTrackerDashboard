@@ -104,10 +104,15 @@ exports.handler = async event => {
   try {
     if (isCombinedRead) {
       const [rows, goal] = await Promise.all([db.listEntries(), db.readGoal()]);
+      // readGoal answers null when the settings row could not be read. Saying so
+      // is what keeps a failed read from arriving as `{hrs: 0}` — a goal the
+      // reader would take as fact, and which setGoal would read as *unlocked*.
+      if (goal === null) return json(502, { error: 'Unable to load the goal' }, cors(origin));
       return json(200, { rows, goal }, cors(origin));
     }
     if (isGoalRead) {
       const goal = await db.readGoal();
+      if (goal === null) return json(502, { error: 'Unable to load the goal' }, cors(origin));
       return {
         statusCode: 200,
         headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', ...cors(origin) },

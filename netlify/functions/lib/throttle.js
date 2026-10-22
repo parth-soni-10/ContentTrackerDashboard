@@ -108,6 +108,60 @@ function recordWrite(ip) {
   return stamps.length;
 }
 
+// A lookup limiter for the two public endpoints that spend a third party's
+// quota: tmdb-search (a TMDB search, external_ids, details, providers and an
+// OMDb call) and imdb-id (one TMDB call). They are not writes, so the write
+// window is the wrong shape — the page asks for one lookup per title it shows,
+// and "Load all ratings" walks through every unrated row at a concurrency of 3.
+//
+// So the ceiling is per *tier*, not one number: the light path (poster + rating,
+// one title at a time) allows a whole pass, while the full path (5 upstream calls
+// each) is deliberately tighter. What keeps the light path honest is the edge
+// cache a light answer is stored under for a day — asking again for a title the
+// CDN already answered costs nothing, so the ceiling only bounds distinct titles.
+//
+// Same caveat as everything else in this file: in-memory and per-instance, so it
+// raises the cost of a scripted sweep rather than walling it out.
+const LOOKUP_WINDOW_MS = 10 * 60 * 1000; // ten minutes
+const MAX_LIGHT_LOOKUPS = 400; // one full ratings pass, plus the posters on screen
+const MAX_FULL_LOOKUPS = 60; // autofill / fill-in-zeros
+
+const lookups = new Map(); // `${ip}|${tier}` -> [timestamps]
+
+function recentLookups(key, now = Date.now()) {
+  const kept = (lookups.get(key) || []).filter((stamp) => now - stamp < LOOKUP_WINDOW_MS);
+  if (kept.length) lookups.set(key, kept);
+  else lookups.delete(key);
+  return kept;
+}
+
+// Ask before doing the work: is this IP already at the ceiling for this tier?
+function lookupState(ip, tier = 'light') {
+  const key = ip + '|' + (tier === 'full' ? 'full' : 'light');
+  const ceiling = tier === 'full' ? MAX_FULL_LOOKUPS : MAX_LIGHT_LOOKUPS;
+  const stamps = recentLookups(key);
+  if (stamps.length < ceiling) return { limited: false, retryAfter: 0 };
+  const age = Date.now() - stamps[0];
+  return {
+    limited: true,
+    retryAfter: Math.max(1, Math.ceil((LOOKUP_WINDOW_MS - age) / 1000)),
+  };
+}
+
+function recordLookup(ip, tier = 'light') {
+  const key = ip + '|' + (tier === 'full' ? 'full' : 'light');
+  const stamps = recentLookups(key);
+  stamps.push(Date.now());
+  lookups.set(key, stamps);
+  if (lookups.size > MAX_TRACKED_IPS) {
+    for (const entry of lookups.keys()) {
+      if (lookups.size <= MAX_TRACKED_IPS) break;
+      lookups.delete(entry);
+    }
+  }
+  return stamps.length;
+}
+
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 module.exports = {
@@ -117,7 +171,11 @@ module.exports = {
   clearFailures,
   writeState,
   recordWrite,
+  lookupState,
+  recordLookup,
   sleep,
   FAILURE_DELAY_MS,
   MAX_WRITES,
+  MAX_LIGHT_LOOKUPS,
+  MAX_FULL_LOOKUPS,
 };

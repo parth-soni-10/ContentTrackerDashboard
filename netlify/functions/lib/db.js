@@ -163,16 +163,26 @@ async function listSuggestions() {
 }
 
 // Rows the watchlist itself can never show: the page's `mapRows` drops every
-// row whose year reads as 0, so a stored row with no watch date and no watch
-// time is invisible in every list, chart and search on the site. This is the
-// one read that exposes them — the admin cleanup card lists them as the raw
-// rows (ids and timestamps included) so they can be deleted deliberately.
+// row whose year reads as 0, so a stored row without a *usable* watch date is
+// invisible in every list, chart and search on the site, whatever its
+// screentime says. This is the one read that exposes them — the admin cleanup
+// card lists them as the raw rows (ids and timestamps included) so they can be
+// deleted deliberately.
+//
+// The filter is applied here in JS, against the same `parseDateParts` the wire
+// row is built from, rather than as `watch_date IS NULL AND screentime <= 0` in
+// SQL. That predicate was narrower than the reason this read exists: a row with
+// no date but a real screentime (id 352, "down cemetry", 508 minutes, on the
+// live store) reads as year 0 too, is shown nowhere, and the scan skipped it —
+// so the card answered "the database is clean" without having looked. Reading
+// the table and asking the date parser is the only way the scan and `mapRows`
+// cannot disagree about which rows are reachable.
 async function listInvalidEntries() {
   const result = await rows(
     'SELECT id, name, season, type, genre, platform, episodes, screentime, watch_date, created_at, updated_at' +
-    ' FROM entries WHERE watch_date IS NULL AND screentime <= 0 ORDER BY id ASC'
+    ' FROM entries ORDER BY id ASC'
   );
-  return result.map(row => ({
+  return result.filter(row => !String(row.name || '').trim() || !parseDateParts(row.watch_date)).map(row => ({
     id: Number(row.id),
     name: row.name,
     season: row.season || '',
@@ -185,27 +195,6 @@ async function listInvalidEntries() {
     createdAt: row.created_at || null,
     updatedAt: row.updated_at || null
   }));
-}
-
-// The Sheet-era duplicate check, on the wire rows: an exact repeat of the same
-// title, kind, season, watch date and screentime. Returns the id it found, or 0.
-function findDuplicateRow(rows, entry) {
-  const wanted = {
-    name: String(entry.name || '').trim().toLowerCase(),
-    type: String(entry.type || '').trim().toLowerCase(),
-    season: seasonKey(entry.season),
-    date: isoOf(parseDateParts(entry.watchDate)) || '',
-    screentime: Number(entry.screentime) || 0
-  };
-  for (const row of rows) {
-    if (String(row.Name || '').trim().toLowerCase() !== wanted.name) continue;
-    if (String(row.Type || '').trim().toLowerCase() !== wanted.type) continue;
-    if (seasonKey(row.Season) !== wanted.season) continue;
-    if ((isoOf(parseDateParts(row['Watch Date'])) || '') !== wanted.date) continue;
-    if ((Number(row.Screentime) || 0) !== wanted.screentime) continue;
-    return Number(row._row);
-  }
-  return 0;
 }
 
 // ── Write ──────────────────────────────────────────────────────────────────
@@ -264,18 +253,35 @@ async function createEntry(entry) {
   throw new Error('The entry was not written');
 }
 
-// Returns the entry's id, or 0 when the id matches no row — the callers answer
-// 404 ENTRY_MISSING for that rather than reporting a write that did not happen.
+// Returns { id } for a saved edit, { duplicate: id } when the edit would produce
+// a second row the add path refuses, or 0 when the id matches no row — the
+// callers answer 404 ENTRY_MISSING for that rather than reporting a write that
+// did not happen.
+//
+// The duplicate rule applies to an edit for the same reason it applies to an
+// add: an update recomputes `dup_key`, and without this guard it would write a
+// pair the insert path refuses — then `createEntry()` for that key would report
+// an arbitrary one of the two. `id <> ?` is what makes it a guard on *other*
+// rows; the row being edited is never its own duplicate.
 async function updateEntry(id, entry) {
   const values = normalizeEntry(entry);
   const key = duplicateKey({ name: values.name, season: values.season, watchDate: values.watchDate, screentime: values.screentime });
   const meta = await write(
     'UPDATE entries SET name = ?, season = ?, type = ?, genre = ?, platform = ?, episodes = ?,' +
-    ' screentime = ?, watch_date = ?, dup_key = ?, updated_at = ? WHERE id = ?',
+    ' screentime = ?, watch_date = ?, dup_key = ?, updated_at = ?' +
+    ' WHERE id = ? AND NOT EXISTS (SELECT 1 FROM entries WHERE dup_key = ? AND type = ? AND id <> ?)',
     [values.name, values.season, values.type, values.genre, values.platform, values.episodes, values.screentime,
-      values.watchDate, key, nowIso(), id]
+      values.watchDate, key, nowIso(), id, key, values.type, id]
   );
-  return meta.changes ? Number(id) : 0;
+  if (meta.changes) return { id: Number(id) };
+  // Nothing was written: either the row is gone, or the guard refused it.
+  const exists = await rows('SELECT id FROM entries WHERE id = ? LIMIT 1', [id]);
+  if (!exists.length) return 0;
+  const clash = await rows('SELECT id FROM entries WHERE dup_key = ? AND type = ? AND id <> ? LIMIT 1', [key, values.type, id]);
+  if (clash.length) return { duplicate: Number(clash[0].id) };
+  // The row exists, no other row claims the key, and the update still changed
+  // nothing: the write did not happen and there is no id to report.
+  throw new Error('The entry was not updated');
 }
 
 async function deleteEntry(id) {
@@ -297,15 +303,23 @@ async function appendSuggestion(values) {
 // ── Yearly goal ────────────────────────────────────────────────────────────
 // The goal lives in the settings table so it syncs across devices and stays with
 // the data, exactly as it did in the sheet's Settings tab.
+//
+// Returns { hrs: 0, year: '' } only when the store genuinely holds no goal, and
+// **null when the read failed**. The two used to be the same value, and `setGoal`
+// decides whether the year is locked from this return value — so one transient
+// D1 error during a Set read as "no goal set" and replaced a goal the docs call
+// locked for the year. A failure has to be distinguishable to be refusable.
 async function readGoal() {
   try {
     const result = await rows('SELECT value FROM settings WHERE key = ?', [GOAL_PROPERTY]);
     if (!result.length) return { hrs: 0, year: '' };
-    const parsed = JSON.parse(String(result[0].value || '').trim() || '{}');
+    const raw = String(result[0].value || '').trim();
+    if (!raw) return { hrs: 0, year: '' };
+    const parsed = JSON.parse(raw);
     return { hrs: Math.max(0, Number(parsed.hrs) || 0), year: String(parsed.year || '') };
   } catch (error) {
     console.error('Reading the goal failed:', error.message);
-    return { hrs: 0, year: '' };
+    return null;
   }
 }
 
@@ -314,10 +328,15 @@ async function readGoal() {
 // mid-year (an identical re-set is a no-op).
 async function setGoal(hrs, year) {
   const current = await readGoal();
-  if (current.hrs > 0 && current.year === year) {
-    if (hrs !== current.hrs) {
-      return { status: 'error', message: `The goal for ${year} is already set and locked until 1 January` };
-    }
+  // A read that failed is not "no goal set": refusing the write is what keeps
+  // the year's lock meaningful when the store hiccups.
+  if (!current) {
+    return { status: 'error', message: 'Could not read the current goal, so nothing was changed. Try again.' };
+  }
+  const locked = (goal, wanted) => goal.hrs > 0 && goal.year === wanted;
+  const refuse = { status: 'error', message: `The goal for ${year} is already set and locked until 1 January` };
+  if (locked(current, year)) {
+    if (hrs !== current.hrs) return refuse;
     return { status: 'ok', goal: current };
   }
   const goal = hrs > 0 ? { hrs: Math.round(hrs * 100) / 100, year } : null;
@@ -325,7 +344,16 @@ async function setGoal(hrs, year) {
     'INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT (key) DO UPDATE SET value = excluded.value',
     [GOAL_PROPERTY, goal ? JSON.stringify(goal) : '']
   );
-  return { status: 'ok', goal: goal ? { hrs: goal.hrs, year: goal.year } : { hrs: 0, year: '' } };
+  // The check above and the write are two statements, so two clicks on 1 January
+  // can both pass it. Report what the store actually holds rather than what this
+  // call intended: the caller that lost the race gets the lock, not a success
+  // for a value that is not there.
+  const stored = await readGoal();
+  if (!stored) {
+    return { status: 'error', message: 'The goal was saved but could not be read back. Reload to check it.' };
+  }
+  if (locked(stored, year) && (!goal || stored.hrs !== goal.hrs)) return refuse;
+  return { status: 'ok', goal: stored };
 }
 
 // ── The Watchmode cache ────────────────────────────────────────────────────
@@ -446,7 +474,6 @@ module.exports = {
   listEntries,
   listSuggestions,
   listInvalidEntries,
-  findDuplicateRow,
   createEntry,
   updateEntry,
   deleteEntry,

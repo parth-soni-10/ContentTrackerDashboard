@@ -531,6 +531,7 @@ html.dark .sf-submit-btn { background: linear-gradient(135deg, #2e7a56, #1b4032)
 .sr-name { font-size: 14px; font-weight: 600; color: var(--text); }
 .sr-meta { font-size: 12px; color: var(--text-soft); margin-top: 2px; }
 .sr-empty { font-size: 14px; color: var(--text-soft); padding: 10px 0; font-style: italic; line-height: 1.5; }
+.sr-retry { padding-top: 10px; }
 .sr-stat { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--border); }
 .sr-stat:last-child { border-bottom: none; }
 .sr-stat-l { font-size: 14px; color: var(--text-mid); }

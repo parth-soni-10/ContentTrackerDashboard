@@ -806,3 +806,46 @@ test("a write that changed nothing is not reported as a saved entry", async () =
     db.setDatabase(null);
   }
 });
+
+test("a two-letter code that is not a country falls back to US", async () => {
+  // `/^[A-Z]{2}$/` accepted ZZ, XX and QQ, so each one bought a full cinema
+  // sweep of a country that does not exist (and its own cache entry) instead of
+  // the documented fallback. Validation is against the ISO 3166-1 list now.
+  const { impl, calls } = calendarUpstream([], []);
+  const original = globalThis.fetch;
+  globalThis.fetch = impl;
+  try {
+    const response = await withEnv({ TMDB_API_KEY: "tmdb-test", WATCHMODE_API_KEY: undefined }, () =>
+      calendar.handler(calendarRequest({ region: "ZZ" })),
+    );
+    assert.equal(response.statusCode, 200);
+    const body = JSON.parse(response.body);
+    assert.equal(body.range.region, "US", "an unknown code is not a region");
+    const sweeps = calls.filter(url => url.includes("/discover/movie"));
+    assert.ok(sweeps.length > 0, "the window was still fetched");
+    assert.ok(
+      sweeps.every(url => /[?&]region=US(&|$)/.test(url)),
+      "and every sweep was spent on a real region",
+    );
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
+test("a region the picker does not offer is still honoured", async () => {
+  // The allow-list is the ISO standard, not a copy of the page's dropdown: a
+  // caller may legitimately ask for a country the picker leaves out.
+  const { impl, calls } = calendarUpstream([], []);
+  const original = globalThis.fetch;
+  globalThis.fetch = impl;
+  try {
+    const response = await withEnv({ TMDB_API_KEY: "tmdb-test", WATCHMODE_API_KEY: undefined }, () =>
+      calendar.handler(calendarRequest({ region: "KE" })),
+    );
+    assert.equal(response.statusCode, 200);
+    assert.equal(JSON.parse(response.body).range.region, "KE");
+    assert.ok(calls.some(url => /[?&]region=KE(&|$)/.test(url)));
+  } finally {
+    globalThis.fetch = original;
+  }
+});

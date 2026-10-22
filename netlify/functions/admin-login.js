@@ -1,4 +1,9 @@
 const crypto = require('crypto');
+// The cookie's signature function lives in lib/session.js, which validates it on
+// every admin endpoint. This file kept its own copy; a payload and a signature
+// have to agree byte for byte, and two implementations is exactly how they stop
+// agreeing.
+const { sign } = require('./lib/session');
 const {
   clientIp,
   failureState,
@@ -19,8 +24,6 @@ const safeEqual = (a, b) => {
   const right = Buffer.from(String(b || ''));
   return left.length === right.length && crypto.timingSafeEqual(left, right);
 };
-
-const sign = value => crypto.createHmac('sha256', process.env.ADMIN_SESSION_SECRET).update(value).digest('base64url');
 
 exports.handler = async event => {
   if (event.httpMethod !== 'POST') return json(405, { error: 'Method not allowed' });

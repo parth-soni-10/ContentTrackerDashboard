@@ -13,6 +13,8 @@
 //
 // GET /.netlify/functions/imdb-id?id=<tmdb id>[&type=tv]
 //   → { imdb: "https://www.imdb.com/title/tt0137523/" } or { imdb: null }
+const { clientIp, lookupState, recordLookup } = require('./lib/throttle');
+
 const TMDB = 'https://api.themoviedb.org/3';
 
 const json = (statusCode, body, headers = {}) => ({
@@ -35,6 +37,20 @@ exports.handler = async event => {
 
   const key = String(process.env.TMDB_API_KEY || '').trim();
   if (!key) return json(500, { error: 'TMDB is not configured in this environment' }, { 'Cache-Control': 'no-store' });
+
+  // One TMDB call per miss, and the answer is cached for a day both at the edge
+  // and on the device — so this is the *light* tier: it must never be the reason
+  // a reader cannot open a title. It is here because "cached" is not "bounded":
+  // a script that varies the id bypasses the cache on every call.
+  const ip = clientIp(event);
+  const limit = lookupState(ip, 'light');
+  if (limit.limited) {
+    return json(429, {
+      error: `Too many lookups from this connection. Try again in ${limit.retryAfter} seconds.`,
+      imdb: null,
+    }, { 'Retry-After': String(limit.retryAfter), 'Cache-Control': 'no-store' });
+  }
+  recordLookup(ip, 'light');
 
   try {
     const res = await fetch(`${TMDB}/${type}/${id}/external_ids?api_key=${encodeURIComponent(key)}`);

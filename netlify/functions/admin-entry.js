@@ -39,7 +39,11 @@ async function handleDirect(body, action, id) {
     if (isUpdate) {
       const updated = await db.updateEntry(id, entry);
       if (!updated) return json(404, { error: 'That entry no longer exists', code: 'ENTRY_MISSING' });
-      return json(200, { duplicate: false, rowNumber: updated });
+      // An edit that would leave two rows the add path refuses to create is
+      // refused here for the same reason, and answers in the same shape as
+      // create so the page can say what happened instead of "updated".
+      if (updated.duplicate) return json(200, { duplicate: true, rowNumber: updated.duplicate });
+      return json(200, { duplicate: false, rowNumber: updated.id });
     }
     // The duplicate check runs inside the insert, under a lock on the title, so
     // the same watch cannot be logged twice by two submissions arriving together.
@@ -61,8 +65,9 @@ exports.handler = async event => {
   try { body = JSON.parse(event.body || '{}'); } catch { return json(400, { error: 'Invalid request body' }); }
 
   // The cleanup card asks for the rows it lists before deleting any of them:
-  // every entry the page shows has a watch date, so the undated, zero-time
-  // leftovers are only reachable through this one read. Same session gate.
+  // every entry the page shows has a usable watch date, so the rows without one
+  // — blank imports, abandoned adds — are only reachable through this one read.
+  // Same session gate.
   if (body.action === 'invalid') {
     try {
       return json(200, { rows: await db.listInvalidEntries() });
