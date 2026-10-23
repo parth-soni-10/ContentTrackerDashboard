@@ -1900,7 +1900,15 @@ function renderReadme() {
   if (goalSet) {
     goalSet.addEventListener('click', async () => {
       const input = document.getElementById('goal-input');
-      const v = Math.max(0, parseFloat(input ? input.value : '') || 0);
+      const raw = input ? input.value.trim() : '';
+      // The kit keeps every character typed, so a word can sit here where a
+      // native number field refused it: say so instead of saving 0 hours.
+      if (raw && !/^-?\d+(\.\d+)?$/.test(raw)) {
+        goalError = 'Enter a number of hours.';
+        renderReadme();
+        return;
+      }
+      const v = Math.max(0, parseFloat(raw) || 0);
       if (input) input.disabled = true;
       goalSet.disabled = true;
       goalSet.textContent = 'Saving…';
