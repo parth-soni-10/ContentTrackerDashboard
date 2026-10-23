@@ -1886,7 +1886,7 @@ function renderReadme() {
           <div class="goal-top"><div class="fact-title fact-title-flush">Watch Goal · ${cy}</div><div class="goal-count"><strong>${fmtHrs(cyrST)}</strong> / ${goalHrs} hrs</div></div>
           <div class="goal-track"><div class="goal-fill" data-w="${goalPct}"></div></div>
           ${goalLocked ? '' : `<div class="goal-edit">
-            <input id="goal-input" class="sf-input" type="number" aria-label="Target hours" inputmode="numeric" min="1" placeholder="Target hrs" value="${goalHint || goalHrs}">
+            <input id="goal-input" class="sf-input" type="number" aria-label="Target hours" inputmode="numeric" min="1" data-number-input placeholder="Target hrs" value="${goalHint || goalHrs}">
             <button class="try-btn btn-compact" id="goal-set" type="button">Set</button>
           </div>`}
           <div class="goal-note">${paceNote}</div>

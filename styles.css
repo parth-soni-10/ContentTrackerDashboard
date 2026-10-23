@@ -1020,7 +1020,10 @@ html.dark .tool-btn { background: var(--green-pale); }
 .goal-track { height: 10px; background: var(--green-pale); border: 1px solid var(--border-mid); border-radius: 8px; overflow: hidden; margin-top: 10px; }
 .goal-fill { width: var(--w, 0%); height: 100%; border-radius: 8px 0 0 8px; background: linear-gradient(90deg, var(--green-mid), var(--gold)); transition: width .8s cubic-bezier(.4,0,.2,1); }
 .goal-edit { margin-top: 10px; display: flex; gap: 8px; }
-.goal-edit input { flex: 1; min-width: 0; }
+/* number-input.js wraps the field in .ni, so the flex child became the wrapper;
+   it takes the share the input used to have and the input still fills it. */
+.goal-edit .ni { flex: 1; min-width: 0; }
+.goal-edit input { flex: 1; min-width: 0; width: 100%; }
 .goal-edit input:disabled { opacity: .6; cursor: not-allowed; }
 .goal-note { font-size: 12px; color: var(--text-soft); margin-top: 8px; }
 .goal-lock-note { color: var(--gold); }
