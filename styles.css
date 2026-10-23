@@ -969,6 +969,7 @@ html.cal-lock, html.cal-lock body { overflow: hidden; }
      when there is one — and names the month the eye is in. The months' own
      headings stay in the flow: the bar is a compact copy of the current one. */
   --tlc-bg: var(--bg);
+  --tlc-menu-bg: var(--surface);
   --tlc-line: var(--border);
   --tlc-top: calc(var(--nav-h) + 10px);
 }

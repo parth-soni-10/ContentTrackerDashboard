@@ -2708,7 +2708,7 @@ function renderTimeline() {
     '<div class="page-header"><div class="ph-left"><h1>Timeline</h1><p>Your watch history, month by month</p></div></div>' +
     '<div class="timeline' + (jumpBar ? ' has-jump' : '') + '" data-timeline-calendar>' +
       jumpBar +
-      '<div data-tl-header data-tl-caption="Timeline"></div>' +
+      '<div data-tl-header data-tl-caption="Timeline" data-tl-noun="month"></div>' +
       sections +
     '</div>';
 
