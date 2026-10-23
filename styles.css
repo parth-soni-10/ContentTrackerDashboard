@@ -963,10 +963,27 @@ html.cal-lock, html.cal-lock body { overflow: hidden; }
 .recap-foot { font-size: 12px; color: var(--text-mid); margin-top: 7px; text-align: center; }
 
 /* Timeline journal */
-.timeline { max-width: 900px; margin: 0 auto; padding: 28px 28px 48px; }
+.timeline {
+  max-width: 900px; margin: 0 auto; padding: 28px 28px 48px;
+  /* timeline-calendar.js pins one bar under the nav — and under the jump bar
+     when there is one — and names the month the eye is in. The months' own
+     headings stay in the flow: the bar is a compact copy of the current one. */
+  --tlc-bg: var(--bg);
+  --tlc-line: var(--border);
+  --tlc-top: calc(var(--nav-h) + 10px);
+}
+.timeline.has-jump { --tlc-top: calc(var(--nav-h) + 48px); }
+.timeline > [data-tl-header] { margin-bottom: 4px; }
 .tl-section { margin-bottom: 26px; scroll-margin-top: calc(var(--nav-h) + 62px); }
-/* Month headers stick under the nav + jump bar so a long month keeps its label. */
-.tl-head { font-size: 14px; font-weight: 700; color: var(--text); letter-spacing: -.2px; display: flex; align-items: center; gap: 8px; margin-bottom: 6px; position: sticky; top: calc(var(--nav-h) + 48px); z-index: 3; background: var(--bg); padding: 8px 0 6px; }
+/* The month headings scroll with their items; the pinned bar above carries the
+   live one. Once the kit is running the heading is a duplicate on screen — it
+   stays in the document, hidden, as the section's own label for a screen
+   reader. Without JavaScript the heading is the only label, so it shows. */
+.tl-head { font-size: 14px; font-weight: 700; color: var(--text); letter-spacing: -.2px; display: flex; align-items: center; gap: 8px; margin-bottom: 6px; padding: 8px 0 6px; }
+.timeline.tlc-live .tl-head {
+  position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0;
+  overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0;
+}
 .tl-count { font-size: 11px; color: var(--green); background: var(--green-pale); padding: 2px 8px; border-radius: 20px; font-weight: 600; }
 .tl-list { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; box-shadow: var(--shadow-sm); }
 .tl-item { display: flex; align-items: center; gap: 12px; padding: 10px 16px; }

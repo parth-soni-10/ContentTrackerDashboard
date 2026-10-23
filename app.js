@@ -2688,7 +2688,10 @@ function renderTimeline() {
     const moreBtn = hiddenCount > 0
       ? '<button class="tl-more" type="button" aria-expanded="false">Show ' + hiddenCount + ' more</button>'
       : '';
-    return '<div class="tl-section"' + anchor + '>' +
+    // timeline-calendar.js reads the label and count from here, so the pinned
+    // bar keeps naming the month once the heading itself has scrolled away.
+    const label = (month || 'N/A') + ' ' + String(year);
+    return '<div class="tl-section"' + anchor + ' data-tl-label="' + escapeHTML(label) + '" data-tl-count="' + byKey[k].length + '">' +
       '<div class="tl-head">' + escapeHTML(month || 'N/A') + ' ' + escapeHTML(String(year)) + '<span class="tl-count">' + byKey[k].length + '</span></div>' +
       '<div class="tl-list">' + items + moreBtn + '</div>' +
     '</div>';
@@ -2703,7 +2706,11 @@ function renderTimeline() {
 
   document.getElementById('app').innerHTML =
     '<div class="page-header"><div class="ph-left"><h1>Timeline</h1><p>Your watch history, month by month</p></div></div>' +
-    '<div class="timeline">' + jumpBar + sections + '</div>';
+    '<div class="timeline' + (jumpBar ? ' has-jump' : '') + '" data-timeline-calendar>' +
+      jumpBar +
+      '<div data-tl-header data-tl-caption="Timeline"></div>' +
+      sections +
+    '</div>';
 
   bindTimelineNav();
 }
