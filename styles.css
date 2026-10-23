@@ -974,6 +974,23 @@ html.cal-lock, html.cal-lock body { overflow: hidden; }
   --tlc-top: calc(var(--nav-h) + 10px);
 }
 .timeline.has-jump { --tlc-top: calc(var(--nav-h) + 48px); }
+
+/* Watches per month, above the journal. The analytics-chart kit draws the line,
+   the grid and the tooltip; the card names the paper and the height only. */
+.tl-trend {
+  --ac-height: 150px;
+  --ac-accent: var(--green);
+  --ac-area: color-mix(in srgb, var(--green) 12%, transparent);
+  --ac-grid: var(--border);
+  --ac-ink: var(--text-soft);
+  --ac-tip-bg: var(--surface);
+  --ac-tip-ink: var(--text);
+  margin: 0 0 18px;
+  padding: 14px 16px 4px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+}
 .timeline > [data-tl-header] { margin-bottom: 4px; }
 .tl-section { margin-bottom: 26px; scroll-margin-top: calc(var(--nav-h) + 62px); }
 /* The month headings scroll with their items; the pinned bar above carries the

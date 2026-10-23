@@ -2707,12 +2707,34 @@ function renderTimeline() {
   document.getElementById('app').innerHTML =
     '<div class="page-header"><div class="ph-left"><h1>Timeline</h1><p>Your watch history, month by month</p></div></div>' +
     '<div class="timeline' + (jumpBar ? ' has-jump' : '') + '" data-timeline-calendar>' +
+      '<div class="tl-trend" id="tlTrend" data-ac-label="titles watched"></div>' +
       jumpBar +
       '<div data-tl-header data-tl-caption="Timeline" data-tl-noun="month"></div>' +
       sections +
     '</div>';
 
   bindTimelineNav();
+  renderTimelineTrend(dated);
+}
+
+/* Watches per month, as the design system's analytics-chart. The rows already
+   carry year and month for the pinned bar, so the counts come from the same
+   grouping the page is built from — no second query and no second definition
+   of "a watch month". */
+function renderTimelineTrend(dated) {
+  const host = document.getElementById('tlTrend');
+  if (!host || !window.AnalyticsChart) return;
+  const now = new Date();
+  const points = [];
+  for (let i = 11; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const name = MONTHS[d.getMonth()];
+    points.push({
+      label: name.slice(0, 3) + ' ' + String(d.getFullYear()).slice(2),
+      value: dated.filter(r => Number(r.year) === d.getFullYear() && r.month === name).length,
+    });
+  }
+  AnalyticsChart.render(host, points, { label: 'titles watched' });
 }
 
 // Jump bar + month expanders for the timeline.
