@@ -2298,19 +2298,49 @@ function renderData() {
           <span class="rating-status" id="rat-status"></span>
           <button class="tool-btn" id="rat-load" type="button" title="Fetch the public rating for every title still missing one, so sorting and the CSV export cover the whole list">⭐ Load all ratings</button>
           <button class="tool-btn" id="data-export" type="button" title="Download the filtered list as CSV">⬇ CSV</button>
-          <button class="data-reset" id="data-reset" type="button">Reset filters</button>
+          <button class="data-reset tu-btn" id="data-reset" type="button">Reset filters</button>
         </div>
       </div>
       <div id="dat-table"></div>
       <div class="pagination" id="dat-pag"></div>
     </div>`;
 
-  document.getElementById('data-reset').addEventListener('click', () => {
-    datFilters = { year: 'all', platform: 'all', type: 'all', genre: 'all', month: 'all', search: '' };
-    dataPageNum = 1;
-    ['df-year', 'df-plat', 'df-type', 'df-genre', 'df-month'].forEach(id => { document.getElementById(id).value = 'all'; });
-    document.getElementById('df-search').value = '';
-    updateDataTable();
+  // Reset filters is the table's destructive control: it throws away every
+  // choice at once. It applies immediately, then the button itself becomes the
+  // undo window — no modal and no "are you sure" before a reversible action.
+  const resetBtn = document.getElementById('data-reset');
+  const resetIds = ['df-year', 'df-plat', 'df-type', 'df-genre', 'df-month'];
+  const readFilterValues = () => {
+    const values = {};
+    resetIds.forEach(id => { const node = document.getElementById(id); if (node) values[id] = node.value; });
+    const search = document.getElementById('df-search');
+    if (search) values.search = search.value;
+    return values;
+  };
+  const paintFilterValues = values => {
+    resetIds.forEach(id => { const node = document.getElementById(id); if (node) node.value = values[id] || 'all'; });
+    const search = document.getElementById('df-search');
+    if (search) search.value = values.search || '';
+  };
+  TimeUndo.mount(resetBtn, {
+    seconds: 6,
+    onStart: () => {
+      resetBtn.__tuBefore = { filters: { ...datFilters }, page: dataPageNum, values: readFilterValues() };
+      datFilters = { year: 'all', platform: 'all', type: 'all', genre: 'all', month: 'all', search: '' };
+      dataPageNum = 1;
+      paintFilterValues({});
+      updateDataTable();
+      return true;
+    },
+    onCancel: () => {
+      const before = resetBtn.__tuBefore;
+      if (!before) return;
+      datFilters = { ...before.filters };
+      dataPageNum = before.page;
+      paintFilterValues(before.values);
+      updateDataTable();
+    },
+    onCommit: () => { delete resetBtn.__tuBefore; }
   });
   document.getElementById('data-export').addEventListener('click', exportDataCSV);
   document.getElementById('dat-table').addEventListener('click', event => {
