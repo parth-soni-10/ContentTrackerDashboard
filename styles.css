@@ -1054,7 +1054,9 @@ html.dark .tool-btn { background: var(--green-pale); }
 .goal-count strong { color: var(--text); font-weight: 600; }
 .goal-track { height: 10px; background: var(--green-pale); border: 1px solid var(--border-mid); border-radius: 8px; overflow: hidden; margin-top: 10px; }
 .goal-fill { width: var(--w, 0%); height: 100%; border-radius: 8px 0 0 8px; background: linear-gradient(90deg, var(--green-mid), var(--gold)); transition: width .8s cubic-bezier(.4,0,.2,1); }
-.goal-edit { margin-top: 10px; display: flex; gap: 8px; }
+.goal-edit { margin-top: 10px; display: flex; align-items: center; gap: 8px; }
+.goal-edit .stp { flex: 1 1 auto; justify-content: space-between; }
+.goal-edit .stp .stp-btn { flex: 0 0 auto; }
 /* number-input.js wraps the field in .ni, so the flex child became the wrapper;
    it takes the share the input used to have and the input still fills it. */
 .goal-edit .ni { flex: 1; min-width: 0; }

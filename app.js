@@ -1886,7 +1886,7 @@ function renderReadme() {
           <div class="goal-top"><div class="fact-title fact-title-flush">Watch Goal · ${cy}</div><div class="goal-count"><strong>${fmtHrs(cyrST)}</strong> / ${goalHrs} hrs</div></div>
           <div class="goal-track"><div class="goal-fill" data-w="${goalPct}"></div></div>
           ${goalLocked ? '' : `<div class="goal-edit">
-            <input id="goal-input" class="sf-input" type="number" aria-label="Target hours" inputmode="numeric" min="1" data-number-input placeholder="Target hrs" value="${goalHint || goalHrs}">
+            <input id="goal-input" class="sf-input" type="number" aria-label="Target hours" inputmode="numeric" min="0" max="9999" placeholder="Target hrs" value="${goalHint || goalHrs}">
             <button class="try-btn btn-compact" id="goal-set" type="button">Set</button>
           </div>`}
           <div class="goal-note">${paceNote}</div>
@@ -1930,6 +1930,20 @@ function renderReadme() {
         if (!goalError) goalError = 'Saved on this device only — syncing is unavailable right now.';
       }
       renderReadme();
+    });
+  }
+
+  // The goal is one number with a small set of useful steps; the stepper keeps
+  // the Set button as the commit and leaves the hidden input as the value the
+  // save path reads. Typing a large target still works on the number itself.
+  const goalInput = document.getElementById('goal-input');
+  if (goalInput && window.Stepper) {
+    Stepper.attach(goalInput, {
+      min: 0,
+      max: 9999,
+      label: 'Target hours',
+      unit: 'hr',
+      size: 'sm'
     });
   }
 
