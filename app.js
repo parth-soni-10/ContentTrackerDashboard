@@ -810,15 +810,34 @@ function renderAdminEditResults(query) {
   }
   container.innerHTML = matches.map(item => {
     const meta = [escapeHTML(item.type), item.season ? 'S' + escapeHTML(item.season) : '', item.year].filter(Boolean).join(' · ');
+    const name = escapeHTML(item.name);
     return '<div class="admin-edit-item" data-swipe-row data-swipe-label="Entry actions">' +
-      '<div class="admin-edit-info"><div class="admin-edit-name">' + escapeHTML(item.name) + '</div>' +
+      '<div class="admin-edit-info"><div class="admin-edit-name">' + name + '</div>' +
       (meta ? '<div class="admin-edit-meta">' + meta + '</div>' : '') + '</div>' +
       '<div class="admin-edit-actions">' +
+        // The pair that repeated down the column is now one " : " per row. The
+        // two buttons stay for the swipe pane (the component hides the sources
+        // and mirrors their labels); the menu is the pointer/keyboard path.
         '<button class="try-btn admin-edit-btn" type="button" data-row="' + item.row + '" data-swipe-action data-swipe-label="Edit">Edit</button>' +
         '<button class="try-btn admin-del-btn" type="button" data-row="' + item.row + '" data-swipe-action data-swipe-label="Delete" data-swipe-tone="danger">Delete</button>' +
+        '<button class="im-trigger admin-menu-btn" type="button" data-row="' + item.row + '" aria-label="Actions for ' + name + '">:</button>' +
       '</div>' +
     '</div>';
   }).join('');
+  // Delete is not armed twice: the row already has slide-to-confirm behind it,
+  // so the menu item opens that rather than adding a second gate.
+  if (window.InlineMenu) {
+    Array.prototype.forEach.call(container.querySelectorAll('.admin-menu-btn'), function (btn) {
+      const rowNumber = Number(btn.dataset.row);
+      InlineMenu.attach(btn, {
+        label: btn.getAttribute('aria-label'),
+        items: [
+          { id: 'edit', label: 'Edit', onSelect: function () { startAdminEdit(rowNumber); } },
+          { id: 'delete', label: 'Delete', destructive: true, onSelect: function () { deleteAdminEntry(rowNumber, null); } },
+        ],
+      });
+    });
+  }
 }
 
 function startAdminEdit(rowNumber) {

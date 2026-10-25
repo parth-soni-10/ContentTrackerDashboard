@@ -1,0 +1,201 @@
+/* Inline Disclosure Menu — the row's ":" trigger and the panel it opens.
+ *
+ * Every colour is a hook with a neutral fallback, so a host that already has
+ * tokens (--card, --ink, --line) needs no rules of its own; a host on a dark
+ * panel sets the four --im-* values in one place. Nothing here uses !important
+ * and nothing assumes a particular trigger markup.
+ */
+
+.im-menu {
+  --im-bg: var(--card, #ffffff);
+  --im-ink: var(--ink, #161712);
+  --im-muted: var(--muted, #6e6e67);
+  --im-line: var(--line, #e3e3dc);
+  --im-hover: var(--bg-deep, #ecece7);
+  --im-danger: var(--negative, #c0392b);
+  --im-ring: var(--accent, #157a4a);
+  position: fixed;
+  left: var(--im-x, 0);
+  top: var(--im-y, 0);
+  z-index: 90;
+  min-width: 172px;
+  max-width: min(260px, calc(100vw - 16px));
+  padding: 4px;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  background: var(--im-bg);
+  color: var(--im-ink);
+  border: 1px solid var(--im-line);
+  border-radius: 10px;
+  box-shadow: var(--shadow-md, 0 4px 12px rgba(0, 0, 0, 0.07), 0 12px 32px rgba(0, 0, 0, 0.06));
+  transform-origin: top right;
+  animation: im-in 120ms cubic-bezier(0.2, 0.8, 0.2, 1) backwards;
+}
+
+.im-menu[data-im-side="bottom"] {
+  transform-origin: bottom right;
+  animation-name: im-in-up;
+}
+
+.im-menu[data-im-side="top"] {
+  transform-origin: top right;
+}
+
+@keyframes im-in {
+  from { opacity: 0; transform: translateY(-4px) scale(0.98); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes im-in-up {
+  from { opacity: 0; transform: translateY(4px) scale(0.98); }
+  to { opacity: 1; transform: none; }
+}
+
+.im-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  min-height: 34px;
+  padding: 7px 10px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.2;
+  text-align: left;
+  cursor: pointer;
+  -webkit-appearance: none;
+  appearance: none;
+  transition: background-color 110ms linear, color 110ms linear;
+}
+
+.im-item:hover {
+  background: var(--im-hover);
+}
+
+.im-item:focus {
+  outline: none;
+}
+
+.im-item:focus-visible {
+  outline: 2px solid var(--im-ring);
+  outline-offset: -2px;
+}
+
+.im-item[disabled],
+.im-item[aria-disabled="true"] {
+  color: var(--im-muted);
+  cursor: default;
+  background: transparent;
+  opacity: 0.55;
+}
+
+.im-item.is-danger {
+  color: var(--im-danger);
+}
+
+.im-item.is-danger:hover {
+  background: color-mix(in srgb, var(--im-danger) 9%, transparent);
+}
+
+.im-item.is-armed {
+  background: var(--im-danger);
+  color: #ffffff;
+  font-weight: 600;
+}
+
+.im-item.is-armed:hover {
+  background: var(--im-danger);
+}
+
+.im-item.is-armed:focus-visible {
+  outline-color: #ffffff;
+}
+
+.im-hint {
+  color: var(--im-muted);
+  font-size: 11px;
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+}
+
+.im-item.is-armed .im-hint {
+  color: inherit;
+  opacity: 0.85;
+}
+
+/* The announcement for an armed item. Visible only to assistive tech: the
+   label swap is the visible cue, so an on-screen note would be noise. */
+.im-live {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* The ":" trigger itself, when a host has not styled its own button. */
+.im-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  width: 28px;
+  min-width: 28px;
+  max-width: 28px;
+  height: 28px;
+  min-height: 28px;
+  flex: 0 0 28px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--muted, #6e6e67);
+  font: inherit;
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+  -webkit-appearance: none;
+  appearance: none;
+  transition: background-color 110ms linear, color 110ms linear, border-color 110ms linear;
+}
+
+.im-trigger:hover,
+.im-trigger[aria-expanded="true"] {
+  background: var(--bg-deep, #ecece7);
+  color: var(--ink, #161712);
+}
+
+.im-trigger:focus-visible {
+  outline: 2px solid var(--accent, #157a4a);
+  outline-offset: 1px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .im-menu,
+  .im-menu[data-im-side="bottom"] {
+    animation: none;
+  }
+  .im-item,
+  .im-trigger {
+    transition: none;
+  }
+}
+
+@media print {
+  .im-menu {
+    display: none;
+  }
+}
