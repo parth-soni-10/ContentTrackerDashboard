@@ -1,5 +1,12 @@
 const db = require('./lib/db');
 const { validSession } = require('./lib/session');
+// The type words an entry may carry live with the page's write module
+// (admin-write.js), because the answer has to be the same on both sides: the
+// store holds the sheet's words ('Film', 'Series'), the form offers the page's
+// ('Movie', 'Series/Show'), and a rename sends back whatever the row already
+// carried. A list kept here instead would refuse every legacy row the moment
+// the page stopped rewriting its type.
+const { ENTRY_TYPES } = require('../../admin-write.js');
 
 const json = (statusCode, body) => ({
   statusCode,
@@ -30,7 +37,7 @@ async function handleDirect(body, action, id) {
       screentime: Number.isFinite(Number(body.screentime)) ? Math.max(0, Math.min(100000, Number(body.screentime))) : 0,
       watchDate: clean(body.watchDate, 40)
     };
-    if (!entry.name || !['Movie', 'Series/Show'].includes(entry.type)) {
+    if (!entry.name || !ENTRY_TYPES.includes(entry.type)) {
       return json(400, { error: 'Name and a valid type are required' });
     }
     const isUpdate = action === 'update';

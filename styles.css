@@ -442,8 +442,51 @@ html.dark .rm-badge.genre { background: #24382c; color: var(--text-mid); }
 .admin-edit-results { margin-top: 12px; display: flex; flex-direction: column; gap: 8px; }
 .admin-edit-empty { font-size: 13px; color: var(--text-soft); padding: 6px 2px; }
 .admin-edit-item { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 12px; background: var(--surface-soft); border: 1px solid var(--border-mid); border-radius: 8px; }
-.admin-edit-info { min-width: 0; }
-.admin-edit-name { font-size: 14px; font-weight: 500; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.admin-edit-info { min-width: 0; flex: 1 1 auto; }
+.admin-edit-name { font-size: 14px; font-weight: 500; color: var(--text); min-width: 0; }
+/* The title edits in place (inline-table.js). The ellipsis moved from the div to
+   the trigger: the row has to be able to grow the editor where the title was,
+   and a clipped nowrap parent would cut that editor in half. */
+.admin-name-edit {
+  display: inline-flex;
+  min-width: 0;
+  max-width: 100%;
+  /* The kit's six tokens, pointed at this page's palette once. */
+  --it-ink: var(--text);
+  --it-muted: var(--text-soft);
+  --it-line: var(--border-mid);
+  --it-surface: var(--surface);
+  --it-focus: var(--green-pale);
+  --it-danger: var(--red);
+}
+.admin-name-btn {
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: 0;
+  padding: 2px 4px;
+  margin: -2px -4px;
+  border-radius: 6px;
+  cursor: text;
+  text-align: left;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.admin-name-btn:hover { background: var(--green-pale); }
+.admin-name-btn:focus-visible { outline: 2px solid var(--green); outline-offset: 1px; }
+/* A title is not a number: the kit's money-sized field (72px, capped at 150) would
+   show ten characters and scroll the rest under the caret. */
+.admin-name-edit .it-control { max-width: none; }
+.admin-name-edit .it-input { width: 240px; }
+@media (max-width: 520px) {
+  .admin-name-edit .it-input { width: 160px; }
+}
+.admin-edit-status { font-size: 12.5px; margin-top: 8px; }
+.admin-edit-status:empty { display: none; }
+.admin-edit-status.is-ok { color: var(--green); }
+.admin-edit-status.is-error { color: var(--red); }
 .admin-edit-meta { font-size: 12px; color: var(--text-soft); margin-top: 2px; }
 .admin-edit-actions { display: flex; gap: 8px; flex-shrink: 0; }
 .admin-edit-btn,

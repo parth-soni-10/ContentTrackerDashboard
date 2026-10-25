@@ -203,9 +203,17 @@ const intOr = (value, max) => (Number.isFinite(Number(value)) ? Math.max(0, Math
 
 // The duplicate rule's key, computed in exactly one place. A NUL joins the parts
 // because it cannot occur in a title, so 'A' + '1' can never collide with 'A1'.
+//
+// The title part is read the way the page reads it (AdminWrite.dupNormTitle):
+// trimmed, lower-cased, and with runs of spaces collapsed — "The   Bear" and
+// "The Bear" are one title, and the page's gate treats them as one, so a guard
+// that read them as two would be the looser half of a rule the page already
+// applies. Rows written before this collapse still carry their original spacing
+// in dup_key, so a repeat of one of those is caught by the page (every edit in
+// the admin page goes through it) rather than by the insert guard.
 function duplicateKey(values) {
   return [
-    String(values.name || '').trim().toLowerCase(),
+    String(values.name || '').trim().toLowerCase().replace(/\s+/g, ' '),
     seasonKey(values.season),
     isoOf(parseDateParts(values.watchDate)) || '',
     Number(values.screentime) || 0

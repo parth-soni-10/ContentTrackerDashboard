@@ -48,20 +48,11 @@ function escapeHTML(value) {
 }
 
 // Converts a sheet display date like "29-Aug-26" into the yyyy-mm-dd format
-// expected by <input type="date">.
+// expected by <input type="date">. The parser itself is in admin-write.js: the
+// duplicate keys and the payload merge compare dates with the same one, and a
+// second copy here is exactly how the page and its writes drift apart.
 function toISOFromDisplay(value) {
-  const text = String(value || '').trim();
-  if (!text) return '';
-  const match = text.match(/^(\d{1,2})[-/ ]([A-Za-z]{3})[a-z]*[-/ ](\d{2,4})$/);
-  if (match) {
-    const day = String(Number(match[1])).padStart(2, '0');
-    const month = { Jan: '01', Feb: '02', Mar: '03', Apr: '04', May: '05', Jun: '06', Jul: '07', Aug: '08', Sep: '09', Oct: '10', Nov: '11', Dec: '12' }[match[2].slice(0, 3)];
-    let year = match[3];
-    if (year.length === 2) year = (Number(year) > 50 ? '19' : '20') + year;
-    return month && year.length === 4 ? `${year}-${month}-${day}` : '';
-  }
-  const date = new Date(text);
-  return isNaN(date.getTime()) ? '' : date.toISOString().slice(0, 10);
+  return AdminWrite.toISODate(value);
 }
 
 // Parses a watch date as a LOCAL midnight Date. Date-only strings ("2026-08-29")
@@ -462,7 +453,23 @@ function mapRows(json) {
     watchDate:  toISOFromDisplay(r['Watch Date'] || r.watchDate || '') || (r['Watch Date'] || r.watchDate || ''),
     month:      r.Month      || r.month      || '',
     row:        Number(r._row || r.row || 0),
-    year:       parseInt(r.Year || r.year || 0) || 0
+    year:       parseInt(r.Year || r.year || 0) || 0,
+    // What the store actually holds, before smartCaseName/normalizeGenre/
+    // normalizePlatform tidy it for display. A partial edit (a search row renames
+    // and nothing else) is merged onto these, so saving a title cannot re-case it
+    // or merge a genre spelling in a column nobody touched. The service writes
+    // every column, so the payload has to carry all of them — see
+    // AdminWrite.mergeStored().
+    stored: {
+      name:       r.Name       || r.name       || '',
+      season:     r.Season     || r.season     || '',
+      type:       r.Type       || r.type       || '',
+      genre:      r['Details/Genre'] || r.Genre || r.genre || '',
+      platform:   r.Platform   || r.platform   || '',
+      episodes:   r['Episode Count'] || r['Episode Count '] || r.episodes || 0,
+      screentime: r.Screentime || r.screentime || 0,
+      watchDate:  r['Watch Date'] || r.watchDate || ''
+    }
   })).filter(r => r.name && r.year > 0);
 }
 
@@ -733,6 +740,7 @@ function renderAdminForm() {
       <h2 class="submit-heading">Edit Existing Entry</h2>
       <p class="submit-sub">Search the tracker, then click <strong>Edit</strong> to load a title into the form above.</p>
       <input id="admin-edit-search" class="sf-input" type="text" aria-label="Search by title" placeholder="Search by title…" autocomplete="off">
+      <div id="admin-edit-status" class="admin-edit-status" aria-live="polite"></div>
       <div id="admin-edit-results" class="admin-edit-results" aria-live="polite"></div>
     </div>
     <div class="submit-form-card">
@@ -812,7 +820,11 @@ function renderAdminEditResults(query) {
     const meta = [escapeHTML(item.type), item.season ? 'S' + escapeHTML(item.season) : '', item.year].filter(Boolean).join(' · ');
     const name = escapeHTML(item.name);
     return '<div class="admin-edit-item" data-swipe-row data-swipe-label="Entry actions">' +
-      '<div class="admin-edit-info"><div class="admin-edit-name">' + name + '</div>' +
+      // The title is the one field this row shows, so it is the one field that
+      // edits in place (see the attach below). It is written as plain text here
+      // and replaced by the kit's trigger, so a page whose inline-table.js did
+      // not arrive still lists every title instead of an empty line.
+      '<div class="admin-edit-info"><div class="admin-edit-name"><span class="admin-name-edit" data-row="' + item.row + '">' + name + '</span></div>' +
       (meta ? '<div class="admin-edit-meta">' + meta + '</div>' : '') + '</div>' +
       '<div class="admin-edit-actions">' +
         // The pair that repeated down the column is now one " : " per row. The
@@ -824,6 +836,34 @@ function renderAdminEditResults(query) {
       '</div>' +
     '</div>';
   }).join('');
+  // Renaming in the row: the same gate and the same transport the form uses.
+  // The write is built by AdminWrite.mergeStored() from `item.stored`, so only
+  // the title changes — the store's own genre, platform, season and date go
+  // back exactly as they came, instead of the display-normalised row rewriting
+  // them behind the reader's back.
+  if (window.InlineTable) {
+    const byRow = new Map(matches.map(item => [item.row, item]));
+    Array.prototype.forEach.call(container.querySelectorAll('.admin-name-edit'), function (host) {
+      const item = byRow.get(Number(host.dataset.row));
+      if (!item) return;
+      const trigger = document.createElement('button');
+      trigger.type = 'button';
+      trigger.className = 'admin-name-btn';
+      trigger.textContent = item.name;
+      host.textContent = '';
+      host.appendChild(trigger);
+      // No `row` here: the kit dims the row's other children while a cell is
+      // being edited, and this host sits two levels down (row → info → name →
+      // host) — passing the row would fade the editor itself along with the
+      // buttons beside it.
+      InlineTable.attach(host, {
+        trigger: trigger,
+        label: 'Rename ' + item.name,
+        fields: [{ key: 'name', label: 'Title', value: item.name, maxLength: 160 }],
+        onSave: values => saveAdminRename(item, values.name),
+      });
+    });
+  }
   // Delete is not armed twice: the row already has slide-to-confirm behind it,
   // so the menu item opens that rather than adding a second gate.
   if (window.InlineMenu) {
@@ -838,6 +878,61 @@ function renderAdminEditResults(query) {
       });
     });
   }
+}
+
+// A rename from the search row. Two things make a second way into one record
+// safe: the payload starts from what the store holds (so every column the row
+// never showed is written back unchanged), and the duplicate gate is the form's
+// own rule, called with this row excluded.
+//
+// Returns a Promise — the kit locks the field while it runs and keeps the draft
+// if the write is refused, which is the same contract the form has: a failed
+// write must never look like a saved one.
+function saveAdminRename(item, rawName) {
+  const name = String(rawName || '').trim();
+  if (!name) { setAdminEditStatus('A title cannot be empty.', 'error'); return false; }
+  const payload = Object.assign({ action: 'update', row: item.row }, AdminWrite.mergeStored(item.stored, { name: name }));
+  const clash = adminDuplicateCheck(payload, item.row);
+  if (clash.exact.length) {
+    setAdminEditStatus('That title is already saved for this date and screentime — nothing was changed.', 'error');
+    return false;
+  }
+  return AdminWrite.send(payload).then(outcome => {
+    if (outcome.expired) { expireAdminSession('Your admin session has ended.'); return false; }
+    if (!outcome.ok) { setAdminEditStatus(outcome.error, 'error'); return false; }
+    if (outcome.duplicate) {
+      setAdminEditStatus('That rename would duplicate entry #' + outcome.rowNumber + ' — nothing was changed.', 'error');
+      return false;
+    }
+    // The store now holds the typed title; the list shows it the way the next
+    // read would render it, so the row, the search and the Duplicate Checker
+    // agree straight away instead of after a reload.
+    item.stored = Object.assign({}, item.stored, { name: name });
+    item.name = smartCaseName(name);
+    setAdminEditStatus('Renamed to ' + item.name + '.', 'ok');
+    const search = document.getElementById('admin-edit-search');
+    renderAdminEditResults(search ? search.value : '');
+    // The repaint replaces the trigger that had focus; hand it back to the row
+    // that was just renamed, so a keyboard run does not start over from the top.
+    setTimeout(() => {
+      const again = document.querySelector('.admin-name-edit[data-row="' + item.row + '"] .admin-name-btn');
+      if (again) again.focus({ preventScroll: true });
+    }, 30);
+    return true;
+  }, error => {
+    setAdminEditStatus((error && error.message) || 'Unable to rename that entry.', 'error');
+    return false;
+  });
+}
+
+// One line of feedback under the search box. A rename has nowhere else to speak:
+// the results list is aria-live as a whole, so its repaint would read out every
+// row rather than the one that changed.
+function setAdminEditStatus(text, tone) {
+  const box = document.getElementById('admin-edit-status');
+  if (!box) return;
+  box.textContent = text || '';
+  box.className = 'admin-edit-status' + (tone ? ' is-' + tone : '');
 }
 
 function startAdminEdit(rowNumber) {
@@ -914,26 +1009,18 @@ async function deleteAdminEntry(rowNumber, button) {
   }
 }
 
-// Posts a single-row delete to the admin service. Resolves with the parsed
-// result, throws an Error on a failed request, and returns null when the admin
-// session has expired (the login screen is already up — stop and wait).
+// Posts a single-row delete to the admin service, through the same door every
+// other admin write uses. Resolves with the parsed result, throws an Error on a
+// failed request, and returns null when the admin session has expired (the login
+// screen is already up — stop and wait).
 async function requestAdminDelete(rowNumber) {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 45000);
-  try {
-    const response = await fetch('/.netlify/functions/admin-entry', { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin', body: JSON.stringify({ action: 'delete', row: rowNumber }), signal: controller.signal });
-    const result = await response.json().catch(() => ({}));
-    if (response.status === 401 && result.code === 'SESSION_INVALID') {
-      expireAdminSession('Your admin session has ended.');
-      return null;
-    }
-    if (!response.ok) {
-      throw new Error((result.error || 'Unable to delete entry') + (result.code ? ` [${result.code}]` : ''));
-    }
-    return result;
-  } finally {
-    clearTimeout(timeout);
+  const outcome = await AdminWrite.send({ action: 'delete', row: rowNumber });
+  if (outcome.expired) {
+    expireAdminSession('Your admin session has ended.');
+    return null;
   }
+  if (!outcome.ok) throw new Error(outcome.error);
+  return outcome.result;
 }
 
 // Server-side sessions can end (cookie cleared, secret rotated, 30-day cap), so
@@ -962,43 +1049,13 @@ function expireAdminSession(reason) {
   if (box && reason) box.innerHTML = `<div class="sf-error">${escapeHTML(reason)} Please sign in again.</div>`;
 }
 
-// ── ADD-TIME DUPLICATE CHECK ──────────────────────────────────────────────
-// The gate every create passes through before it is allowed anywhere near the
-// network. Two tiers, because the tracker deliberately allows a rewatch:
-//   * exact  — same title, kind, season, watch date AND screentime: certainly
-//              the same row logged twice, so the add is refused outright and no
-//              override is offered.
-//   * exists — same title, kind and season but not an exact repeat (another
-//              date, or the same date saved with different details): the title
-//              is already in the list, so the add stops and says so either way;
-//              "Add anyway" is the deliberate override for the genuine rewatch
-//              that the Duplicate Checker below also declines to call an error.
-// Title, season and date all go through the same keys the checker uses
-// (dupNormTitle/dupSeasonKey/dupDateKey), so "S2", "Season 2" and "2" agree and
-// casing or spacing can never hide a match. The check this replaced demanded an
-// identical screentime, compared seasons as raw text and ignored the media
-// type: it missed "S2" vs "2", let a same-named movie and series collide, and
-// waved through a rewatch without a word.
-// `excludeRow` is the row being edited: the duplicate rule is about *other*
-// rows, so the entry loaded into the form must never count as its own match.
-function adminDuplicateCheck(payload, excludeRow) {
-  const found = { exact: [], exists: [] };
-  const name = dupNormTitle(payload.name);
-  if (!name) return found;
-  const kind = dupKind(payload.type);
-  const season = dupSeasonKey(payload.season);
-  const date = dupDateKey(payload.watchDate);
-  const screentime = Number(payload.screentime) || 0;
-  rawData.forEach(item => {
-    if (excludeRow != null && item.row === excludeRow) return;
-    if (dupNormTitle(item.name) !== name) return;
-    if (dupKind(item.type) !== kind) return;
-    if (dupSeasonKey(item.season) !== season) return;
-    if (dupDateKey(item.watchDate) === date && (Number(item.screentime) || 0) === screentime) found.exact.push(item);
-    else found.exists.push(item);
-  });
-  return found;
-}
+// ── THE DUPLICATE GATE ────────────────────────────────────────────────────
+// The two tiers (exact, exists) and the keys they compare are in admin-write.js,
+// because the form and a search row both write an entry now and a rule kept in
+// two places is a rule that eventually disagrees with itself. This is that rule
+// bound to the rows this visit has read: the entry being edited is excluded, so
+// a row is never its own duplicate.
+const adminDuplicateCheck = (payload, excludeRow) => AdminWrite.findDuplicates(rawData, payload, excludeRow);
 
 function adminDuplicateRow(item) {
   const bits = [];
@@ -1051,29 +1108,10 @@ function renderAdminDuplicateWarning(payload, found) {
 // surfaced for review, because a genuine rewatch looks identical.
 let dupScanGroups = [];
 
-function dupNormTitle(value) {
-  return String(value || '').trim().toLowerCase().replace(/\s+/g, ' ');
-}
-
-function dupKind(value) {
-  return String(value || '').toLowerCase().includes('movie') ? 'movie' : 'show';
-}
-
-// 'S1', 's 01', 'Season 1' and '01' all describe season one.
-function dupSeasonKey(value) {
-  let text = String(value || '').trim().toLowerCase()
-    .replace(/^season\s*/, '')
-    .replace(/^series\s*/, '')
-    .replace(/^#\s*/, '');
-  if (/^s\s*\d/.test(text)) text = text.slice(1).trim();
-  const number = Number(text);
-  return text && Number.isInteger(number) ? String(number) : text;
-}
-
-// Canonical yyyy-mm-dd so differently formatted representations compare equal.
-function dupDateKey(value) {
-  return toISOFromDisplay(value) || String(value || '').trim().toLowerCase();
-}
+// The four keys the duplicate rule is written in. They live in admin-write.js so
+// the checker, the add and the edit cannot each normalise a title, a season or a
+// date slightly differently; these are the names this file reads them by.
+const { dupNormTitle, dupKind, dupSeasonKey, dupDateKey } = AdminWrite;
 
 function dupFmtDate(value) {
   const dt = parseLocalDate(value);
@@ -1614,28 +1652,22 @@ async function submitAdminEntry(event) {
   }
   button.disabled = true; button.textContent = 'Saving…'; msg.textContent = '';
   try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 45000);
-    const response = await fetch('/.netlify/functions/admin-entry', { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin', body: JSON.stringify(payload), signal: controller.signal });
-    clearTimeout(timeout);
-    const result = await response.json().catch(() => ({}));
-    if (response.status === 401 && result.code === 'SESSION_INVALID') {
+    const outcome = await AdminWrite.send(payload);
+    if (outcome.expired) {
       expireAdminSession('Your admin session has ended.');
       return;
     }
-    if (!response.ok) {
-      throw new Error((result.error || 'Unable to save entry') + (result.code ? ` [${result.code}]` : ''));
-    }
+    if (!outcome.ok) throw new Error(outcome.error);
     // Leave edit mode, then reload the whole page so the entry shows up everywhere.
-    const where = result.rowNumber ? ` (#${escapeHTML(String(result.rowNumber))})` : '';
-    if (result.duplicate && isUpdate) {
+    const where = outcome.rowNumber ? ` (#${escapeHTML(String(outcome.rowNumber))})` : '';
+    if (outcome.duplicate && isUpdate) {
       // The server refused the edit on the same rule the check above applies
       // (a concurrent add could have claimed the key first). Stay in edit mode
       // with the form intact so the values can be changed.
       msg.innerHTML = `<div class="sf-error">This edit would duplicate entry${where} — nothing was changed.</div>`;
       return;
     }
-    document.getElementById('admin-entry-msg').innerHTML = result.duplicate
+    document.getElementById('admin-entry-msg').innerHTML = outcome.duplicate
       ? `<div class="sf-success">That entry was already saved${where}. Nothing was added again. Reloading…</div>`
       : `<div class="sf-success">Entry ${isUpdate ? 'updated' : 'added'} successfully${where}. Reloading…</div>`;
     adminEditRow = null;
