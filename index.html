@@ -137,6 +137,7 @@
   <link rel="stylesheet" href="stepper.css">
   <link rel="stylesheet" href="inline-menu.css">
   <link rel="stylesheet" href="inline-table.css">
+  <link rel="stylesheet" href="dynamic-button.css">
   <link rel="stylesheet" href="styles.css">
   <link rel="stylesheet" href="doc-page.css">
   <!-- Deliberately not deferred: this has to run before the first paint or a
@@ -276,6 +277,10 @@
      copy of them. Loaded before app.js, which reads window.AdminWrite. -->
 <script src="admin-write.js" defer></script>
 <script src="inline-table.js" defer></script>
+<!-- The retry and admin-delete buttons each say a second label ("Loading…",
+     "Deleting…") while they work: the kit cross-fades it in and travels to
+     its width, and the app writes plain text when this never loads. -->
+<script src="dynamic-button.js" defer></script>
 <script src="app.js" defer></script>
 
 </body>

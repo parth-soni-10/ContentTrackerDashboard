@@ -1,0 +1,84 @@
+/* Dynamic Button — the layers a label swap paints on.
+ *
+ * Nothing here is visible until the script has marked the button
+ * [data-db-ready], and the button keeps its own box, type, colours and padding:
+ * the kit adds one layer holding the resting label and one holding whatever the
+ * button is saying, and animates between them.
+ *
+ * Tune from the host's stylesheet:
+ *   --db-dur    how long the width takes to travel (260ms)
+ *   --db-fade   how long a label takes to cross-fade (200ms)
+ *   --db-lift   how far the incoming label rises into place (7px)
+ */
+
+[data-db-ready] {
+  position: relative;
+  transition: width var(--db-dur, 260ms) cubic-bezier(.22, .9, .28, 1);
+}
+
+/* While a state is showing, the resting label is out of the paint but still in
+   the flow: the button's height stays its own rather than collapsing to its
+   padding, and nothing below it moves. */
+[data-db-ready] .db-face {
+  transition:
+    opacity var(--db-fade, 200ms) ease,
+    transform var(--db-fade, 200ms) ease;
+}
+
+/* The resting layer keeps the button's own layout, so an icon-and-label pair
+   inside it lays out exactly as it did in the button.
+
+   width:fit-content matters more than it looks: a button that is display:block
+   would otherwise stretch this layer — its only in-flow child — to whatever
+   width the button currently has. A block box that fills its parent cannot tell
+   the kit how wide its own label is, so restoring would measure the state
+   label's width and never shrink back.   Sized to its content, the layer always
+   reports the label's own width — and no max-width:100%, because a percentage
+   cap would be the button's current width, which is the width being animated:
+   restoring from a narrow state label would measure a squeezed label and never
+   grow back. */
+[data-db-ready] [data-db-rest] {
+  display: inherit;
+  align-items: inherit;
+  justify-content: inherit;
+  gap: inherit;
+  white-space: nowrap;
+  width: fit-content;
+}
+
+/* A state layer floats above the resting one, centred and out of the flow. */
+[data-db-ready] .db-face:not([data-db-rest]) {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: inherit;
+  white-space: nowrap;
+  opacity: 0;
+  transform: translate(-50%, calc(-50% + var(--db-lift, 7px)));
+  pointer-events: none;
+}
+
+[data-db-ready] [data-db-rest].is-on { opacity: 1; }
+[data-db-ready] [data-db-rest]:not(.is-on) { opacity: 0; }
+[data-db-ready] .db-face:not([data-db-rest]).is-on {
+  opacity: 1;
+  transform: translate(-50%, -50%);
+}
+
+/* Quiet frames: the first paint, a re-measure after a resize, a font arriving
+   late, or a state the host set instantly. */
+[data-db-ready][data-db-quiet],
+[data-db-ready][data-db-quiet] .db-face { transition: none; }
+
+/* A label swap must not spill outside the button while the width is still
+   travelling: clip keeps the swap inside the box. `overflow: clip` where it is
+   supported, `hidden` everywhere else. */
+[data-db-ready] { overflow: hidden; overflow: clip; }
+
+@media (prefers-reduced-motion: reduce) {
+  [data-db-ready],
+  [data-db-ready] .db-face { transition: none; }
+}
