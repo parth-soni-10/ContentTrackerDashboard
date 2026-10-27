@@ -338,7 +338,9 @@ function warn(warnings, text) {
 // can't push the whole function past the platform's request timeout. A 429 or a
 // 5xx is retried once after a short pause — both sources shed load that way —
 // but a call that failed for lack of subrequests never is: another call only
-// spends more of what ran out.
+// spends more of what ran out. TMDB 404s are expected (a title not in TMDB)
+// and are not warnings — they are silently dropped so they don't surface as
+// "Partially loaded" noise to the user.
 async function fetchJSON(url, warnings, label) {
   for (let attempt = 0; ; attempt++) {
     const controller = new AbortController();
@@ -350,7 +352,11 @@ async function fetchJSON(url, warnings, label) {
         await new Promise(resolve => setTimeout(resolve, 350));
         continue;
       }
-      if (!response.ok) throw new Error('HTTP ' + response.status);
+      if (!response.ok) {
+        // TMDB 404 is normal (title not found) — don't warn, just return null.
+        if (response.status === 404) return null;
+        throw new Error('HTTP ' + response.status);
+      }
       return await response.json();
     } catch (error) {
       warn(warnings, label + ' · ' + (error && error.message ? error.message : 'request failed'));

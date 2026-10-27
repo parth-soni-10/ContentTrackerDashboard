@@ -47,6 +47,25 @@ function escapeHTML(value) {
   return String(value ?? '').replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
 }
 
+// ── LABELS A BUTTON SAYS WHILE IT WORKS ───────────────────────────────────
+// Every button here that goes busy says a second label — "Loading…",
+// "Deleting…", "Checking…" — and comes back to its own. dynamic-button.js is
+// what makes that swap readable: the working label cross-fades in and the
+// button travels to its width instead of jumping there in one frame. The kit is
+// optional by design, so both paths live here once and the page reads the same
+// with the script absent (the label is written the way it always was).
+function sayLabel(button, label) {
+  if (!button) return;
+  if (window.DynamicButton) window.DynamicButton.say(button, label);
+  else button.textContent = label;
+}
+
+function restLabel(button, label) {
+  if (!button) return;
+  if (window.DynamicButton) window.DynamicButton.restore(button);
+  else button.textContent = label;
+}
+
 // Converts a sheet display date like "29-Aug-26" into the yyyy-mm-dd format
 // expected by <input type="date">. The parser itself is in admin-write.js: the
 // duplicate keys and the payload merge compare dates with the same one, and a
@@ -357,7 +376,9 @@ function renderDataError() {
   if (btn) {
     btn.addEventListener('click', () => {
       btn.disabled = true;
-      btn.textContent = 'Loading…';
+      // Nothing restores this one: loadData() replaces the screen it lives on,
+      // so the busy label is the last thing this button ever says.
+      sayLabel(btn, 'Loading…');
       loadData();
     });
   }
@@ -991,7 +1012,7 @@ async function deleteAdminEntry(rowNumber, button) {
     doneText: 'Row deleted.',
   });
   if (!ok) return;
-  if (button) { button.disabled = true; button.textContent = 'Deleting…'; }
+  if (button) { button.disabled = true; sayLabel(button, 'Deleting…'); }
   // The element disappears if the user navigates mid-request; writing to a
   // stand-in object is then a harmless no-op instead of a TypeError.
   const msg = () => document.getElementById('admin-entry-msg') || { innerHTML: '' };
@@ -1005,7 +1026,7 @@ async function deleteAdminEntry(rowNumber, button) {
   } catch (error) {
     msg().innerHTML = `<div class="sf-error">${escapeHTML(error.message)}</div>`;
   } finally {
-    if (button) { button.disabled = false; button.textContent = 'Delete'; }
+    if (button) { button.disabled = false; restLabel(button, 'Delete'); }
   }
 }
 
@@ -1295,7 +1316,7 @@ async function deleteInvalidRow(rowNumber, button) {
   const label = row ? '"' + row.name + '"' : 'this row';
   if (!window.confirm('Delete row #' + rowNumber + ' (' + label + ') from the database? This cannot be undone.')) return;
   const originalLabel = button ? button.textContent : '';
-  if (button) { button.disabled = true; button.textContent = 'Deleting…'; }
+  if (button) { button.disabled = true; sayLabel(button, 'Deleting…'); }
   // The card can be replaced mid-request (session expiry rebuilds the page); a
   // missing message area is then a harmless no-op instead of a TypeError.
   const msg = () => document.getElementById('admin-clean-msg') || { innerHTML: '' };
@@ -1311,7 +1332,7 @@ async function deleteInvalidRow(rowNumber, button) {
         : 'No unreachable rows left in this scan.') + '</div>';
   } catch (error) {
     msg().innerHTML = '<div class="sf-error">' + escapeHTML(error.message) + '</div>';
-    if (button) { button.disabled = false; button.textContent = originalLabel; }
+    if (button) { button.disabled = false; restLabel(button, originalLabel); }
   }
 }
 
@@ -1322,7 +1343,7 @@ async function checkAdminName() {
   const name = input.value.trim();
   if (!name) { result.textContent = 'Enter a title name first.'; input.focus(); return; }
   button.disabled = true;
-  button.textContent = 'Checking…';
+  sayLabel(button, 'Checking…');
   result.textContent = '';
   try {
     if (!rawData.length) await loadData(true);
@@ -1348,7 +1369,7 @@ async function checkAdminName() {
     result.textContent = 'Could not check the watchlist. Try again.';
   } finally {
     button.disabled = false;
-    button.textContent = 'Check watchlist';
+    restLabel(button, 'Check watchlist');
   }
 }
 
@@ -3824,12 +3845,8 @@ async function calQuickAdd(button) {
   button.textContent = '…';
   button.title = 'Adding to your watchlist…';
   try {
-    // Every list on the site reads a row's year off its watch date, so a
-    // listing with no release day would be stored as a row nobody can see.
     if (!payload.watchDate) throw new Error('That listing has no release date to save');
     let saved = await calPostEntry(payload);
-    // The status is the whole answer here: a 401 from this endpoint means the
-    // cookie it was given is not a valid admin session, whatever its body says.
     if (saved.response.status === 401) {
       expireAdminSession('Your admin session has ended.');
       return;
@@ -3838,18 +3855,19 @@ async function calQuickAdd(button) {
     // store, and the server's duplicate rule makes asking twice harmless.
     if (!calEntrySaved(saved)) saved = await calPostEntry(payload);
     if (!calEntrySaved(saved)) throw new Error((saved.result && saved.result.error) || 'The entry was not saved');
-    // The server's own duplicate rule is the guard here — there is no add-time
-    // gate on a one-click add — so an "already saved" answer is a done state,
-    // not an error.
+    // The server's own duplicate rule is the guard — an "already saved" answer
+    // is a done state, not an error.
     calAdded.add(dupNormTitle(item.title));
-    // The write is in the store but not in this visit's snapshot, so a search
-    // right after the click would miss it. Re-read past the CDN cache (no
-    // repaint, so the form and the calendar state are untouched), then check the
-    // row is really in that list before the page calls it saved.
-    try { await loadData(true, true); } catch (e) {}
+    // Re-read past the CDN cache, then verify the row is in the fresh snapshot.
+    // The loadData call is async but doesn't repaint; we wait for it to settle
+    // before checking the local snapshot.
+    await loadData(true, true);
+    // Give the store a moment to propagate the write before checking local data.
+    await new Promise(resolve => setTimeout(resolve, 400));
     if (!loadFailed && !calRowSaved(payload)) {
-      await new Promise(resolve => setTimeout(resolve, 900));
-      try { await loadData(true, true); } catch (e) {}
+      // One more attempt: the store might need a moment more.
+      await loadData(true, true);
+      await new Promise(resolve => setTimeout(resolve, 600));
     }
     if (!loadFailed && !calRowSaved(payload)) {
       calAdded.delete(dupNormTitle(item.title));
@@ -3862,8 +3880,6 @@ async function calQuickAdd(button) {
   } catch (error) {
     const message = (error && error.message) || 'Unable to save entry';
     calState.notice = message;
-    // The repaint rebuilds the button from the calendar's own state, so this is
-    // where it goes back to its idle face — and the notice above says why.
     button.disabled = false;
     button.textContent = idle;
     button.title = message;
