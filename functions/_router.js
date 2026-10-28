@@ -1,11 +1,11 @@
 /**
- * Content Tracker — the routing half of this site's Pages Function.
+ * Content Tracker - the routing half of this site's Pages Function.
  *
  * This file only adapts how the functions under netlify/functions/ are hosted.
  * Pages compiles this directory (see `functions/[[path]].js`, the catch-all
  * route) and it imports those files, so the data layer, the admin session, the
  * throttles, the TMDB/OMDb lookups and the release calendar all keep exactly
- * one implementation — the one the site ran on. The `_` prefix keeps this file
+ * one implementation - the one the site ran on. The `_` prefix keeps this file
  * out of the routing table: the only route is the catch-all beside it.
  *
  * What the Netlify runtime used to provide, and what replaces it here:
@@ -13,8 +13,8 @@
  *   storage     Netlify Database injected a Postgres connection string
  *               (NETLIFY_DB_URL, via @netlify/database) and lib/db.js ran `pg`.
  *               Here the Worker hands lib/db.js the D1 binding through
- *               setDatabase(), and that file — the only one that has ever known
- *               the schema — is written against D1 instead.
+ *               setDatabase(), and that file - the only one that has ever known
+ *               the schema - is written against D1 instead.
  *
  *   config      Netlify put the project's environment variables and secrets in
  *               process.env; Workers hand them over as bindings. They are copied
@@ -26,7 +26,7 @@
  *               served from here; anything else goes through serveDocument()
  *               below, which negotiates HTML/Markdown and otherwise hands the
  *               request to the assets layer. On Pages every request arrives at
- *               this code — the catch-all function hands it on — which is why
+ *               this code - the catch-all function hands it on - which is why
  *               that fallback is the whole routing contract rather than a
  *               run_worker_first pattern.
  *
@@ -114,7 +114,7 @@ const jsonError = (status, message) =>
  * agent wants is in `_documents.js`. Every request that is not a function
  * route passes through serveDocument(), which chooses between the two
  * representations from the request's Accept header and always says so with
- * Vary: Accept — without that header a shared cache is free to hand a browser
+ * Vary: Accept - without that header a shared cache is free to hand a browser
  * the Markdown blob, or an agent the HTML, because it keyed the entry on the
  * URL alone.
  *
@@ -122,8 +122,8 @@ const jsonError = (status, message) =>
  * need no negotiation; the llms.txt proposal asks for them so a linker has a
  * stable Markdown URL to point at.
  *
- * A 404 is negotiated too. The status is still 404 — an agent must be able to
- * tell a missing page from an empty one — and the body explains the miss and
+ * A 404 is negotiated too. The status is still 404 - an agent must be able to
+ * tell a missing page from an empty one - and the body explains the miss and
  * links the sitemap and llms.txt for recovery.
  */
 const MARKDOWN_TYPE = "text/markdown; charset=utf-8";

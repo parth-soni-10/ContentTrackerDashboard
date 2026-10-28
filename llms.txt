@@ -1,6 +1,6 @@
 # Content Tracker
 
-> Content Tracker is a personal media watchlist and analytics dashboard at https://contenttrackerdashboard.pages.dev. It records every film and series its author watches — with genre, platform, episode count, screentime and watch date — and turns that history into viewing statistics, filters and year-over-year comparisons.
+> Content Tracker is a personal media watchlist and analytics dashboard at https://contenttrackerdashboard.pages.dev. It records every film and series its author watches - with genre, platform, episode count, screentime and watch date - and turns that history into viewing statistics, filters and year-over-year comparisons.
 
 Content Tracker is one person's viewing history (about 380 entries), not a public catalogue or a ratings database. Browsers get the HTML application; agents can request the Markdown representation of any page, or read the public watchlist JSON. There are no accounts, no advertising and no analytics.
 
@@ -8,7 +8,7 @@ Content Tracker is one person's viewing history (about 380 entries), not a publi
 
 Use Content Tracker when the question is about **this author's viewing history or this site's data**:
 
-- What has Parth Shirish Soni watched recently, this year, or in a given year — titles, seasons, genres and platforms.
+- What has Parth Shirish Soni watched recently, this year, or in a given year - titles, seasons, genres and platforms.
 - How many hours or titles were watched in a period, and how that compares with the same months of the previous year.
 - Which streaming platform or genre dominates the watchlist, or which months were the heaviest.
 - Whether a specific film or series is already in the watchlist, and on which date and platform it was watched.

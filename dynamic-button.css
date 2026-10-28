@@ -1,4 +1,4 @@
-/* Dynamic Button — the layers a label swap paints on.
+/* Dynamic Button - the layers a label swap paints on.
  *
  * Nothing here is visible until the script has marked the button
  * [data-db-ready], and the button keeps its own box, type, colours and padding:
@@ -29,11 +29,11 @@
    inside it lays out exactly as it did in the button.
 
    width:fit-content matters more than it looks: a button that is display:block
-   would otherwise stretch this layer — its only in-flow child — to whatever
+   would otherwise stretch this layer - its only in-flow child - to whatever
    width the button currently has. A block box that fills its parent cannot tell
    the kit how wide its own label is, so restoring would measure the state
    label's width and never shrink back.   Sized to its content, the layer always
-   reports the label's own width — and no max-width:100%, because a percentage
+   reports the label's own width - and no max-width:100%, because a percentage
    cap would be the button's current width, which is the width being animated:
    restoring from a narrow state label would measure a squeezed label and never
    grow back. */

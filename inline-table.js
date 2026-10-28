@@ -1,4 +1,4 @@
-/* Inline Table Control — a table cell that turns into its own small form.
+/* Inline Table Control - a table cell that turns into its own small form.
  *
  *   InlineTable.attach(cellHost, {
  *     trigger: theButton,
@@ -14,7 +14,7 @@
  * attach() owns the cell: the existing control is the trigger, and pressing it
  * hides that control and lays the fields out in its place, inside the cell the
  * control already occupied. Nothing moves on the page, so the row being edited
- * stays where the reader found it — the point of editing a table in place.
+ * stays where the reader found it - the point of editing a table in place.
  *
  * The numbers behave like a spreadsheet cell rather than a dialog:
  *   Enter        commit (from the last field) or walk to the next field
@@ -29,7 +29,7 @@
  *
  * The editor is a detail of a cell, so it never activates the row around it:
  * pointer and Enter/Space events inside the fields stop there, and focus moving
- * between its own fields is not "clicked away" — only focus that truly leaves
+ * between its own fields is not "clicked away" - only focus that truly leaves
  * the editor commits.
  *
  * A money field parses through the host's own `parse` (cents. hands over its
@@ -169,7 +169,7 @@
         var next = ev.relatedTarget;
         if (next && editor.contains(next)) return;
         // A <select> only takes focus once its popup opens, so the blur of the
-        // field before it arrives with an empty relatedTarget — and committing
+        // field before it arrives with an empty relatedTarget - and committing
         // on that blink would tear the editor out from under the pointer that
         // is still on its way to the select. Where focus actually landed is the
         // only answer that holds for both a click away and a move between two
@@ -184,7 +184,7 @@
       });
       // The editor lives inside a table cell, and a table row is usually the
       // thing that opens the record. Nothing typed or clicked in a field is an
-      // activation of that row, so the editor keeps its own input to itself —
+      // activation of that row, so the editor keeps its own input to itself -
       // pointer and Enter/Space alike, since that is how a row is opened.
       var keep = function (ev) { ev.stopPropagation(); };
       editor.addEventListener('pointerdown', keep);

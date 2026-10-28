@@ -1,4 +1,4 @@
-// The Watchmode client — the one place the streaming-availability API is
+// The Watchmode client - the one place the streaming-availability API is
 // asked "which service is this title on, and when did it land there?".
 //
 // It exists because of a class of release nothing else in this calendar can
@@ -7,8 +7,8 @@
 // that was measured against a live October window: TMDB has it as a type-4
 // digital release and lists **no watch provider for it in any region**, so no
 // provider-filtered query can return it, and TVmaze is episodes-only. A
-// source that indexes by *service* — the thing a streaming calendar is
-// actually about — is the only shape that reaches it.
+// source that indexes by *service* - the thing a streaming calendar is
+// actually about - is the only shape that reaches it.
 //
 // Three calls, and what each one is for:
 //
@@ -16,7 +16,7 @@
 //                        landed on, and that service's own release date. This
 //                        is the catch-all the calendar was missing, and it
 //                        carries the platform with it, so a film arrives here
-//                        *because* it is on a service the watchlist logs — not
+//                        *because* it is on a service the watchlist logs - not
 //                        because a popularity page happened to list it.
 //
 //   /title/{id}/sources  Which services carry a title now, per region, with
@@ -28,8 +28,8 @@
 //
 //   /search              TMDB id to Watchmode id, so the two catalogues join
 //                        by id instead of by name. A title can be listed under
-//                        its original name — "YOU ME US" is "Noi un po'
-//                        meglio" here — so a name join fails on exactly the
+//                        its original name - "YOU ME US" is "Noi un po'
+//                        meglio" here - so a name join fails on exactly the
 //                        titles this file exists to find. The id is looked up
 //                        by the kind of TMDB id it has (a film's and a show's
 //                        are different fields in that index).
@@ -38,8 +38,8 @@
 // rather than as a query parameter, so it never lands in a log line, a
 // referrer or a browser history.
 //
-// Every call costs a credit — one per request, 2,500 a month on the free plan
-// — so the client counts what it spends and stops at the budget it is given.
+// Every call costs a credit - one per request, 2,500 a month on the free plan
+// - so the client counts what it spends and stops at the budget it is given.
 // Past that budget the caller is told what did not make it, instead of the
 // request being killed half way: a missing service is a gap the page can name,
 // and a killed request is nothing at all.
@@ -49,8 +49,8 @@
 // ceiling is 250 rows) is split and asked for again rather than being taken
 // at face value. That is what keeps a busy week from being half a week.
 //
-// The slices sit on a fixed weekly grid — every one runs from a Monday to the
-// Sunday after it — so the same week is always the same slice, two windows
+// The slices sit on a fixed weekly grid - every one runs from a Monday to the
+// Sunday after it - so the same week is always the same slice, two windows
 // that overlap share one credit, and an answer can be written down and read
 // back. How long a written-down answer stays good depends on what it is
 // about: a week that has been and gone cannot change, the week in play is
@@ -62,14 +62,14 @@ const WM_TIMEOUT_MS = 6000;
 const WM_PAGE_LIMIT = 250;
 // A window is asked for in slices of this many days. There is no pagination
 // and no way to ask for one service at a time, so slicing is the only way to
-// stay under the ceiling — and a week is comfortably inside it.
+// stay under the ceiling - and a week is comfortably inside it.
 const WM_SLICE_DAYS = 7;
 // How deep a full slice may be split before it is taken at face value: 7 days
 // → 3 → 1, which is the finest a day can get.
 const WM_MAX_SPLIT = 3;
 // How many weeks the feed is asked for at most. A service's own release dates
 // run a few weeks out, so a window further ahead than this is answered for
-// the close weeks instead — and the answer says that it did not cover the
+// the close weeks instead - and the answer says that it did not cover the
 // window it was given.
 const WM_HORIZON_WEEKS = 7;
 // The source types that are a service the watchlist logs. 'purchase' is a
@@ -177,7 +177,7 @@ function createWatchmode({
         headers: { accept: 'application/json', 'X-API-Key': apiKey },
       });
       if (response.status === 401 || response.status === 403) {
-        note(label + ' · the API key was rejected — check WATCHMODE_API_KEY');
+        note(label + ' · the API key was rejected - check WATCHMODE_API_KEY');
         return null;
       }
       if (response.status === 429) {
@@ -272,7 +272,7 @@ function createWatchmode({
    * The Watchmode id for a TMDB id.
    *
    * @param {number} tmdbId
-   * @param {string} kind  'movie' or 'tv' — the index has a field for each
+   * @param {string} kind  'movie' or 'tv' - the index has a field for each
    * @returns {{ id: number, imdb: string, title: string }|null}
    */
   async function titleId(tmdbId, kind) {
@@ -291,7 +291,7 @@ function createWatchmode({
   /**
    * The services carrying a title now.
    *
-   * `wmId` skips the id lookup when the caller already has it — which is the
+   * `wmId` skips the id lookup when the caller already has it - which is the
    * whole point of the cache: a title's Watchmode id never changes.
    *
    * @returns {object[]} the raw source rows

@@ -1,6 +1,6 @@
 // One rule, two runtimes: the page refuses a write it knows is a repeat, and
 // the D1 guard refuses one that slipped past it. Both are the same rule, so
-// both are pinned against the same fixtures here — the page must never let
+// both are pinned against the same fixtures here - the page must never let
 // through an edit the store then refuses, and must never refuse one the store
 // would have taken.
 //
@@ -29,13 +29,13 @@ const BASE = {
 // guard adds the stored type (`dup_key = ? AND type = ?`), so both parts are
 // asked here in the same breath. The type is compared as the string the row
 // carries, which is why a pair that spells the same kind two ways ('Film' and
-// 'Movie') is only ever a duplicate on the page — see the last test.
+// 'Movie') is only ever a duplicate on the page - see the last test.
 function gateSaysRepeat(a, b) {
   return db.duplicateKey(a) === db.duplicateKey(b) && String(a.type || "") === String(b.type || "");
 }
 
 // The page's side: one row in the list, the payload an edit would send, and no
-// exclusion — the row being edited is a separate case, already covered in
+// exclusion - the row being edited is a separate case, already covered in
 // admin-write.test.mjs.
 function pageSaysRepeat(a, b) {
   const rows = [{ row: 1, ...b }];
@@ -89,7 +89,7 @@ test("the two season keys differ in prefix and agree in grouping", () => {
 
 // The type is the third thing the two sides read differently: the page asks
 // whether two rows are the same *kind*, the store asks whether they carry the
-// same *word*. The store is therefore the looser half — and that direction is
+// same *word*. The store is therefore the looser half - and that direction is
 // the safe one: anything it would refuse, the page refuses first, with a
 // message naming the row. The reverse (the page refusing where the store would
 // have written) can only happen between two spellings of one kind, which is a

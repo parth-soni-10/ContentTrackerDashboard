@@ -1,16 +1,16 @@
 // Release Calendar data service.
 //
-// Two structured APIs — nothing is scraped out of HTML, and no new credentials
+// Two structured APIs - nothing is scraped out of HTML, and no new credentials
 // are needed: the films come from TMDB through the same TMDB_API_KEY
 // tmdb-search.js already uses, and the episodes come from TVmaze, which is a
 // free public API with no key at all.
 //
 // Why two sources instead of the one we already had:
-//   * Movies — TMDB /discover/movie, filtered to a release-date window in a
+//   * Movies - TMDB /discover/movie, filtered to a release-date window in a
 //     single region. TMDB is the only one of our sources that knows about a
 //     film before it comes out, and its discover endpoint is the only free,
 //     filterable release calendar of its kind.
-//   * Episodes — TMDB cannot serve a calendar of episodes: /discover/tv's
+//   * Episodes - TMDB cannot serve a calendar of episodes: /discover/tv's
 //     air_date filter answers with SHOWS that have an episode in the window,
 //     and getting the actual dates would mean one request per show (hundreds).
 //     TVmaze's /schedule/full returns the last couple of days and every future
@@ -19,8 +19,8 @@
 //     to a specific country… Episodes from global Web Channels like Netflix are
 //     not included", which is exactly the half a release calendar is for. The
 //     one thing /schedule/full cannot do is reach back to the start of the
-//     current month, so the days it misses are fetched a day at a time — the
-//     same two halves — which is what makes a month that is already running
+//     current month, so the days it misses are fetched a day at a time - the
+//     same two halves - which is what makes a month that is already running
 //     open on its whole self (see backfillDays).
 //
 // Both halves fail independently: if one source is down the other still
@@ -28,7 +28,7 @@
 //
 // Third rule, and the one that decides what the page contains: a film or an
 // episode is fetched only if it is on one of the platforms the Sheet logs
-// against (see PLATFORMS) — or, for a film, released in a cinema, which the
+// against (see PLATFORMS) - or, for a film, released in a cinema, which the
 // watchlist calls "Theater". The filter lives here at the fetch boundary, so the
 // rest of the app never sees a title that is not watchable on those services.
 //
@@ -53,7 +53,7 @@ const BATCH = 5; // concurrent TMDB requests
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 // ISO 3166-1 alpha-2, officially assigned codes. Two letters is not a region:
 // ZZ, XX and QQ all satisfied the old /^[A-Z]{2}$/ test, and each one bought a
-// full cinema sweep of a country that does not exist — plus a CDN cache entry —
+// full cinema sweep of a country that does not exist - plus a CDN cache entry -
 // instead of the documented fallback to US. This is the standard's own list, not
 // a copy of the page's picker (that one is the page's to define, and it is what a
 // union is asked for); a caller may legitimately name a region the dropdown does
@@ -78,21 +78,21 @@ const isRegion = code => ISO_REGIONS.has(code);
 // Watchmode owns the one class of release nothing else here can see: a film
 // that arrives on a service with no cinema run *and* with no TMDB
 // watch-provider tag. "YOU ME US" (Netflix, 29 Oct 2026) is the measured
-// case — TMDB has it as a type-4 digital release and lists no watch provider
+// case - TMDB has it as a type-4 digital release and lists no watch provider
 // for it in any region, so no provider-filtered query can return it, and
 // TVmaze is episodes-only. What Watchmode has is the *feed* the calendar was
 // missing: what landed on a service, on which service, and on what date.
 //
 // What it costs: one credit a request (2,500 a month on the free plan, 120
 // requests a minute), so the budget below is what one invocation may spend,
-// and the answers that do not change are cached in D1 (see lib/db.js) — which
+// and the answers that do not change are cached in D1 (see lib/db.js) - which
 // is what makes the second load of a month free.
 //
-// The feed's dates are US-first — the endpoint documents them as "primarily US
+// The feed's dates are US-first - the endpoint documents them as "primarily US
 // release dates, though most major services release globally on the same day"
-// — so it dates the US. Another region gets its platforms from TMDB's own
+// - so it dates the US. Another region gets its platforms from TMDB's own
 // provider sweeps, which are region-aware.
-const WM_CALL_BUDGET = 8; // Watchmode requests — one credit each
+const WM_CALL_BUDGET = 8; // Watchmode requests - one credit each
 const WM_DETAIL_BUDGET = 10; // TMDB records fetched for the films only the feed knows
 const WM_BUDGET_MS = 6000; // the wall clock the feed and the records share
 // How many pages one platform's sweep may walk. A window that is short
@@ -104,7 +104,7 @@ const MAX_SWEEP_PAGES = 6;
 
 // ── ONE REGION, OR ALL OF THEM ───────────────────────────────────────────
 // `region=all` is the union of the regions the page's picker offers, which the
-// page names in `regions` — that dropdown is the one place the list is defined,
+// page names in `regions` - that dropdown is the one place the list is defined,
 // so the function unions exactly what it was asked for rather than keeping a
 // second copy that could drift from it. TMDB has no all-regions query (region is
 // one ISO country per request), so a union is one pass per region merged here.
@@ -118,8 +118,8 @@ const MAX_UNION_REGIONS = 30;
 //
 // The second budget is a count, and on the free plan it is the binding one: one
 // invocation may only make 50 external subrequests and the limit cannot be
-// raised there. The page fans its union out itself now — one movies request per
-// region plus an episodes request — so a single region's films must stay well
+// raised there. The page fans its union out itself now - one movies request per
+// region plus an episodes request - so a single region's films must stay well
 // under 50 on their own. Past TMDB_CALL_BUDGET no new TMDB work starts and the
 // region lands in the partial/cut report below, instead of the tail of the
 // request arriving as a per-provider "Too many subrequests" warning.
@@ -127,7 +127,7 @@ const MAX_UNION_REGIONS = 30;
 // 30, not 40: a movies request also carries the release feed (up to WM_CALL_BUDGET
 // credits) and the TMDB records the films it found need (WM_DETAIL_BUDGET), and
 // those are subrequests of the *same* invocation. Spending 40 on sweeps left the
-// tail of the feed at the platform's ceiling — measured on the live October
+// tail of the feed at the platform's ceiling - measured on the live October
 // window, three provider sweeps and the feed's own releases call came back "Too
 // many subrequests", so the streaming half of the calendar arrived empty. The
 // feed is the half nothing else can replace, so the sweeps give it the room.
@@ -135,7 +135,7 @@ const REGION_BUDGET_MS = 20000;
 const UNION_BUDGET_MS = 9000;
 const TMDB_CALL_BUDGET = 30;
 // The platform's own ceiling on one invocation's external subrequests, counted
-// across every source in it — TMDB, the release feed, and the records the
+// across every source in it - TMDB, the release feed, and the records the
 // feed's own films need. Past it the request is killed with nothing to show,
 // so each source stops before it rather than being cut off in it.
 const SUBREQUEST_CAP = 50;
@@ -143,7 +143,7 @@ const SUBREQUEST_CAP = 50;
 // records the films it found need, and the episode half that runs beside it.
 const WM_SUBREQUEST_RESERVE = 14;
 // How many regions are worked on at once. The ceiling that matters is the total
-// in-flight upstream requests — this times BATCH, the fan-out inside one region —
+// in-flight upstream requests - this times BATCH, the fan-out inside one region -
 // because TMDB's documented upper limit is "somewhere in the 40 requests per
 // second range" and at these latencies three regions is already ~15 requests at
 // a time. Asking for more only buys 429s, which arrive as missing platform lists.
@@ -159,7 +159,7 @@ function requestedRegions(params) {
 }
 
 // ── THE PLATFORMS THIS CALENDAR IS FOR ───────────────────────────────────
-// The calendar fetches from these platforms and nothing else — the list is the
+// The calendar fetches from these platforms and nothing else - the list is the
 // watchlist's own platform vocabulary, which is what makes the page agree with
 // what gets logged. It is applied at the fetch boundary rather than in the page,
 // so the data that is dropped is never sent, never counted and never selectable:
@@ -169,12 +169,12 @@ function requestedRegions(params) {
 // web-channel content rather than anything watchable here, and it was the single
 // biggest source of episodes that were never going to be watched (86 of a
 // month's 675, from 36 channels like Hot Ones and Talk Ville). Dropping the name
-// is the whole change — it is matched at the fetch boundary like any other
+// is the whole change - it is matched at the fetch boundary like any other
 // platform, so those episodes and any film only on YouTube stop arriving.
 //
 // "Other" is not a service: it is how the watchlist logs a title that had no
 // platform, and it is also what the episode source reports when a show has no
-// network at all — so it is matched like any other spelling. "Theater" is not a
+// network at all - so it is matched like any other spelling. "Theater" is not a
 // service either, so it is deliberately absent here: a cinema release is a
 // property of the film (its theatrical release date), and it is added to the
 // film's platforms below as that label.
@@ -207,7 +207,7 @@ const PLATFORM_SPELLINGS = {
   'Amazon Prime Video': ['Prime Video'],
   // CBS is the one platform here that is a *network* the watchlist logs and also a
   // regional service the API lists, so it is the one name TMDB may qualify by
-  // country — paired rather than left to look like a second service, which would
+  // country - paired rather than left to look like a second service, which would
   // drop every film on it at the fetch boundary. Comparing without punctuation
   // means this one spelling covers both "CBS US" and "CBS (US)".
   'CBS': ['CBS US'],
@@ -224,7 +224,7 @@ const PLATFORM_SPELLINGS = {
 const IMDB_TITLE = 'https://www.imdb.com/title/';
 // The episode source writes the id with its own "tt" prefix ("tt35826715"), and a
 // bare number is accepted too because that is how the same id is spelled
-// elsewhere — prefixing one that already carries it builds "tttt…", which is a
+// elsewhere - prefixing one that already carries it builds "tttt…", which is a
 // 404 on IMDb rather than a link.
 const imdbIdOf = value => {
   const text = String(value || '').trim().replace(/^tt/i, '');
@@ -247,20 +247,20 @@ const PLATFORM_INDEX = (() => {
   return index;
 })();
 // The Sheet's spelling of a platform the APIs named differently, or '' for a
-// platform that is not on the list — which is the whole filter.
+// platform that is not on the list - which is the whole filter.
 const platformFor = name => PLATFORM_INDEX.get(platformKey(name)) || '';
 const THEATER = 'Theater';
 
 // ── TITLES THIS CALENDAR DOES NOT CARRY ───────────────────────────────────
-// League and promotion entries — a wrestling card, a basketball or football
-// game — are the one thing here that is not a *release* to plan around: they air
+// League and promotion entries - a wrestling card, a basketball or football
+// game - are the one thing here that is not a *release* to plan around: they air
 // several nights a week all year, they run for hours, and nobody picks them off
 // a calendar. They are matched on the show's name, at the fetch boundary like
 // the platform filter, so an excluded title is never sent, never counted and
 // never offered in a filter.
 //
 // Deliberately a list of names and not a "sports" rule: the episode source's own
-// genre for this is unusable — it tags quiz and game shows as Sports, so a rule
+// genre for this is unusable - it tags quiz and game shows as Sports, so a rule
 // on it would swallow "Alle mot alle" and "The Traitors Telugu" along with the
 // league. A sports *documentary* is a real release too, which is the second
 // reason this is a short explicit list. Word boundaries, so a title that merely
@@ -268,7 +268,7 @@ const THEATER = 'Theater';
 //
 // The four below are the leagues in this watchlist's own calendar today. A fifth
 // (NHL, MLB, UFC, WNBA, Formula 1 …) is one line here, and an entry can be any
-// pattern when a name does not fit the acronym — "Thursday Night Football on
+// pattern when a name does not fit the acronym - "Thursday Night Football on
 // Prime Video" and "All Elite Wrestling PPV" are league property under a name
 // no acronym catches.
 const EXCLUDED_TITLES = [
@@ -287,7 +287,7 @@ const json = (statusCode, body, headers = {}) => ({
 
 // Where this invocation actually ran. Netlify set CONTEXT for every deploy
 // (production / deploy-preview / branch-deploy / dev); Cloudflare Pages, where
-// this runs now, sets CF_PAGES_BRANCH instead and never CONTEXT — so reading
+// this runs now, sets CF_PAGES_BRANCH instead and never CONTEXT - so reading
 // only the Netlify name made this say "local run" on every deployed invocation,
 // which is what the warning below quotes back to the page. Both names are read,
 // the richer one first; a bare local runner sets neither, and that absence is
@@ -297,11 +297,11 @@ function runContext() {
   const branch = String(process.env.BRANCH || process.env.CF_PAGES_BRANCH || '').trim().slice(0, 60);
   if (context) return context === 'branch-deploy' && branch ? context + ' on ' + branch : context;
   if (process.env.CF_PAGES) return branch ? 'Cloudflare Pages on ' + branch : 'Cloudflare Pages';
-  return 'no deploy context — local run';
+  return 'no deploy context - local run';
 }
 
 // How much of TMDB to ask for, decided by the window itself. The theatre half is
-// one query — 2|3 — and a month of it is a small, finite list that can be walked
+// one query - 2|3 - and a month of it is a small, finite list that can be walked
 // in release-date order until the window runs out. A year cannot be listed to the
 // day at all (date-ordered pages of a year only reach its first weeks), so a long
 // window takes the same release types ordered by popularity instead: the cinema
@@ -328,7 +328,7 @@ function addDays(iso, days) {
 }
 
 // One line per problem. A failing key or an unreachable source fails every
-// request in the batch, and the page joins its warnings into a single banner —
+// request in the batch, and the page joins its warnings into a single banner -
 // eight copies of "HTTP 401" is noise, not information.
 function warn(warnings, text) {
   if (!warnings.includes(text)) warnings.push(text);
@@ -336,10 +336,10 @@ function warn(warnings, text) {
 
 // A bounded fetch: every upstream call gets its own deadline so one slow source
 // can't push the whole function past the platform's request timeout. A 429 or a
-// 5xx is retried once after a short pause — both sources shed load that way —
+// 5xx is retried once after a short pause - both sources shed load that way -
 // but a call that failed for lack of subrequests never is: another call only
 // spends more of what ran out. TMDB 404s are expected (a title not in TMDB)
-// and are not warnings — they are silently dropped so they don't surface as
+// and are not warnings - they are silently dropped so they don't surface as
 // "Partially loaded" noise to the user.
 async function fetchJSON(url, warnings, label) {
   for (let attempt = 0; ; attempt++) {
@@ -353,7 +353,7 @@ async function fetchJSON(url, warnings, label) {
         continue;
       }
       if (!response.ok) {
-        // TMDB 404 is normal (title not found) — don't warn, just return null.
+        // TMDB 404 is normal (title not found) - don't warn, just return null.
         if (response.status === 404) return null;
         throw new Error('HTTP ' + response.status);
       }
@@ -406,7 +406,7 @@ const round1 = value => {
 // ── MOVIES ────────────────────────────────────────────────────────────────
 // Release types: 2 (limited theatrical), 3 (theatrical), 4 (digital), 6 (TV).
 // Leaving out 4 would hide every straight-to-streaming release, which is most of
-// what arrives on a service without a cinema run — so they are all here, just
+// what arrives on a service without a cinema run - so they are all here, just
 // asked for in two passes (see moviePlan). The order inside each pair decides
 // which date TMDB reports back for a title that has both, and earliest-first is
 // what a calendar means by "when it arrives".
@@ -462,7 +462,7 @@ async function regionMovies(from, to, region, deadline, warnings, movies, report
     if (!report.cut.includes(region) && !report.partial.includes(region)) report[kind].push(region);
   };
   // Every TMDB call in this invocation is counted here, and past the budget no
-  // new work starts — the guard lives beside the time deadline because on the
+  // new work starts - the guard lives beside the time deadline because on the
   // free plan the count is what runs out first.
   const spent = () => (usage ? usage.tmdb >= TMDB_CALL_BUDGET || (usage.limit && (usage.total || 0) >= usage.limit) : false);
   const tmdbGet = (url, label) => {
@@ -473,13 +473,13 @@ async function regionMovies(from, to, region, deadline, warnings, movies, report
     return fetchJSON(url, warnings, label);
   };
   if (Date.now() > deadline || spent()) { stop('cut'); return; }
-  // The regional window. `release_date.gte/lte` — not `primary_release_date.*` —
+  // The regional window. `release_date.gte/lte` - not `primary_release_date.*` -
   // is the pair TMDB documents as the region-aware one: with region and
   // with_release_type the date it returns is the film's own date for those
   // release types in that region. Pairing a region with primary_release_date.*
   // is the trap this shipped with: the filter stays global (every region gets an
   // identical list), while the date reported back is the regional one, which for
-  // a window starting today came back as the window's own first day — a month of
+  // a window starting today came back as the window's own first day - a month of
   // real releases replaced by 80 undated titles, none of them the films actually
   // opening. The re-check below is what keeps that class of surprise visible.
   const windowParams = {
@@ -492,7 +492,7 @@ async function regionMovies(from, to, region, deadline, warnings, movies, report
     tmdbGet(tmdbUrl('/discover/movie', { ...windowParams, with_release_type: pass.types, sort_by: pass.sort, page: String(number) }), 'TMDB films');
 
   // The dated walk (see moviePlan): pages come in release-date order, so the
-  // window is finished once a page's own last entry is already past `to` — or
+  // window is finished once a page's own last entry is already past `to` - or
   // once a page comes back short, which is TMDB's last one. Walking in chunks of
   // BATCH and stopping there is what keeps the crowded opening days of a month
   // from eating the whole budget before the rest of it is reached. A popularity-
@@ -590,8 +590,8 @@ async function regionMovies(from, to, region, deadline, warnings, movies, report
       const items = (payload && payload.results) || [];
       for (const item of items) {
         if (!item.release_date || item.release_date < from || item.release_date > to) continue;
-        // A film only on a service is a real entry here — that is the
-        // service's own list — so it is merged in, not merely labelled.
+        // A film only on a service is a real entry here - that is the
+        // service's own list - so it is merged in, not merely labelled.
         mergeFilm(movies, item, false, entry.provider.label);
       }
       // A short page is TMDB's last one for this query.
@@ -603,8 +603,8 @@ async function regionMovies(from, to, region, deadline, warnings, movies, report
 
 // The TMDB record of a film the feed named, folded into the entry the calendar
 // shows: the poster, the rating, the popularity, and the canonical title. A
-// title can be listed under its original name — "YOU ME US" is "Noi un po'
-// meglio" in Watchmode — so the title the page shows is TMDB's, not the
+// title can be listed under its original name - "YOU ME US" is "Noi un po'
+// meglio" in Watchmode - so the title the page shows is TMDB's, not the
 // feed's, wherever the two disagree.
 function applyLookup(film, record) {
   if (!film || !record) return;
@@ -614,14 +614,14 @@ function applyLookup(film, record) {
   if (record.popularity) film.popularity = record.popularity;
 }
 
-// One TMDB record, by id, for a film the release feed named — the poster, the
+// One TMDB record, by id, for a film the release feed named - the poster, the
 // rating and TMDB's own title.
 //
 // A 404 here is an ordinary answer, not a failure: the feed's id can name a
 // record TMDB does not have as a film, and the feed's own row still carries a
 // title, a date and the service the film arrived on, which is everything a
-// calendar needs. So the miss is written down as an empty record — one ask, then
-// never again — and nothing about it reaches the page: a reader cannot act on
+// calendar needs. So the miss is written down as an empty record - one ask, then
+// never again - and nothing about it reaches the page: a reader cannot act on
 // "TMDB film · HTTP 404", and a title shown without a poster is the fallback
 // working rather than a fault to report.
 async function filmRecord(id, usage, deadline) {
@@ -667,7 +667,7 @@ const wmCache = {
 };
 
 // The services carrying a title, in the watchlist's own spelling, for the
-// region asked about — and for another region, whatever Watchmode knows.
+// region asked about - and for another region, whatever Watchmode knows.
 function servicesForRegion(rows, region) {
   const wanted = String(region || '').toUpperCase();
   const mine = (rows || []).filter(row => String(row.region || '').toUpperCase() === wanted);
@@ -681,11 +681,11 @@ function servicesForRegion(rows, region) {
 //
 // The join is by id and never by name. A title can be listed under its
 // original name, so a name join fails on exactly the films this step exists to
-// find — and it is also why the TMDB record is fetched by id afterwards: the
+// find - and it is also why the TMDB record is fetched by id afterwards: the
 // feed's name for a film is not always the name the page should show.
 //
 // The feed's dates are the service's own, and the service's own dates are
-// US-first — the endpoint documents them as "primarily US release dates, though
+// US-first - the endpoint documents them as "primarily US release dates, though
 // most major services release globally on the same day". So it dates the US.
 // Another region gets its platforms from TMDB's provider sweeps, which are
 // region-aware, and the feed is not asked for it.
@@ -728,7 +728,7 @@ async function loadWatchmode(from, to, regions, warnings, usage, deadline, movie
   const { rows, truncated, from: feedFrom, to: feedTo, beyond } = await client.releases(from, to);
   report.truncated = truncated;
   report.window = { from: feedFrom, to: feedTo };
-  // A window the feed does not reach — next year, seen from this year — is
+  // A window the feed does not reach - next year, seen from this year - is
   // answered for the close weeks instead. The page says which weeks those
   // were, rather than claiming a coverage of a year it does not have.
   report.beyond = Boolean(beyond);
@@ -766,7 +766,7 @@ async function loadWatchmode(from, to, regions, warnings, usage, deadline, movie
       if (existing.providers.length < 3 && !existing.providers.includes(arrival.platform)) {
         existing.providers.push(arrival.platform);
       }
-      // A cinema release outranks a service one — a calendar means the date a
+      // A cinema release outranks a service one - a calendar means the date a
       // film arrives, and a cinema release is the earliest of them.
       if (!existing.theater && arrival.date < existing.date) existing.date = arrival.date;
       continue;
@@ -807,7 +807,7 @@ async function loadWatchmode(from, to, regions, warnings, usage, deadline, movie
     const record = await filmRecord(arrival.id, usage, deadline);
     // No record to be had, or no budget left to ask: the feed's own title, date
     // and service are already on the entry, so the calendar has a release to
-    // show either way — a missing poster is a smaller loss than a page that
+    // show either way - a missing poster is a smaller loss than a page that
     // says something went wrong.
     if (!record) continue;
     await db.writeWmLookup(record);
@@ -822,12 +822,12 @@ async function loadWatchmode(from, to, regions, warnings, usage, deadline, movie
 }
 
 // The film half of one window: one region, or every region the picker offers
-// when `region=all`. The union is a merge, not a stack — a film on a service in
+// when `region=all`. The union is a merge, not a stack - a film on a service in
 // six countries is one entry carrying six labels (capped, as ever, at three) and
-// one date — so the day a film appears never depends on which region's sweep
+// one date - so the day a film appears never depends on which region's sweep
 // reached it first, and the list stays a list of films rather than of releases.
 // One budget covers the whole union (see UNION_BUDGET_MS), and the page usually
-// fans the union out itself — one movies request per region — so that each
+// fans the union out itself - one movies request per region - so that each
 // invocation stays inside the platform's subrequest cap; several regions in one
 // call still works, bounded the same way.
 async function loadMovies(from, to, regions, warnings, state, usage, coverage, today) {
@@ -841,13 +841,13 @@ async function loadMovies(from, to, regions, warnings, state, usage, coverage, t
     regionMovies(from, to, region, deadline, warnings, movies, report, usage)
   );
   if (report.noPlatforms.length) {
-    warn(warnings, 'TMDB films · none of your platforms (' + PLATFORMS.length + ' of them) are listed for ' + report.noPlatforms.join(', ') + ' — cinema releases only there');
+    warn(warnings, 'TMDB films · none of your platforms (' + PLATFORMS.length + ' of them) are listed for ' + report.noPlatforms.join(', ') + ' - cinema releases only there');
   }
   if (report.partial.length) {
-    warn(warnings, 'TMDB films · ' + report.partial.length + ' of ' + regions.length + ' regions came back without their platform lists (' + report.partial.join(', ') + ') — Refresh tries again');
+    warn(warnings, 'TMDB films · ' + report.partial.length + ' of ' + regions.length + ' regions came back without their platform lists (' + report.partial.join(', ') + ') - Refresh tries again');
   }
   if (report.cut.length) {
-    warn(warnings, 'TMDB films · no time left for ' + report.cut.length + ' of ' + regions.length + ' regions (' + report.cut.join(', ') + ') — Refresh tries again');
+    warn(warnings, 'TMDB films · no time left for ' + report.cut.length + ' of ' + regions.length + ' regions (' + report.cut.join(', ') + ') - Refresh tries again');
   }
   if (state) state.complete = !report.cut.length && !report.partial.length;
 
@@ -858,7 +858,7 @@ async function loadMovies(from, to, regions, warnings, state, usage, coverage, t
   const wm = await loadWatchmode(from, to, regions, warnings, usage, wmDeadline, movies, coverage, today);
   if (wm.enabled && (wm.cut || wm.truncated)) {
     if (state) state.complete = false;
-    warn(warnings, 'Watchmode · the release feed was cut short (' + wm.calls + ' requests) — some arrivals are missing until the next load');
+    warn(warnings, 'Watchmode · the release feed was cut short (' + wm.calls + ' requests) - some arrivals are missing until the next load');
   }
 
   // Nothing gets in that is neither in cinemas nor on one of the platforms: a
@@ -877,7 +877,7 @@ async function loadMovies(from, to, regions, warnings, state, usage, coverage, t
 }
 
 // ── EPISODES ──────────────────────────────────────────────────────────────
-// "series" and "season" mark the two things a viewer actually plans around —
+// "series" and "season" mark the two things a viewer actually plans around -
 // the rest of the schedule is the weekly run of shows already on.
 function episodeRow(entry) {
   // Two shapes for the same thing: the schedule endpoints embed the show under
@@ -886,7 +886,7 @@ function episodeRow(entry) {
   const streaming = Boolean(show.webChannel && show.webChannel.name);
   const channel = (streaming ? show.webChannel.name : (show.network && show.network.name) || '') || 'Other';
   // The Sheet's spelling of the platform, or '' when the show airs somewhere
-  // this calendar is not for — which is how the episode half is filtered.
+  // this calendar is not for - which is how the episode half is filtered.
   const platform = platformFor(channel);
   return {
     id: entry.id,
@@ -908,7 +908,7 @@ function episodeRow(entry) {
     // A release links to the title's own IMDb page rather than to the API it came
     // from. For an episode it costs nothing: the show's IMDb id is already in the
     // payload this function fetches, so no extra upstream call is made. A show
-    // the source has no id for (a fifth of them — news, talk, the web channels)
+    // the source has no id for (a fifth of them - news, talk, the web channels)
     // is null here and the page falls back to an IMDb search for the name.
     imdb: imdbUrl(show.externals && show.externals.imdb),
   };
@@ -918,12 +918,12 @@ function episodeRow(entry) {
 // /schedule/full is complete for today onwards and only rolling while it starts,
 // which serves a month that is ahead but not the one we are in: on 10 October its
 // own earliest day held three entries. So every day of the window that is already
-// behind us is asked for on its own — the network half for one country plus the
-// web half without one, which is exactly the pair the big response merges — and
+// behind us is asked for on its own - the network half for one country plus the
+// web half without one, which is exactly the pair the big response merges - and
 // the month reads as a month instead of as a wall of empty past days.
 //
 // The boundary is today, deliberately not the big response's earliest day: that
-// edge is the rolling part, and a day taken from it arrives half-filled — Oct 8
+// edge is the rolling part, and a day taken from it arrives half-filled - Oct 8
 // carried three entries (CNN, NBC, ABC, none of them on the platform list, so an
 // empty day) where the day's own list has dozens.
 //
@@ -934,7 +934,7 @@ function episodeRow(entry) {
 // spend), and whatever the budget cannot reach is named in a warning rather than
 // quietly missing.
 const BACKFILL_MAX_DAYS = 31; // a month is the longest past a window can be
-const BACKFILL_BATCH = 3; // days at a time — two requests each. TVmaze's courtesy
+const BACKFILL_BATCH = 3; // days at a time - two requests each. TVmaze's courtesy
 // limit is ~20 requests per 10 seconds, so a whole month goes out in small
 // waves rather than one burst.
 const BACKFILL_BUDGET_MS = 7000; // for the whole backfill, not per day
@@ -992,7 +992,7 @@ function warnBackfill(warnings, late, failed) {
     warn(
       warnings,
       'TVmaze episodes · no time left for ' + late.length + (late.length === 1 ? ' day' : ' days') + ' before today (' +
-        late[0] + ' to ' + late[late.length - 1] + ') — Refresh tries again'
+        late[0] + ' to ' + late[late.length - 1] + ') - Refresh tries again'
     );
   }
   if (failed) {
@@ -1011,7 +1011,7 @@ async function backfillDays(from, to, today, collect, warnings) {
 // Which past days this invocation backfills. `backfill=none` fetches the big
 // response only; `backfill=YYYY-MM-DD,YYYY-MM-DD` backfills exactly that range
 // (clamped to the window and to BACKFILL_CHUNK_DAYS) and skips the big response
-// — that is how the page fetches a long past without putting 60 subrequests in
+// - that is how the page fetches a long past without putting 60 subrequests in
 // one invocation. Anything else is the automatic behaviour: the whole past of
 // the window, up to BACKFILL_MAX_DAYS.
 function backfillParam(params, from, to) {
@@ -1041,7 +1041,7 @@ async function loadEpisodes(from, to, today, warnings, backfill) {
     seen.add(entry.id);
     const row = episodeRow(entry);
     // A show on a network or service that is not on the list is not part of this
-    // calendar — that is the whole point of fetching from a fixed set.
+    // calendar - that is the whole point of fetching from a fixed set.
     if (!row.platform) return;
     if (isExcludedTitle(row.title)) return;
     rows.push(row);
@@ -1067,7 +1067,7 @@ async function loadEpisodes(from, to, today, warnings, backfill) {
 // ── A TITLE, LOOKED UP BY NAME ────────────────────────────────────────────
 // The calendar above is built from TMDB's *discover* index: the theatrical
 // list and the per-service lists. A title can exist in TMDB and still be in
-// neither — a streaming release whose provider TMDB has not attached yet (a
+// neither - a streaming release whose provider TMDB has not attached yet (a
 // Netflix film days before its date, say) is in TMDB's search index but in no
 // discover list, so the calendar could not show it at all. This asks for the
 // record directly, which is the only way a title TMDB knows about can be
@@ -1075,14 +1075,14 @@ async function loadEpisodes(from, to, today, warnings, backfill) {
 //
 // It answers with the same movie shape the calendar uses, so the page can
 // render it and add it like any other listing. The platform is the watchlist's
-// own spelling of whatever TMDB lists, and 'Other' — the watchlist's word for
-// "no platform recorded" — when TMDB lists none.
+// own spelling of whatever TMDB lists, and 'Other' - the watchlist's word for
+// "no platform recorded" - when TMDB lists none.
 async function searchTitle(title, warnings, region, usage) {
   const text = String(title || '').trim();
   if (!text) return null;
   const key = String(process.env.TMDB_API_KEY || '').trim();
   if (!key) {
-    warn(warnings, 'TMDB films · no TMDB_API_KEY where this function ran (' + runContext() + ') — the key is set per environment, so this one needs a value too');
+    warn(warnings, 'TMDB films · no TMDB_API_KEY where this function ran (' + runContext() + ') - the key is set per environment, so this one needs a value too');
     return null;
   }
   const searchUrl = new URL(TMDB_BASE + '/search/multi');
@@ -1114,7 +1114,7 @@ async function searchTitle(title, warnings, region, usage) {
       if (label && !names.includes(label)) names.push(label);
     }));
   });
-  // TMDB lists no service for some titles — the measured case being a film
+  // TMDB lists no service for some titles - the measured case being a film
   // whose provider it has not attached, which is why it is invisible in the
   // calendar at all. Watchmode indexes by service, so it is the one source
   // that can say where such a title is watchable; without it the answer would
@@ -1170,8 +1170,8 @@ exports.handler = async event => {
   const regions = requestedRegions(params);
   const region = regions.length > 1 ? ALL_REGIONS : regions[0];
 
-  // What this invocation builds. The page asks for the halves separately — one
-  // movies request per region plus an episodes request — so that no single
+  // What this invocation builds. The page asks for the halves separately - one
+  // movies request per region plus an episodes request - so that no single
   // invocation carries the union's old ~250 subrequests on the free plan's 50.
   // `backfill=none` fetches the big schedule response only, and
   // `backfill=FROM,TO` backfills exactly that past range without it. Absent
@@ -1209,11 +1209,11 @@ exports.handler = async event => {
     if (wantMovies && !tmdbKey) {
       warn(
         warnings,
-        'TMDB films · no TMDB_API_KEY where this function ran (' + runContext() + ') — the key is set per environment, so this one needs a value too'
+        'TMDB films · no TMDB_API_KEY where this function ran (' + runContext() + ') - the key is set per environment, so this one needs a value too'
       );
     }
 
-    // A past range never changes — the episodes that aired, aired — so an
+    // A past range never changes - the episodes that aired, aired - so an
     // explicit backfill caches for a day and the page's later months never
     // refetch it. Everything else keeps the short cache, and an incomplete
     // union keeps the minute one so the missing regions are retried, not pinned.

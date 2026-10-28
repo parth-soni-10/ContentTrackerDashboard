@@ -263,7 +263,7 @@ const entities = {
   quot: '"',
   apos: "'",
   nbsp: " ",
-  mdash: "—",
+  mdash: "-",
   ndash: "–",
   rsquo: "’",
   lsquo: "‘",

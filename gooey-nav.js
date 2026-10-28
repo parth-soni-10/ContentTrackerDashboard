@@ -1,4 +1,4 @@
-/* Gooey Nav — the active item's pill, drawn as a liquid that stretches after it.
+/* Gooey Nav - the active item's pill, drawn as a liquid that stretches after it.
  *
  *   <nav data-gooey-nav>
  *     <a href="#one" class="active">One</a>
@@ -9,7 +9,7 @@
  *
  * The host keeps its links, its active class and its click handling. The kit
  * appends one decorative layer behind them: a single pill under an SVG goo
- * filter. Moving it does not teleport a box across the nav — the pill first
+ * filter. Moving it does not teleport a box across the nav - the pill first
  * stretches to cover the ground to the new item, then contracts into it, so a
  * move reads as liquid being pulled, and at no instant is there a second pill
  * that could be mistaken for a second active item.
@@ -225,7 +225,7 @@
     /* Watch what the host changes, never what this refresh writes. The nav's own
        class and the pill's .is-stretch / .is-instant flips are all inside the
        observed subtree, so feeding them straight back into refresh() made every
-       pass schedule the next one — a renderer that never goes idle. Host edits
+       pass schedule the next one - a renderer that never goes idle. Host edits
        land on the links, so the kit's own layer is simply skipped. */
     var raf = 0;
     function isKitOwned(record) {
@@ -284,7 +284,7 @@
     // A host that rebuilds its header (cents. redraws the whole app shell on a
     // route change, nav included) leaves the old mount observing a detached
     // node, and its window resize listener would stay registered for the life
-    // of the page — one per render. Drop the dead mounts before adding the new
+    // of the page - one per render. Drop the dead mounts before adding the new
     // one: the kit's own observers are all it has to unwind.
     mounted.slice().forEach(function (m) {
       if (!m.nav.isConnected) m.destroy();

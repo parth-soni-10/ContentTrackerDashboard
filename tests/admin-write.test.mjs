@@ -2,8 +2,8 @@
 // calls a duplicate, and what the one POST treats as a save.
 //
 // The first test is the one the review asked for. The service builds a complete
-// entry out of the body and writes every column — a rename that sent only a name
-// would blank the genre, the platform, the season, the date and the screentime —
+// entry out of the body and writes every column - a rename that sent only a name
+// would blank the genre, the platform, the season, the date and the screentime -
 // so "rename only, every other column unchanged" is the failure a reader could
 // never see in the UI, and the reason `stored` exists beside the display row.
 import test from "node:test";
@@ -48,7 +48,7 @@ test("an untouched payload is the stored row itself", () => {
 
 // The store was filled from a sheet, so its type column holds 'Film' and
 // 'Series' while the form offers 'Movie' and 'Series/Show'. A rename carries
-// back whichever one the row has — the service checks the payload against
+// back whichever one the row has - the service checks the payload against
 // ENTRY_TYPES, so a list that only knew the form's words refused every legacy
 // row with "Name and a valid type are required".
 test("a rename of a row stored the sheet's way is a payload the service accepts", () => {

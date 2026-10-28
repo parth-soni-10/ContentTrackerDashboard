@@ -1,7 +1,7 @@
 -- The Watchmode cache.
 --
 -- Watchmode is the one source in this calendar that answers "which service is
--- this title on, and when did it land there" — the question the calendar is
+-- this title on, and when did it land there" - the question the calendar is
 -- actually about, and the one TMDB's provider filters cannot answer for a
 -- film it lists with no provider attached (the measured case: "YOU ME US",
 -- a Netflix film TMDB has as a type-4 digital release with no watch provider
@@ -23,7 +23,7 @@
 --   wm_lookups  The TMDB record of a film the release feed named and nothing
 --               else had: the poster, the rating, the popularity and the
 --               canonical title (a title can be listed under its original name
---               — "YOU ME US" is "Noi un po' meglio" in Watchmode — so the
+--               - "YOU ME US" is "Noi un po' meglio" in Watchmode - so the
 --               title the page shows is TMDB's). A poster never changes and an
 --               id never changes, so this row is written once and read
 --               forever: the second load of a month costs no credits at all.
@@ -35,7 +35,7 @@
 -- As with 0001_init.sql, a migration is not run by a deploy: it is a separate
 -- command, and a schema change is not live until it has been run. The code
 -- that reads these tables treats their absence as "no cache" and carries on,
--- so the site works before the migration has been applied — it just spends
+-- so the site works before the migration has been applied - it just spends
 -- the credits again.
 
 -- The cached Watchmode answers, keyed by the request that produced them.

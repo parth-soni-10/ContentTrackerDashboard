@@ -1,5 +1,5 @@
 // The two public endpoints that spend a third party's quota: tmdb-search and
-// imdb-id. Both are world-callable with no session, and neither was limited —
+// imdb-id. Both are world-callable with no session, and neither was limited -
 // while a single INSERT on the same origin was. The ceiling is per tier because
 // the page legitimately asks for one lookup per title it shows.
 //

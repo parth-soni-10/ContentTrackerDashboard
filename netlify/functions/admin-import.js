@@ -3,13 +3,13 @@
 // This is the recovery path for the Postgres → D1 move: the rows were held in
 // Netlify Database, whose Neon endpoint came back disabled once the Netlify site
 // was deleted, so there was no connection string left to dump. Everything the
-// store holds can still arrive from the exporting side — the Google Sheet the
-// rows originally came from, or any CSV/JSON export of them — and this endpoint
+// store holds can still arrive from the exporting side - the Google Sheet the
+// rows originally came from, or any CSV/JSON export of them - and this endpoint
 // is what puts them in D1.
 //
 // It is the same shape as the one-shot importer that moved the Sheet into
 // Postgres (since deleted, along with lib/sheets.js): admin-session gated because
-// it is a write endpoint, and *additive* — it never deletes and never updates a
+// it is a write endpoint, and *additive* - it never deletes and never updates a
 // row that is already there. Running it twice is safe and is in fact the check:
 // a row whose duplicate key (the same name/season/watch-date/screentime rule the
 // admin form uses, implemented once in lib/db.js) already exists is counted as a
@@ -34,7 +34,7 @@ const json = (statusCode, body) => ({
 // body that claims to be an import is not a reason to accept an arbitrary one.
 const MAX_ROWS = 2000;
 
-// Reads the first key that matches, ignoring case and spacing — the same
+// Reads the first key that matches, ignoring case and spacing - the same
 // tolerance the deleted importer had for the Sheet's header row.
 const text = (row, ...names) => {
   for (const name of names) {
@@ -91,7 +91,7 @@ exports.handler = async event => {
       else report.inserted++;
     }
   } catch (error) {
-    // Rows already written stay written — the import is additive and idempotent,
+    // Rows already written stay written - the import is additive and idempotent,
     // so answering with what did land and re-running is safe.
     console.error('Import failed part-way:', error);
     return json(502, { ...report, error: error.message || 'Import failed', code: 'DB_ERROR' });

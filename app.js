@@ -38,7 +38,7 @@ let loadRetried = false;
 let goalState = { hrs: 0, year: '' };
 let goalError = '';
 // A goal this device remembers from an earlier visit. It is only ever offered as
-// a prefill for the Set input — never written back to the shared store on a read
+// a prefill for the Set input - never written back to the shared store on a read
 // (see loadGoal).
 let localGoalHint = null;
 let goalReady = Promise.resolve();
@@ -48,8 +48,8 @@ function escapeHTML(value) {
 }
 
 // ── LABELS A BUTTON SAYS WHILE IT WORKS ───────────────────────────────────
-// Every button here that goes busy says a second label — "Loading…",
-// "Deleting…", "Checking…" — and comes back to its own. dynamic-button.js is
+// Every button here that goes busy says a second label - "Loading…",
+// "Deleting…", "Checking…" - and comes back to its own. dynamic-button.js is
 // what makes that swap readable: the working label cross-fades in and the
 // button travels to its width instead of jumping there in one frame. The kit is
 // optional by design, so both paths live here once and the page reads the same
@@ -76,7 +76,7 @@ function toISOFromDisplay(value) {
 
 // Parses a watch date as a LOCAL midnight Date. Date-only strings ("2026-08-29")
 // parsed via new Date() are treated as UTC, which shifts the calendar day for
-// anyone outside UTC — the old +1-day display hacks only patched that for
+// anyone outside UTC - the old +1-day display hacks only patched that for
 // negative-offset timezones. Parsing the parts directly is correct everywhere.
 function parseLocalDate(value) {
   const text = String(value || '').trim();
@@ -111,7 +111,7 @@ function normalizePlatform(value) {
   return PLATFORM_MAP[text.toLowerCase()] || text;
 }
 
-// Display-level cleanup only — the store keeps whatever was typed. These maps
+// Display-level cleanup only - the store keeps whatever was typed. These maps
 // merge near-duplicate labels that had crept into the Genre/Type columns (e.g.
 // "Sci-Fi" vs "Science Fiction" vs "Sci-Fi & Fantasy"), so the filters, the
 // genre treemap and "top genre" finally agree with each other.
@@ -167,10 +167,10 @@ function initTheme() {
   apply();
 }
 
-// Poster + public rating + IMDb id — cached per title to avoid hammering TMDB/OMDB.
+// Poster + public rating + IMDb id - cached per title to avoid hammering TMDB/OMDB.
 // Versioned so a schema change (adding imdbId) triggers one refetch pass, then caches forever.
 // v3 re-verifies every poster: v2 cached the top popularity hit, which is how
-// "You" matched "Because I Want You" — the lookup now prefers an exact name in
+// "You" matched "Because I Want You" - the lookup now prefers an exact name in
 // the right kind, so every title gets one checked pass.
 // `miss` remembers titles the lookup came back without a rating for: those
 // never get an imdbId, so without it every re-render re-queried TMDB *and*
@@ -179,7 +179,7 @@ const MEDIA_STORE = (() => {
   try {
     const c = JSON.parse(localStorage.getItem('ct-media-cache') || '{}');
     if (c && c.v === 3) return { v: 3, items: c.items || {}, miss: c.miss || {} };
-  } catch (e) { /* unreadable or corrupt storage — start from empty */ }
+  } catch (e) { /* unreadable or corrupt storage - start from empty */ }
   return { v: 3, items: {}, miss: {} };
 })();
 const MEDIA_CACHE = MEDIA_STORE.items;
@@ -196,7 +196,7 @@ function mediaMissed(key) {
 }
 function noteMedia(key, meta) {
   // The API's answer for a given title is stable, so a successful lookup that
-  // brought no rating means there is nothing more to learn — remember that
+  // brought no rating means there is nothing more to learn - remember that
   // (poster or not) instead of asking again on every re-render. A later success
   // clears the marker, so a title that gains a rating stops being a miss.
   const rated = Number(meta.rating) > 0;
@@ -241,7 +241,7 @@ function applyRating(key, rating) {
   rawData.forEach(r => { if (String(r.name || '').trim().toLowerCase() === key) r.rating = rating; });
 }
 // Swap a whole name cell (poster + title) from plain text to a link to its
-// EXACT IMDb page. No generic search pages — the link only appears once a
+// EXACT IMDb page. No generic search pages - the link only appears once a
 // real imdbID arrives.
 function applyImdbLink(key, imdbId) {
   if (!imdbId) return;
@@ -304,7 +304,7 @@ async function loadPoster(title, imgEl) {
   const cached = MEDIA_CACHE[key];
   if (cached && cached.imdbId) {
     // The paint calls throw on a hostile title exactly like the fetch path's
-    // do, so they get the same catch — an unwatched throw here kills the pool
+    // do, so they get the same catch - an unwatched throw here kills the pool
     // worker and every poster queued behind it.
     try {
       applyPoster(imgEl, cached.poster);
@@ -326,7 +326,7 @@ function applyPoster(el, url) {
   if (url) { el.onerror = () => posterFallback(el); el.src = url; }
   else posterFallback(el);
 }
-// Loads the visible posters with a small concurrency pool — a full page
+// Loads the visible posters with a small concurrency pool - a full page
 // (~25 titles) resolves in a few waves instead of one long serial chain,
 // while staying gentle on the media APIs.
 async function loadVisiblePosters(container) {
@@ -388,8 +388,8 @@ function renderDataError() {
 // { hrs, year } or null on failure.
 //
 // A failure has two shapes and the reader needs to be told which one it is. The
-// endpoint is admin-gated — it writes shared state that locks for the year, so
-// it takes the same session as the admin writes — and a 401 means "sign in",
+// endpoint is admin-gated - it writes shared state that locks for the year, so
+// it takes the same session as the admin writes - and a 401 means "sign in",
 // not "the network is down". That reason is left in goalError for the caller to
 // show; anything else is a plain failure and the card keeps working on this
 // device.
@@ -416,7 +416,7 @@ async function setSharedGoal(hrs, year) {
 // Fetch the shared goal. **Reading never writes.**
 //
 // This used to publish a device's remembered goal back into the store on a page
-// load. The badge on that is not "a visitor sees the goal they already had" — the
+// load. The badge on that is not "a visitor sees the goal they already had" - the
 // owner's browser holds a 30-day session, so the write lands. And the year's
 // lock is held against the *stored* year, so on 1 January it no longer applies:
 // the first visit from any device carrying an old ct-goal would define the new
@@ -425,7 +425,7 @@ async function setSharedGoal(hrs, year) {
 // admin gate, writes it.
 //
 // If the server can't answer (offline / not configured), fall back to whatever
-// this browser last saved locally so the card still reads sensibly — still
+// this browser last saved locally so the card still reads sensibly - still
 // without sending anything.
 async function loadGoal() {
   let serverReachable = false;
@@ -456,7 +456,7 @@ async function loadGoal() {
 // ── FAST FIRST PAINT ────────────────────────────────────────────────────
 // The last successfully fetched sheet JSON (plus the shared goal) is kept in
 // localStorage, so a repeat visit can paint the dashboard instantly from the
-// snapshot while the network copy is fetched underneath — the page feels
+// snapshot while the network copy is fetched underneath - the page feels
 // immediate even when the backend is cold, then silently corrects itself if
 // the data actually changed.
 const SNAP_KEY = 'ct-data-snap-v1';
@@ -479,7 +479,7 @@ function mapRows(json) {
     // normalizePlatform tidy it for display. A partial edit (a search row renames
     // and nothing else) is merged onto these, so saving a title cannot re-case it
     // or merge a genre spelling in a column nobody touched. The service writes
-    // every column, so the payload has to carry all of them — see
+    // every column, so the payload has to carry all of them - see
     // AdminWrite.mergeStored().
     stored: {
       name:       r.Name       || r.name       || '',
@@ -499,7 +499,7 @@ function mapRows(json) {
 //
 // Every field a page renders goes in. The old hash mixed in the name's *length*
 // and the screentime only, so an edit that changed a genre, a platform, the type
-// or an episode count kept the signature — the silent refresh fetched the new
+// or an episode count kept the signature - the silent refresh fetched the new
 // rows, decided nothing had changed, and left the old paint on screen until the
 // next navigation. Screentime and date were in it, which is why the fill-in-zeros
 // write did repaint and this looked fine in testing.
@@ -510,7 +510,7 @@ function dataSignature(rows, goal) {
     r.episodes, r.screentime, r.watchDate, r.month, r.year].join('\u0001')).join('\u0002');
   for (let i = 0; i < text.length; i++) hash = ((hash * 33) ^ text.charCodeAt(i)) >>> 0;
   // The goal card also changes when a remembered value arrives to prefill it, and
-  // that read resolves after the snapshot paint — so the hint is part of what the
+  // that read resolves after the snapshot paint - so the hint is part of what the
   // page shows, and part of what decides a repaint.
   const hint = localGoalHint ? localGoalHint.hrs + '/' + localGoalHint.year : '';
   return hash + ':' + rows.length + ':' + goal.hrs + ':' + goal.year + ':' + hint;
@@ -519,7 +519,7 @@ function dataSignature(rows, goal) {
 function saveDataSnapshot(json) {
   try {
     localStorage.setItem(SNAP_KEY, JSON.stringify({ ts: Date.now(), rows: json, goal: goalState }));
-  } catch (e) { /* full/unavailable storage — the snapshot is an optimization only */ }
+  } catch (e) { /* full/unavailable storage - the snapshot is an optimization only */ }
 }
 
 function readDataSnapshot() {
@@ -530,7 +530,7 @@ function readDataSnapshot() {
 }
 
 // Boot: when a snapshot exists (and this isn't a post-write ?fresh= reload),
-// paint it immediately, then refresh from the network underneath — repainting
+// paint it immediately, then refresh from the network underneath - repainting
 // only when the data actually changed, and never on stateful pages (admin /
 // submit forms) where a surprise re-render would lose what you typed.
 async function bootData() {
@@ -604,7 +604,7 @@ async function loadData(skipRerender, bust) {
   } catch (e) {
     console.warn('Data load failed:', e);
     // Keep the rows already loaded (the snapshot painted on this visit, or an
-    // earlier successful fetch) — a failed background refresh must not blank
+    // earlier successful fetch) - a failed background refresh must not blank
     // the dashboard. Only loadFailed flips; that's what the retry logic uses.
     loadFailed = true;
   }
@@ -624,7 +624,7 @@ async function loadData(skipRerender, bust) {
 // ── UTILS ─────────────────────────────────────────────────────────────────
 // The real calendar year. Future-dated entries never rebrand it (the This
 // Year filters compare against this value), and after 1 January the dashboard
-// — and the yearly goal lock — roll over even before the first new entry.
+// - and the yearly goal lock - roll over even before the first new entry.
 const maxYear = () => new Date().getFullYear();
 const fmtHrs   = m  => (m / 60).toFixed(1).replace(/\.0$/, '') + ' hrs';
 const fmtK     = n  => n.toLocaleString('en-GB');
@@ -735,7 +735,7 @@ function renderAdmin() {
 function renderAdminForm() {
   // A fresh form is always create mode: without this, starting an edit,
   // navigating away and coming back would leave adminEditRow set while the
-  // form reads "New Watchlist Entry" — the next submit would silently
+  // form reads "New Watchlist Entry" - the next submit would silently
   // overwrite the old row instead of adding an entry.
   adminEditRow = null;
   const genres = [...new Set(rawData.map(row => row.genre).filter(Boolean))].sort();
@@ -771,18 +771,18 @@ function renderAdminForm() {
     </div>
     <div class="submit-form-card">
       <h2 class="submit-heading">Database Cleanup</h2>
-      <p class="submit-sub">Finds stored rows with no usable watch date — rows the rest of the site never shows, whatever their screentime. Delete them to keep the database clean.</p>
+      <p class="submit-sub">Finds stored rows with no usable watch date - rows the rest of the site never shows, whatever their screentime. Delete them to keep the database clean.</p>
       <button class="try-btn admin-clean-btn" id="admin-clean-scan" type="button">Scan for invalid rows</button>
       <div id="admin-clean-msg" aria-live="polite"></div>
       <div id="admin-clean-results" class="admin-clean-results" aria-live="polite"></div>
     </div>
     <div class="submit-form-card">
       <h2 class="submit-heading">Fill in zeros</h2>
-      <p class="submit-sub">Entries sitting at 0 screentime get their episode count and runtime looked up again — past and upcoming alike. Only empty numbers are filled — anything typed stays.</p>
+      <p class="submit-sub">Entries sitting at 0 screentime get their episode count and runtime looked up again - past and upcoming alike. Only empty numbers are filled - anything typed stays.</p>
       <div id="admin-zero-count" class="admin-zero-count" aria-live="polite"></div>
       <button class="try-btn admin-clean-btn" id="admin-zero-fill" type="button">Fill them in</button>
       <div id="admin-zero-results" class="admin-clean-results" aria-live="polite"></div>
-    </div></div><div class="submit-right"><div class="note-card"><div class="note-icon" aria-hidden="true">💡</div><div class="note-body"><strong>Protected entry</strong>The password is checked server-side and never leaves this site.</div></div><button class="try-btn" id="admin-lock" type="button">Lock Admin</button></div><div class="submit-form-card submit-wide"><h2 class="submit-heading">Release Calendar</h2><p class="submit-sub">The same releases as the Calendar tab — the ＋ on a listing adds it straight to the watchlist, with its release day as the watch date.</p><div class="cal-embed">${calShellHTML()}</div></div></div>`;
+    </div></div><div class="submit-right"><div class="note-card"><div class="note-icon" aria-hidden="true">💡</div><div class="note-body"><strong>Protected entry</strong>The password is checked server-side and never leaves this site.</div></div><button class="try-btn" id="admin-lock" type="button">Lock Admin</button></div><div class="submit-form-card submit-wide"><h2 class="submit-heading">Release Calendar</h2><p class="submit-sub">The same releases as the Calendar tab - the ＋ on a listing adds it straight to the watchlist, with its release day as the watch date.</p><div class="cal-embed">${calShellHTML()}</div></div></div>`;
   document.getElementById('admin-entry-form').addEventListener('submit', submitAdminEntry);
   ['genre', 'platform'].forEach(key => {
     const select = document.getElementById('admin-' + key);
@@ -859,7 +859,7 @@ function renderAdminEditResults(query) {
   }).join('');
   // Renaming in the row: the same gate and the same transport the form uses.
   // The write is built by AdminWrite.mergeStored() from `item.stored`, so only
-  // the title changes — the store's own genre, platform, season and date go
+  // the title changes - the store's own genre, platform, season and date go
   // back exactly as they came, instead of the display-normalised row rewriting
   // them behind the reader's back.
   if (window.InlineTable) {
@@ -875,7 +875,7 @@ function renderAdminEditResults(query) {
       host.appendChild(trigger);
       // No `row` here: the kit dims the row's other children while a cell is
       // being edited, and this host sits two levels down (row → info → name →
-      // host) — passing the row would fade the editor itself along with the
+      // host) - passing the row would fade the editor itself along with the
       // buttons beside it.
       InlineTable.attach(host, {
         trigger: trigger,
@@ -906,7 +906,7 @@ function renderAdminEditResults(query) {
 // never showed is written back unchanged), and the duplicate gate is the form's
 // own rule, called with this row excluded.
 //
-// Returns a Promise — the kit locks the field while it runs and keeps the draft
+// Returns a Promise - the kit locks the field while it runs and keeps the draft
 // if the write is refused, which is the same contract the form has: a failed
 // write must never look like a saved one.
 function saveAdminRename(item, rawName) {
@@ -915,14 +915,14 @@ function saveAdminRename(item, rawName) {
   const payload = Object.assign({ action: 'update', row: item.row }, AdminWrite.mergeStored(item.stored, { name: name }));
   const clash = adminDuplicateCheck(payload, item.row);
   if (clash.exact.length) {
-    setAdminEditStatus('That title is already saved for this date and screentime — nothing was changed.', 'error');
+    setAdminEditStatus('That title is already saved for this date and screentime - nothing was changed.', 'error');
     return false;
   }
   return AdminWrite.send(payload).then(outcome => {
     if (outcome.expired) { expireAdminSession('Your admin session has ended.'); return false; }
     if (!outcome.ok) { setAdminEditStatus(outcome.error, 'error'); return false; }
     if (outcome.duplicate) {
-      setAdminEditStatus('That rename would duplicate entry #' + outcome.rowNumber + ' — nothing was changed.', 'error');
+      setAdminEditStatus('That rename would duplicate entry #' + outcome.rowNumber + ' - nothing was changed.', 'error');
       return false;
     }
     // The store now holds the typed title; the list shows it the way the next
@@ -1018,7 +1018,7 @@ async function deleteAdminEntry(rowNumber, button) {
   const msg = () => document.getElementById('admin-entry-msg') || { innerHTML: '' };
   try {
     const result = await requestAdminDelete(rowNumber);
-    if (result === null) return; // session expired — the login screen is already up
+    if (result === null) return; // session expired - the login screen is already up
     // Reload the whole page so the deletion is reflected everywhere.
     msg().innerHTML = `<div class="sf-success">Entry deleted${result.rowNumber ? ' (#' + escapeHTML(result.rowNumber) + ')' : ''}. Reloading…</div>`;
     reloading = true;
@@ -1033,7 +1033,7 @@ async function deleteAdminEntry(rowNumber, button) {
 // Posts a single-row delete to the admin service, through the same door every
 // other admin write uses. Resolves with the parsed result, throws an Error on a
 // failed request, and returns null when the admin session has expired (the login
-// screen is already up — stop and wait).
+// screen is already up - stop and wait).
 async function requestAdminDelete(rowNumber) {
   const outcome = await AdminWrite.send({ action: 'delete', row: rowNumber });
   if (outcome.expired) {
@@ -1088,8 +1088,8 @@ function adminDuplicateRow(item) {
     '<span>' + escapeHTML(bits.join(' · ') || 'existing entry') + '</span></div>';
 }
 
-// The warning that stands in for the save: what already exists, and — only when
-// the match is a same-title-different-date one — the deliberate override.
+// The warning that stands in for the save: what already exists, and - only when
+// the match is a same-title-different-date one - the deliberate override.
 function renderAdminDuplicateWarning(payload, found) {
   const msg = document.getElementById('admin-entry-msg');
   if (!msg) return;
@@ -1100,16 +1100,16 @@ function renderAdminDuplicateWarning(payload, found) {
   const rows = found.exact.concat(found.exists).map(adminDuplicateRow).join('');
   // The "exists" tier is everything that is not an exact repeat, so name the two
   // cases it can be: a different date (a rewatch) or the same date saved with
-  // different details (a second viewing) — never claim a date difference that
+  // different details (a second viewing) - never claim a date difference that
   // isn't there.
   const sameDate = !found.exact.length && dupDateKey(payload.watchDate) &&
     found.exists.every(item => dupDateKey(item.watchDate) === dupDateKey(payload.watchDate));
   const tail = found.exact.length
-    ? 'This exact entry — same watch date and screentime — is already saved. Find it in the search below to edit or delete it.'
+    ? 'This exact entry - same watch date and screentime - is already saved. Find it in the search below to edit or delete it.'
     : (sameDate
       ? 'Already saved on this date with different details, so this may be a second viewing. Add it anyway to log it again.'
       : 'Logged on a different date, so this may be a rewatch. Add it anyway to log it again.');
-  msg.innerHTML = '<div class="sf-error admin-dup-stop"><strong>Already in your watchlist — nothing was added.</strong>' +
+  msg.innerHTML = '<div class="sf-error admin-dup-stop"><strong>Already in your watchlist - nothing was added.</strong>' +
     '<div class="admin-dup-what">' + what + '</div>' + rows +
     '<div class="admin-dup-tail">' + tail + '</div>' +
     (found.exact.length ? '' : '<button class="try-btn admin-dup-force" id="admin-dup-force" type="button">Add anyway</button>') +
@@ -1228,7 +1228,7 @@ async function removeDupCopies(groupIndex, button) {
   try {
     for (const copy of copies.slice().sort((a, b) => b.row - a.row)) {
       const result = await requestAdminDelete(copy.row);
-      if (result === null) return; // session expired — the login screen is already up
+      if (result === null) return; // session expired - the login screen is already up
     }
     msg().innerHTML = '<div class="sf-success">Removed ' + copies.length + ' duplicate cop' + (copies.length > 1 ? 'ies' : 'y') + ' of "' + escapeHTML(label) + '". Reloading…</div>';
     reloading = true;
@@ -1246,7 +1246,7 @@ async function removeDupCopies(groupIndex, button) {
 // in the database but in no list, chart or search on the site. The scan reads
 // the table itself (ids and timestamps included) and deleting here uses the
 // same verified single-row delete as everywhere else. The row leaves the
-// rendered list in place — nothing else on the page ever showed it, so no
+// rendered list in place - nothing else on the page ever showed it, so no
 // reload is needed.
 async function scanInvalidRows() {
   const container = document.getElementById('admin-clean-results');
@@ -1283,11 +1283,11 @@ function renderInvalidRows() {
   const container = document.getElementById('admin-clean-results');
   if (!container) return;
   if (!adminCleanupRows.length) {
-    container.innerHTML = '<div class="clean-clear">✓ No unreachable rows found — every stored entry has a usable watch date.</div>';
+    container.innerHTML = '<div class="clean-clear">✓ No unreachable rows found - every stored entry has a usable watch date.</div>';
     return;
   }
-  const cell = value => escapeHTML(value === '' || value == null ? '—' : String(value));
-  const added = value => value ? escapeHTML(String(value).slice(0, 19).replace('T', ' ')) : '—';
+  const cell = value => escapeHTML(value === '' || value == null ? '-' : String(value));
+  const added = value => value ? escapeHTML(String(value).slice(0, 19).replace('T', ' ')) : '-';
   const rows = adminCleanupRows.map(row =>
     '<tr>' +
       '<td class="clean-id">#' + escapeHTML(String(row.id)) + '</td>' +
@@ -1304,7 +1304,7 @@ function renderInvalidRows() {
     '</tr>'
   ).join('');
   container.innerHTML =
-    '<div class="clean-sub">' + adminCleanupRows.length + ' unreachable row' + (adminCleanupRows.length === 1 ? '' : 's') + ' — no usable watch date</div>' +
+    '<div class="clean-sub">' + adminCleanupRows.length + ' unreachable row' + (adminCleanupRows.length === 1 ? '' : 's') + ' - no usable watch date</div>' +
     '<div class="clean-table-wrap"><table class="clean-table"><thead><tr>' +
       '<th>ID</th><th>Name</th><th>Season</th><th>Type</th><th>Genre</th><th>Platform</th>' +
       '<th>Eps</th><th>Mins</th><th>Watch date</th><th>Added (UTC)</th><th></th>' +
@@ -1322,7 +1322,7 @@ async function deleteInvalidRow(rowNumber, button) {
   const msg = () => document.getElementById('admin-clean-msg') || { innerHTML: '' };
   try {
     const result = await requestAdminDelete(rowNumber);
-    if (result === null) return; // session expired — the login screen is already up
+    if (result === null) return; // session expired - the login screen is already up
     adminCleanupRows = adminCleanupRows.filter(item => item.id !== rowNumber);
     renderInvalidRows();
     msg().innerHTML = '<div class="sf-success">Deleted row #' + escapeHTML(String(rowNumber)) +
@@ -1401,7 +1401,7 @@ async function autofillAdminEntry() {
     // count (or a season count used as an episode count), and one episode's
     // runtime as the season's screentime. The fill-in-zeros path refuses that and
     // names the reason; this one used to write it into the form. Name, type and
-    // genre are known either way, so those are still filled — the numbers are
+    // genre are known either way, so those are still filled - the numbers are
     // left blank rather than wrong.
     const seasonKnown = kind === 'Movie' || data.seasonOk !== false;
     const fields = {
@@ -1428,7 +1428,7 @@ async function autofillAdminEntry() {
     result.className = 'admin-name-result ' + (seasonKnown ? 'available' : 'found');
     result.textContent = seasonKnown
       ? 'Details filled from TMDB. Review them before saving. Platform left as it was.'
-      : 'Title, type and genre filled from TMDB. Episodes and screentime left blank — TMDB has no season ' +
+      : 'Title, type and genre filled from TMDB. Episodes and screentime left blank - TMDB has no season ' +
         (data.season || season || '1') + ' listed for this show yet, and its fallback would count the whole series. Enter them yourself; platform left as it was.';
   } catch (error) {
     result.className = 'admin-name-result found';
@@ -1446,14 +1446,14 @@ async function autofillAdminEntry() {
 // runtimes), so this re-fetches them and writes back ONLY what is still empty:
 // episodes, screentime, and a blank genre. Anything typed stays, and a row the
 // lookup cannot describe honestly is skipped, never guessed into.
-// A season number typed as "S6" or "Season 6" is dug back out to digits — the
+// A season number typed as "S6" or "Season 6" is dug back out to digits - the
 // lookup only understands a bare number and silently falls back to season 1.
 function zeroSeasonParam(value) {
   const match = String(value || '').match(/\d{1,2}/);
   return match ? match[0] : '';
 }
 // The day count uses local midnights on both sides: a watch date is a calendar
-// day, not a UTC instant. Rows dated in the future are attempted too — a season
+// day, not a UTC instant. Rows dated in the future are attempted too - a season
 // TMDB already lists (The Rookie S8 months before its January premiere) fills
 // fine; one it does not list yet comes back as "not listed yet" to try again.
 function zeroEntries() {
@@ -1474,7 +1474,7 @@ function zeroEntries() {
 function zeroPendingLine(entry) {
   const date = entry.row.watchDate ? escapeHTML(entry.row.watchDate) : 'no date';
   const tag = entry.state === 'ready' ? 'ready' : entry.state === 'upcoming' ? 'upcoming' : 'left out';
-  return '<div class="admin-zero-line"><strong>' + escapeHTML(entry.row.name) + '</strong> — 0 eps · 0 mins · ' + date + ' · ' + tag + '</div>';
+  return '<div class="admin-zero-line"><strong>' + escapeHTML(entry.row.name) + '</strong> - 0 eps · 0 mins · ' + date + ' · ' + tag + '</div>';
 }
 function paintZeroCount(fresh) {
   const box = document.getElementById('admin-zero-count');
@@ -1482,7 +1482,7 @@ function paintZeroCount(fresh) {
   if (!box || !button) return;
   const { zeros, eligible, list } = zeroEntries();
   box.textContent = zeros === 0
-    ? 'Nothing at 0 screentime — every entry has its numbers.'
+    ? 'Nothing at 0 screentime - every entry has its numbers.'
     : zeros + (zeros === 1 ? ' entry' : ' entries') + ' at 0 screentime · ' + eligible.length + ' can be tried';
   button.disabled = eligible.length === 0;
   button.textContent = eligible.length === 0 ? 'Fill them in' : 'Fill ' + eligible.length + (eligible.length === 1 ? ' entry' : ' entries');
@@ -1498,7 +1498,7 @@ function paintZeroCount(fresh) {
 async function lookupZeroEntry(row) {
   const wantMovie = String(row.type || '').toLowerCase() === 'movie';
   // A series row without a season number has no season to ask for, and the
-  // lookup would silently answer season 1 — wrong numbers filed without a
+  // lookup would silently answer season 1 - wrong numbers filed without a
   // word. Skipped until a season is on the row.
   if (!wantMovie && !zeroSeasonParam(row.season)) return { status: 'no-season-number' };
   const query = new URLSearchParams({ title: row.name, type: wantMovie ? 'movie' : 'tv' });
@@ -1553,7 +1553,7 @@ async function lookupZeroEntry(row) {
   return { status: 'filled', patch, genre };
 }
 function zeroLine(row, text) {
-  return '<div class="admin-zero-line"><strong>' + escapeHTML(row.name) + '</strong> — ' + text + '</div>';
+  return '<div class="admin-zero-line"><strong>' + escapeHTML(row.name) + '</strong> - ' + text + '</div>';
 }
 async function fillZeroEntries(button) {
   const box = document.getElementById('admin-zero-results');
@@ -1595,13 +1595,13 @@ async function fillZeroEntries(button) {
         if (outcome.genre) bits.push(outcome.genre);
         lines[job.index] = zeroLine(job.row, '✓ ' + bits.join(' · '));
       } else if (outcome.status === 'mismatch') {
-        lines[job.index] = zeroLine(job.row, 'skipped — the lookup found the film version, not the series (or vice versa)');
+        lines[job.index] = zeroLine(job.row, 'skipped - the lookup found the film version, not the series (or vice versa)');
       } else if (outcome.status === 'no-season') {
-        lines[job.index] = zeroLine(job.row, 'skipped — that season is not listed yet');
+        lines[job.index] = zeroLine(job.row, 'skipped - that season is not listed yet');
       } else if (outcome.status === 'no-season-number') {
-        lines[job.index] = zeroLine(job.row, 'skipped — add a season number to fill a series');
+        lines[job.index] = zeroLine(job.row, 'skipped - add a season number to fill a series');
       } else if (outcome.status === 'nothing-new') {
-        lines[job.index] = zeroLine(job.row, 'skipped — nothing new to fill');
+        lines[job.index] = zeroLine(job.row, 'skipped - nothing new to fill');
       } else {
         lines[job.index] = zeroLine(job.row, 'could not be refilled right now');
       }
@@ -1614,7 +1614,7 @@ async function fillZeroEntries(button) {
     (started.noDate ? ' · ' + started.noDate + ' left out (no usable date)' : '') + '.';
   if (box) box.innerHTML = '<div class="sf-success">' + escapeHTML(summary) + '</div>' + lines.join('');
   // Re-read past the CDN cache: the watchlist endpoint caches for five
-  // minutes, and a plain re-read would keep showing the pre-fill zeros — the
+  // minutes, and a plain re-read would keep showing the pre-fill zeros - the
   // filled rows would come straight back into this list.
   try { await loadData(true, true); } catch (e) {}
   paintZeroCount(false);
@@ -1640,7 +1640,7 @@ async function submitAdminEntry(event) {
   // explicit "Add anyway" rewatch) reaches the service.
   //
   // An empty rawData would make that check a silent no-op, so the watchlist is
-  // read first — and a store that still cannot be read stops the save instead of
+  // read first - and a store that still cannot be read stops the save instead of
   // letting an unchecked entry through. (skipRerender keeps the repaint from
   // throwing away what is typed in the form.)
   const needsCheck = isUpdate || !forced;
@@ -1658,7 +1658,7 @@ async function submitAdminEntry(event) {
     // stays as the last-resort check (a concurrent add can still land first).
     const clash = adminDuplicateCheck(payload, adminEditRow);
     if (clash.exact.length) {
-      msg.innerHTML = '<div class="sf-error admin-dup-stop"><strong>This edit would create a duplicate — nothing was changed.</strong>' +
+      msg.innerHTML = '<div class="sf-error admin-dup-stop"><strong>This edit would create a duplicate - nothing was changed.</strong>' +
         '<div class="admin-dup-what">' + escapeHTML(String(payload.name || '').trim()) + '</div>' +
         clash.exact.map(adminDuplicateRow).join('') +
         '<div class="admin-dup-tail">That row already has the same title, season, watch date and screentime. Change the date or the screentime, or edit that row instead.</div></div>';
@@ -1685,7 +1685,7 @@ async function submitAdminEntry(event) {
       // The server refused the edit on the same rule the check above applies
       // (a concurrent add could have claimed the key first). Stay in edit mode
       // with the form intact so the values can be changed.
-      msg.innerHTML = `<div class="sf-error">This edit would duplicate entry${where} — nothing was changed.</div>`;
+      msg.innerHTML = `<div class="sf-error">This edit would duplicate entry${where} - nothing was changed.</div>`;
       return;
     }
     document.getElementById('admin-entry-msg').innerHTML = outcome.duplicate
@@ -1714,7 +1714,7 @@ function renderReadme() {
   const topGenre = countBy(rawData, 'genre')[0];
   const bestMo   = Object.entries(countByMonth(rawData)).sort((a, b) => b[1] - a[1])[0];
   const distinctMonths = new Set(rawData.filter(r => r.month).map(r => r.year + '-' + r.month)).size;
-  const avgMo    = distinctMonths ? (total / distinctMonths).toFixed(1) : '—';
+  const avgMo    = distinctMonths ? (total / distinctMonths).toFixed(1) : '-';
 
   // ── Insights + watch goal ────────────────────────────────────────────────
   const dayList = [...new Set(rawData.map(r => r.watchDate ? watchDateTimestamp(r.watchDate) : 0).filter(t => t > 0))].sort((a, b) => a - b);
@@ -1742,7 +1742,7 @@ function renderReadme() {
 
   const platAgg = {};
   countBy(rawData, 'platform').forEach(([p, n]) => { if (p && n >= 3) platAgg[p] = Math.round(rawData.filter(r => r.platform === p).reduce((s, r) => s + r.screentime, 0) / n); });
-  const bingePlat = Object.entries(platAgg).sort((a, b) => b[1] - a[1])[0] || ['—', 0];
+  const bingePlat = Object.entries(platAgg).sort((a, b) => b[1] - a[1])[0] || ['-', 0];
 
   const cyMonths = [...new Set(cyrData.map(r => r.month).filter(Boolean))].sort((a, b) => monthIdx[a] - monthIdx[b]);
   const latestMo = cyMonths[cyMonths.length - 1] || '';
@@ -1779,7 +1779,7 @@ function renderReadme() {
 
   // Months elapsed drives the pace/projection line. If the latest entry is
   // dated in the future of the current year, don't let it count the year as
-  // complete — cap at the real current month in that case.
+  // complete - cap at the real current month in that case.
   const elapsed = (cy === calNow.getFullYear() && latestMoIdx > calNow.getMonth())
     ? calNow.getMonth() + 1
     : (latestMoIdx >= 0 ? latestMoIdx + 1 : 0);
@@ -1805,17 +1805,17 @@ function renderReadme() {
     : '';
   const yoyTip    = 'Same months compared with ' + (cy - 1) + ' (' + yoyRange + '), not year-to-date against a full year';
 
-  const cyTopGenre = countBy(cyrData, 'genre')[0] || ['—', 0];
-  const cyTopPlat = countBy(cyrData, 'platform')[0] || ['—', 0];
-  const cyBestMo = Object.entries(countByMonth(cyrData)).sort((a, b) => b[1] - a[1])[0] || ['—', 0];
+  const cyTopGenre = countBy(cyrData, 'genre')[0] || ['-', 0];
+  const cyTopPlat = countBy(cyrData, 'platform')[0] || ['-', 0];
+  const cyBestMo = Object.entries(countByMonth(cyrData)).sort((a, b) => b[1] - a[1])[0] || ['-', 0];
 
-  // Pre-compute dynamic classes — avoids single quotes inside template literals
+  // Pre-compute dynamic classes - avoids single quotes inside template literals
   const diffBadgeClass = diff >= 0 ? 'badge badge-green' : 'badge badge-red';
   const diffSign       = diff >= 0 ? '+' : '';
-  const diffBadge      = diffPct === null ? '—' : diffSign + diffPct + '%';
+  const diffBadge      = diffPct === null ? '-' : diffSign + diffPct + '%';
   const yoyBarWidth    = yoyPrevST ? Math.min((yoyCurST / yoyPrevST) * 100, 100) : 50;
 
-  // Recent watches — last 6 titles with a valid watch date, sorted newest first
+  // Recent watches - last 6 titles with a valid watch date, sorted newest first
   const fmtShortDate = s => {
     if (!s) return '';
     var clean = String(s).trim();
@@ -1824,7 +1824,7 @@ function renderReadme() {
     var dt = parseLocalDate(clean);
     return dt ? dt.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' }) : '';
   };
-  // "Recently watched" means actually watched — future-dated entries are
+  // "Recently watched" means actually watched - future-dated entries are
   // planned, so they don't appear here (they still show in Data/Timeline).
   const recent = rawData
     .filter(r => r.watchDate && watchDateTimestamp(r.watchDate) <= Date.now())
@@ -1838,7 +1838,7 @@ function renderReadme() {
   }, 0);
   const lastWatched = lastWatchedTs
     ? new Date(lastWatchedTs).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
-    : '—';
+    : '-';
   const recentHTML = recent.map(r => {
     const typeClass  = r.type.toLowerCase() === 'movie' ? 'rw-pill movie' : 'rw-pill show';
     const typeLabel  = r.type.toLowerCase() === 'movie' ? 'Movie' : 'Show';
@@ -1894,7 +1894,7 @@ function renderReadme() {
         </div>
         <div class="readme-stat">
           <div class="rs-label">Top Platform</div>
-          <div class="rs-val">${topPlat ? pe(topPlat[0]) : ''}${topPlat ? escapeHTML(topPlat[0]) : '—'}</div>
+          <div class="rs-val">${topPlat ? pe(topPlat[0]) : ''}${topPlat ? escapeHTML(topPlat[0]) : '-'}</div>
           <div class="rs-sub">${topPlat ? topPlat[1] + ' titles all time' : ''}</div>
         </div>
       </div>
@@ -1903,7 +1903,7 @@ function renderReadme() {
       <div>
         <div class="cards-label">What's inside</div>
         <div class="cards-grid slim">
-          <a class="info-card slim" href="#current" title="This year's stats — shows vs movies, platform breakdown, genre split and monthly viewing trend."><div class="ic-icon">📅</div><div class="ic-body"><h2>Current Year</h2></div></a>
+          <a class="info-card slim" href="#current" title="This year's stats - shows vs movies, platform breakdown, genre split and monthly viewing trend."><div class="ic-icon">📅</div><div class="ic-body"><h2>Current Year</h2></div></a>
           <a class="info-card slim" href="#alltime" title="Complete viewing history across all years. Filter by year, platform or genre to spot long-term patterns."><div class="ic-icon">📈</div><div class="ic-body"><h2>All Time</h2></div></a>
           <a class="info-card slim" href="#data" title="Full list of every title logged. Search by name, filter by type, genre, platform or month."><div class="ic-icon">🗂️</div><div class="ic-body"><h2>Data</h2></div></a>
           <a class="info-card slim" href="#suggestions" title="Can't decide what to watch? Spin for a random pick from your own list, filtered by genre or type."><div class="ic-icon gold">🎲</div><div class="ic-body"><h2>Random Pick</h2></div></a>
@@ -1929,8 +1929,8 @@ function renderReadme() {
       <div class="readme-sidebar">
         <div class="fact-card">
           <div class="fact-title">Quick Facts</div>
-          <div class="fact-row"><div class="fact-l"><span>🎭</span> Top Genre</div><div class="fact-r">${topGenre ? escapeHTML(topGenre[0]) : '—'}</div></div>
-          <div class="fact-row"><div class="fact-l"><span>📆</span> Best Month</div><div class="fact-r">${bestMo ? bestMo[0] : '—'}</div></div>
+          <div class="fact-row"><div class="fact-l"><span>🎭</span> Top Genre</div><div class="fact-r">${topGenre ? escapeHTML(topGenre[0]) : '-'}</div></div>
+          <div class="fact-row"><div class="fact-l"><span>📆</span> Best Month</div><div class="fact-r">${bestMo ? bestMo[0] : '-'}</div></div>
           <div class="fact-row"><div class="fact-l"><span>📊</span> Avg / Month</div><div class="fact-r">${avgMo} titles</div></div>
           <div class="fact-row"><div class="fact-l"><span>📺</span> Shows (of titles)</div><div class="fact-r">${total ? (shows / total * 100).toFixed(1) : 0}%</div></div>
           <div class="fact-row"><div class="fact-l"><span>🎬</span> Movies (of titles)</div><div class="fact-r">${total ? (movies / total * 100).toFixed(1) : 0}%</div></div>
@@ -1941,8 +1941,8 @@ function renderReadme() {
           <div class="ins-row"><div class="ins-l">🕒 Screen-time split</div><div class="ins-r">${stShowsPct}%<span class="ins-sub"> shows / ${100 - stShowsPct}% movies</span></div></div>
           <div class="ins-row"><div class="ins-l">📺 Most time per title</div><div class="ins-r">${escapeHTML(String(bingePlat[0]))}<span class="ins-sub"> ${fmtHrs(bingePlat[1])}/title</span></div></div>
           ${yoyMonth ? `<div class="ins-row"><div class="ins-l">🔄 ${escapeHTML(yoyMonth.name)}${yoyMonth.monthRunning ? ' so far' : ' ytd'}</div><div class="ins-r">${yoyMonth.curTitles}<span class="ins-sub"> vs ${yoyMonth.prevTitles} ${yoyMonth.monthRunning ? 'by this day last yr' : 'last yr'}</span></div></div>` : ''}
-          <div class="ins-row"><div class="ins-l">🎬 Deepest franchise</div><div class="ins-r">${escapeHTML(String(deepFranchise[0]) || '—')}<span class="ins-sub"> ${fmtHrs(deepFranchise[1])} · ${deepCount}×</span></div></div>
-          <div class="ins-cta">👀 Try next — you've watched little ${escapeHTML(String(leastGenre[0]) || 'any genre')}: something on ${escapeHTML(String(leastPlat[0]) || 'any platform')}?</div>
+          <div class="ins-row"><div class="ins-l">🎬 Deepest franchise</div><div class="ins-r">${escapeHTML(String(deepFranchise[0]) || '-')}<span class="ins-sub"> ${fmtHrs(deepFranchise[1])} · ${deepCount}×</span></div></div>
+          <div class="ins-cta">👀 Try next - you've watched little ${escapeHTML(String(leastGenre[0]) || 'any genre')}: something on ${escapeHTML(String(leastPlat[0]) || 'any platform')}?</div>
         </div>
         <div class="yoy-card">
           <div class="yoy-title">Year on Year</div>
@@ -1962,8 +1962,8 @@ function renderReadme() {
             <button class="try-btn btn-compact" id="goal-set" type="button">Set</button>
           </div>`}
           <div class="goal-note">${paceNote}</div>
-          ${goalHint ? `<div class="goal-note">💡 No goal is set for ${cy} yet. This device remembers ${goalHint} hrs — press Set to publish it, or type another target.</div>` : ''}
-          ${goalLocked ? `<div class="goal-note goal-lock-note">🔒 Locked for ${cy} — unlocks to set a new target on 1 Jan.</div>` : ''}
+          ${goalHint ? `<div class="goal-note">💡 No goal is set for ${cy} yet. This device remembers ${goalHint} hrs - press Set to publish it, or type another target.</div>` : ''}
+          ${goalLocked ? `<div class="goal-note goal-lock-note">🔒 Locked for ${cy} - unlocks to set a new target on 1 Jan.</div>` : ''}
         </div>
       </div>
     </div>`;
@@ -1997,9 +1997,9 @@ function renderReadme() {
           localStorage.setItem('ct-goal-year', String(cy));
         } catch (e) {}
         goalState = { hrs: v, year: v ? String(cy) : '' };
-        // setSharedGoal has already named a refused session — that reason is
+        // setSharedGoal has already named a refused session - that reason is
         // more useful than "syncing is unavailable", and it is actionable.
-        if (!goalError) goalError = 'Saved on this device only — syncing is unavailable right now.';
+        if (!goalError) goalError = 'Saved on this device only - syncing is unavailable right now.';
       }
       renderReadme();
     });
@@ -2029,7 +2029,7 @@ function buildPlatBars(platCounts) {
   const maxVal = platCounts[0] ? platCounts[0][1] : 1;
   return platCounts.map((p, i) => {
     p = [escapeHTML(p[0]), p[1]];
-    // Pre-compute class — no ternary with quotes inside template literal
+    // Pre-compute class - no ternary with quotes inside template literal
     const fillClass = i === 0 ? 'plat-fill top' : 'plat-fill';
     const pct = (p[1] / maxVal * 100).toFixed(0);
     return `<div class="plat-row">
@@ -2044,7 +2044,7 @@ function buildPlatBars(platCounts) {
 function buildTreemap(genCounts, totalGen) {
   const cols = ['col1', 'col2a', 'col2b', 'col3a', 'col3b'];
   const pads = genCounts.slice(0, 5);
-  while (pads.length < 5) pads.push(['—', 0]);
+  while (pads.length < 5) pads.push(['-', 0]);
   return pads.map((g, i) => {
     const blockClass = `tm-block ${cols[i]}`;
     const pct = totalGen && g[1] ? (g[1] / totalGen * 100).toFixed(1) + '%' : '';
@@ -2137,8 +2137,8 @@ function updateCurrentYear() {
   const platCounts = countBy(d, 'platform').slice(0, 8);
   const genCounts  = countBy(d, 'genre').slice(0, 5);
   const totalGen   = genCounts.reduce((s, g) => s + g[1], 0);
-  const topGenre   = genCounts[0] || ['—', 0];
-  const bestMo     = Object.entries(countByMonth(d)).sort((a, b) => b[1] - a[1])[0] || ['—', 0];
+  const topGenre   = genCounts[0] || ['-', 0];
+  const bestMo     = Object.entries(countByMonth(d)).sort((a, b) => b[1] - a[1])[0] || ['-', 0];
 
   // ── Pre-compute ALL dynamic classes before template literals ──────────
   const showsPct   = d.length ? (shows / d.length * 100).toFixed(0) : 0;
@@ -2148,11 +2148,11 @@ function updateCurrentYear() {
   const diffValClass  = diff < 0 ? 'kpi-val negative' : 'kpi-val';
   const diffBadgeClass = diff < 0 ? 'badge badge-red' : 'badge badge-green';
   const diffSign      = diff >= 0 ? '+' : '';
-  const diffBadge      = diffPct === null ? '—' : diffSign + diffPct + '%';
+  const diffBadge      = diffPct === null ? '-' : diffSign + diffPct + '%';
   const diffHrs       = Math.round(diff / 60);
   const genrePct      = totalGen ? (topGenre[1] / totalGen * 100).toFixed(1) : 0;
   const topPlatEmoji  = platCounts[0] ? pe(platCounts[0][0]) : '';
-  const topPlatName   = platCounts[0] ? platCounts[0][0] : '—';
+  const topPlatName   = platCounts[0] ? platCounts[0][0] : '-';
   const topPlatCount  = platCounts[0] ? platCounts[0][1] + ' titles' : '';
 
   destroyCharts();
@@ -2258,11 +2258,11 @@ function updateAllTime() {
   const platCounts = countBy(d, 'platform').slice(0, 8);
   const genCounts  = countBy(d, 'genre').slice(0, 5);
   const totalGen   = genCounts.reduce((s, g) => s + g[1], 0);
-  const topPlat    = platCounts[0] || ['—', 0];
-  const topGenre   = genCounts[0]  || ['—', 0];
-  const bestMo     = Object.entries(countByMonth(d)).sort((a, b) => b[1] - a[1])[0] || ['—', 0];
+  const topPlat    = platCounts[0] || ['-', 0];
+  const topGenre   = genCounts[0]  || ['-', 0];
+  const bestMo     = Object.entries(countByMonth(d)).sort((a, b) => b[1] - a[1])[0] || ['-', 0];
   const distinctMonthsAt = new Set(d.filter(r => r.month).map(r => r.year + '-' + r.month)).size;
-  const avgMo      = distinctMonthsAt ? (d.length / distinctMonthsAt).toFixed(1) : '—';
+  const avgMo      = distinctMonthsAt ? (d.length / distinctMonthsAt).toFixed(1) : '-';
 
   // ── Pre-compute ALL dynamic values before template literals ───────────
   const showsPct  = d.length ? (shows / d.length * 100).toFixed(1) : 0;
@@ -2352,9 +2352,9 @@ function renderData() {
     <div class="page-header">
       <div class="ph-left"><h1>All Shows &amp; Movies</h1><p>Your complete watchlist · sorted by watch date</p></div>
       <div class="ph-right">
-        <div class="dh-pill">📺 <strong id="dh-shows">—</strong> shows</div>
-        <div class="dh-pill">🎬 <strong id="dh-movies">—</strong> movies</div>
-        <div class="dh-pill">Total <strong id="dh-total">—</strong></div>
+        <div class="dh-pill">📺 <strong id="dh-shows">-</strong> shows</div>
+        <div class="dh-pill">🎬 <strong id="dh-movies">-</strong> movies</div>
+        <div class="dh-pill">Total <strong id="dh-total">-</strong></div>
       </div>
     </div>
     <div class="data-filters">
@@ -2393,7 +2393,7 @@ function renderData() {
 
   // Reset filters is the table's destructive control: it throws away every
   // choice at once. It applies immediately, then the button itself becomes the
-  // undo window — no modal and no "are you sure" before a reversible action.
+  // undo window - no modal and no "are you sure" before a reversible action.
   const resetBtn = document.getElementById('data-reset');
   const resetIds = ['df-year', 'df-plat', 'df-type', 'df-genre', 'df-month'];
   const readFilterValues = () => {
@@ -2465,7 +2465,7 @@ function dataVal(r, key) {
     case 'platform': return r[key] || '';
     // Missing numbers must read as EMPTY, not as the value 0: movies have no
     // episode count and a cold cache has no rating, and compareData() only
-    // sinks empty values — sorting them as 0 dumped all 92 movies (or every
+    // sinks empty values - sorting them as 0 dumped all 92 movies (or every
     // unrated row) on top of an ascending sort.
     case 'episodes':
     case 'screentime': {
@@ -2523,15 +2523,15 @@ function dataHeader(key, label) {
 }
 function buildDataCSV() {
   // A 0 is a value, not an absence. `r.episodes || ''` wrote a legitimate zero as
-  // an empty cell — the same mistake dataVal() was fixed for — so a film's 0
+  // an empty cell - the same mistake dataVal() was fixed for - so a film's 0
   // episodes and a blank column nobody had filled in exported identically.
   const num = v => (v === 0 || (v !== '' && v != null && Number.isFinite(Number(v)))) ? String(Number(v)) : '';
   // Ratings fall back to the device cache, so the export covers every row we
-  // already know a rating for — not just the ones on screen right now.
+  // already know a rating for - not just the ones on screen right now.
   const rows = dataFiltered.map(r => [r.name, r.type, r.genre, r.platform, num(r.episodes), num(r.screentime), r.month || '', r.year || '', r.watchDate || '', r.rating || cachedRating(r.name) || '']);
   // A cell starting with = + - @ (or a tab/CR) is a live formula when the file is
   // opened in a spreadsheet, and these values are typed by hand or arrived from an
-  // import — so one is quoted with a leading apostrophe. Numbers cannot trip it
+  // import - so one is quoted with a leading apostrophe. Numbers cannot trip it
   // (a screentime is never negative), so nothing numeric is turned into text.
   const esc = s => {
     s = String(s == null ? '' : s);
@@ -2550,7 +2550,7 @@ function exportDataCSV() {
   setTimeout(() => { try { URL.revokeObjectURL(a.href); } catch (e) {} }, 0);
 }
 // Read shareable filter params from the URL (e.g. ?year=2026) and sync the UI.
-// A value that names nothing — a typo'd shared link, a platform since renamed —
+// A value that names nothing - a typo'd shared link, a platform since renamed -
 // falls back to 'all' instead of filtering the page down to an empty table
 // that reads as missing data.
 function applyDataFilters() {
@@ -2558,7 +2558,7 @@ function applyDataFilters() {
   // The URL describes the whole filter state, so apply it to the defaults rather
   // than on top of whatever this tab already had. Applying it on top meant that
   // pasting a shared `?year=2026#data` link into a tab already filtered to
-  // platform=Netflix gave Netflix∩2026 while the address bar said only `year` —
+  // platform=Netflix gave Netflix∩2026 while the address bar said only `year` -
   // an empty table that reads as missing data, which is the failure this
   // function's own value check exists to prevent.
   datFilters = { year: 'all', platform: 'all', type: 'all', genre: 'all', month: 'all', search: '' };
@@ -2586,7 +2586,7 @@ function syncDataURL() {
   const qs = p.toString();
   // A fragment-only URL keeps the CURRENT query string, so a cleared filter
   // stayed in the address bar and came straight back the next time the page
-  // read it (applyDataFilters runs on every render) — write the path out.
+  // read it (applyDataFilters runs on every render) - write the path out.
   try { history.replaceState(null, '', location.pathname + (qs ? '?' + qs : '') + '#data'); } catch (e) {}
 }
 
@@ -2621,32 +2621,32 @@ function updateDataTable() {
   }
 
   const fmtDate = function(s) {
-    if (!s) return '—';
+    if (!s) return '-';
     var clean = String(s).trim();
     if (/^\d{1,2}\s+[A-Za-z]{3}\s+\d{4}$/.test(clean)) return clean;
     var dt = parseLocalDate(clean);
     return dt ? dt.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : clean;
   };
 
-  // Build each row with pure string concatenation — no template literals
+  // Build each row with pure string concatenation - no template literals
   var rowsHTML = '';
   for (var i = 0; i < page.length; i++) {
     var r = page[i];
     var pillClass  = (r.type && r.type.toLowerCase() === 'movie') ? 'type-pill movie' : 'type-pill show';
-    var typeLabel  = escapeHTML(r.type || '—');
-    var genre      = escapeHTML(r.genre || '—');
+    var typeLabel  = escapeHTML(r.type || '-');
+    var genre      = escapeHTML(r.genre || '-');
     var platEmoji  = pe(r.platform || '');
-    var platName   = escapeHTML(r.platform || '—');
-    var name       = r.name || '—';
+    var platName   = escapeHTML(r.platform || '-');
+    var name       = r.name || '-';
     var isMovie      = r.type && r.type.toLowerCase() === 'movie';
     var seasonStr    = isMovie ? '' : ' S' + (r.season || '1');
-    var epsStr       = r.episodes ? r.episodes + ' eps' : '—';
+    var epsStr       = r.episodes ? r.episodes + ' eps' : '-';
     name = escapeHTML(name);
     var    posterTitle  = escapeHTML(r.name || '');
     var ratingKey   = String(r.name || '').trim().toLowerCase();
     // The whole name cell (poster + title) starts as plain text and becomes a
     // link to its EXACT IMDb page once the lookup returns an imdbID
-    // (see applyImdbLink) — never a find page.
+    // (see applyImdbLink) - never a find page.
     rowsHTML += '<tr>';
     rowsHTML += '<td class="row-num">' + (start + i + 1) + '</td>';
     // The Episodes column is dropped on phones to stop the table scrolling so
@@ -2660,8 +2660,8 @@ function updateDataTable() {
     rowsHTML += '<td>' + genre + '</td>';
     rowsHTML += '<td>' + platEmoji + ' ' + platName + '</td>';
     rowsHTML += '<td class="td-mid">' + escapeHTML(epsStr) + '</td>';
-    rowsHTML += '<td class="td-mid">' + escapeHTML(r.screentime ? r.screentime + ' mins' : '—') + '</td>';
-    rowsHTML += '<td class="rating-cell" data-rk="' + escapeHTML(ratingKey) + '">' + (isFinite(Number(r.rating)) && Number(r.rating) > 0 ? ratingStars(r.rating) : '<span class="rt-na">—</span>') + '</td>';
+    rowsHTML += '<td class="td-mid">' + escapeHTML(r.screentime ? r.screentime + ' mins' : '-') + '</td>';
+    rowsHTML += '<td class="rating-cell" data-rk="' + escapeHTML(ratingKey) + '">' + (isFinite(Number(r.rating)) && Number(r.rating) > 0 ? ratingStars(r.rating) : '<span class="rt-na">-</span>') + '</td>';
     rowsHTML += '<td class="td-soft">' + escapeHTML(fmtDate(r.watchDate)) + '</td>';
     rowsHTML += '</tr>';
   }
@@ -2700,7 +2700,7 @@ function updateDataTable() {
 // ── RATINGS ───────────────────────────────────────────────────────────────
 // Public ratings arrive with the on-demand TMDB/OMDb lookup and live in the
 // per-device cache, so a fresh browser only knows the rows it has actually
-// rendered — which made the Rating column look half-broken and quietly thinned
+// rendered - which made the Rating column look half-broken and quietly thinned
 // the CSV export. This shows honest coverage and fills the rest in one pass.
 function cachedRating(name) {
   const cached = MEDIA_CACHE[String(name || '').trim().toLowerCase()];
@@ -2711,7 +2711,7 @@ function ratingCoverage() {
   rawData.forEach(r => {
     if (cachedRating(r.name) > 0 || Number(r.rating) > 0) have++;
     // A title the media API has already answered for, without a rating, can't
-    // gain one by asking again — count it as unavailable rather than letting it
+    // gain one by asking again - count it as unavailable rather than letting it
     // hold the coverage short forever.
     else if (mediaMissed(String(r.name || '').trim().toLowerCase())) dead++;
   });
@@ -2752,7 +2752,7 @@ async function loadAllRatings() {
       try {
         const meta = await lookupMedia(String(row.name || '').trim().toLowerCase(), row.name, String(row.type || '').toLowerCase() === 'movie' ? 'movie' : 'tv');
         if (meta && Number(meta.rating) > 0) row.rating = Number(meta.rating);
-      } catch (e) { /* nothing to do — coverage just stays short */ }
+      } catch (e) { /* nothing to do - coverage just stays short */ }
       ratingScan.done++;
       if (ratingScan.done % 4 === 0 || ratingScan.done === ratingScan.total) updateRatingStatus();
     }
@@ -2835,7 +2835,7 @@ function renderTimeline() {
 
 /* Watches per month, as the design system's analytics-chart. The rows already
    carry year and month for the pinned bar, so the counts come from the same
-   grouping the page is built from — no second query and no second definition
+   grouping the page is built from - no second query and no second definition
    of "a watch month". */
 function renderTimelineTrend(dated) {
   const host = document.getElementById('tlTrend');
@@ -2877,16 +2877,16 @@ function bindTimelineNav() {
 // A rolling release calendar. Films come from TMDB (the same key tmdb-search.js
 // already uses, so there is nothing new to configure) and episodes from TVmaze,
 // whose /schedule/full endpoint answers with the whole future schedule in one
-// request — broadcast *and* streaming, every country.
+// request - broadcast *and* streaming, every country.
 //
 // Rolling means nothing about it is fixed at build time:
 //   * **This year** is month by month, from the current month to December. The
 //     months come from the clock, so a finished month drops out of the strip and
 //     a new one joins it at midnight with no deploy.
 //   * **Next year** is one year-at-a-glance view: twelve sections, one per month,
-//     of what is already dated. That is a genuinely different thing to fetch —
+//     of what is already dated. That is a genuinely different thing to fetch -
 //     a year cannot be listed to the day (the function switches to a
-//     popularity-ordered window for it, see moviePlan) — which is why the two
+//     popularity-ordered window for it, see moviePlan) - which is why the two
 //     scopes are two windows rather than one long one.
 //   * It refreshes itself: a 20-minute background poll, a refetch when the tab
 //     comes back into view, and a midnight rollover that moves "today", drops
@@ -2912,7 +2912,7 @@ const CAL_REGIONS = [
 ];
 // A film releases country by country, so "every region" is not a region code the
 // API has: it is the sentinel the picker offers, and the list above is what the
-// page fans out over — one movies request per region — when it is chosen. This
+// page fans out over - one movies request per region - when it is chosen. This
 // array is the one place that list is defined, so the dropdown and the calendar
 // can never disagree about what "all" means.
 const CAL_REGION_ALL = 'all';
@@ -2921,7 +2921,7 @@ const calRegionKnown = value => value === CAL_REGION_ALL || CAL_REGIONS.some(reg
 const CAL_WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 // No floor on the platform list. A threshold used to hide any platform with
 // fewer than eight releases in the window, which is not a list of the quiet ones
-// — the whole-year view is thin by nature — but of the ones you cannot ask for:
+// - the whole-year view is thin by nature - but of the ones you cannot ask for:
 // CBS, Hulu, Netflix, Disney+ and HBO Max all fell off it there. Every platform
 // with a release in the loaded window earns an option instead; the cap only
 // bounds a runaway list.
@@ -2936,8 +2936,8 @@ const CAL_DAILY_FLOOR = 5;
 const CAL_PREVIEW = 3;  // entries a day cell shows before its "+N more"
 
 // The filters are kept on the device, like the region below: the calendar then
-// opens on the view that was actually asked for — "Episode releases" stays
-// applied through a reload, a new tab or a later visit — instead of falling back
+// opens on the view that was actually asked for - "Episode releases" stays
+// applied through a reload, a new tab or a later visit - instead of falling back
 // to the default, which reads as missing data rather than as a filter.
 const CAL_FILTERS_KEY = 'ct-cal-filters';
 const CAL_SCOPES = ['new', 'episodes', 'all'];
@@ -2948,7 +2948,7 @@ const CAL_TYPES = ['all', 'movie', 'episode'];
 const CAL_FILTER_DEFAULTS = { scope: 'all', type: 'all', platform: 'all', search: '' };
 // The shape of the stored filters, bumped when a default above changes. Storing
 // only happens on a deliberate change, so an untouched device has nothing saved
-// and needs no bump — but a device that once stored the *old* default would keep
+// and needs no bump - but a device that once stored the *old* default would keep
 // opening on it, which reads as the new default never having taken effect.
 const CAL_FILTERS_VERSION = 2;
 function calStoredFilters() {
@@ -2966,7 +2966,7 @@ function calStoredFilters() {
 }
 function calSaveFilters() {
   // An empty platform is what a rebuilt <select> reads back as, and it means
-  // 'all' to calMatches — so store it that way rather than as a blank that a
+  // 'all' to calMatches - so store it that way rather than as a blank that a
   // later load would have to make sense of.
   try {
     localStorage.setItem(CAL_FILTERS_KEY, JSON.stringify({
@@ -2980,7 +2980,7 @@ function calSaveFilters() {
 }
 let calFilters = calStoredFilters();
 // Movies release on a per-country schedule, so the region decides what the film
-// half of the calendar contains — and the default is every region at once: a
+// half of the calendar contains - and the default is every region at once: a
 // release calendar that quietly dropped everything outside one country was the
 // wrong default for a watchlist that is not itself in one country. A single
 // region is still one choice away, and a remembered one wins over the default.
@@ -2988,15 +2988,15 @@ let calRegion = (() => {
   try {
     const saved = localStorage.getItem('ct-cal-region');
     if (calRegionKnown(saved)) return saved;
-  } catch (e) { /* private mode — fall through to the default */ }
+  } catch (e) { /* private mode - fall through to the default */ }
   return CAL_REGION_ALL;
 })();
 let calState = {
-  cache: new Map(),   // window key -> { data, loadedAt, updatedAt } — one entry per built window
+  cache: new Map(),   // window key -> { data, loadedAt, updatedAt } - one entry per built window
   key: '',            // the window key currently painted
   data: null,         // { days, movies, episodes, platforms, warnings, generatedAt }
   loadedAt: 0,
-  updated: '',        // "14:32" — when the painted window was last fetched
+  updated: '',        // "14:32" - when the painted window was last fetched
   status: 'idle',     // idle | loading | ready | error
   error: '',
   notice: '',         // a background refresh that failed, while a window is on screen
@@ -3016,7 +3016,7 @@ let calTimers = [];
 // True while the calendar is painted inside the Admin page: every listing then
 // carries one extra button that adds it straight to the watchlist. Only one
 // page exists at a time, so this is set on each calendar-bearing render and
-// read at paint time — never toggled per item.
+// read at paint time - never toggled per item.
 // calAdded remembers this visit's quick adds by normalised title, so a repaint
 // (which rebuilds calTracked from the not-yet-reloaded watchlist) keeps the
 // done state and the ✓ marker instead of forgetting the click.
@@ -3026,7 +3026,7 @@ let calAdded = new Set();
 function calISO(date) {
   return date.getFullYear() + '-' + String(date.getMonth() + 1).padStart(2, '0') + '-' + String(date.getDate()).padStart(2, '0');
 }
-// Whole days in an inclusive ISO range — the denominator for "is this a daily
+// Whole days in an inclusive ISO range - the denominator for "is this a daily
 // strip" and nothing else.
 function calDayCount(from, to) {
   const start = Date.parse(from + 'T00:00:00Z');
@@ -3043,7 +3043,7 @@ function calMonthAt(year, month) {
     last: calISO(new Date(year, month + 1, 0))
   };
 }
-// Every month of this year that is still to come — the current one through
+// Every month of this year that is still to come - the current one through
 // December. A month that has *ended* is not offered at all: nobody plans around
 // one. The month that is running is offered whole, its past days included, since
 // they are part of the month you are looking at.
@@ -3058,9 +3058,9 @@ function calNextYearWindow(now) {
   const year = now.getFullYear() + 1;
   return { year: year, from: calISO(new Date(year, 0, 1)), to: calISO(new Date(year, 11, 31)) };
 }
-// The one window the current view is asking for. A month is asked for whole —
+// The one window the current view is asking for. A month is asked for whole -
 // the current one included, so its past days carry the releases that were on
-// them instead of being a row of blanks — and next year is asked for whole by
+// them instead of being a row of blanks - and next year is asked for whole by
 // definition. The days of the current month that are already behind us are not
 // in the schedule response the function fetches first; it goes back for them
 // itself (see backfillDays in calendar.js), which is why the page asks for the
@@ -3087,7 +3087,7 @@ function calSlots(month) {
 }
 // Within a day the most interesting things lead: a new series first, then a
 // film, then a returning season, then the weekly run of shows already on. Daily
-// news rounds out the tail — which is what "every single thing" honestly looks
+// news rounds out the tail - which is what "every single thing" honestly looks
 // like once a schedule stops flattering itself.
 function calRank(item) {
   if (item.media === 'movie') return item.platforms.length ? 2 : 3;
@@ -3096,13 +3096,13 @@ function calRank(item) {
   if (item.streaming) return 6;
   return CAL_DAILY_KINDS.has(String(item.kind || '').toLowerCase()) ? 8 : 7;
 }
-// What "trendy" means, in one place: where an item sits among its own kind — a
+// What "trendy" means, in one place: where an item sits among its own kind - a
 // percentile, so "the most popular film of the window" and "the most popular show
-// of the window" are worth the same — plus a nudge for a rating, for arriving on
+// of the window" are worth the same - plus a nudge for a rating, for arriving on
 // a streaming service and for being a premiere. The two sources' figures are NOT
 // one scale: TMDB's popularity is an unbounded hotness number with a long tail
-// (median 3 across a month of films) while TVmaze's show weight saturates — 38
-// different shows share a 100 in a single October — so a raw score compares TVmaze
+// (median 3 across a month of films) while TVmaze's show weight saturates - 38
+// different shows share a 100 in a single October - so a raw score compares TVmaze
 // against itself and buries a Friday's theatrical opening under a PBS cooking
 // show. calRank is what the day drawer is built on, because a schedule reads as
 // tiers; this is what the month's cells preview, because a picture reads as what
@@ -3144,7 +3144,7 @@ function calLabel(item) {
   return 'S' + (item.season || 0) + 'E' + item.number;
 }
 function calTitle(item) { return item.title + ' ' + (item.episode || ''); }
-// Titles the watchlist already knows about — a calendar entry you have logged
+// Titles the watchlist already knows about - a calendar entry you have logged
 // is worth marking, and the sheet's "Homeland All Seasons" has to match the
 // show the calendar lists bare.
 function calTrackedTitles() {
@@ -3165,8 +3165,8 @@ function calSafeUrl(url) {
 // A calendar title links to its own IMDb page rather than to the API the row
 // came from: IMDb is the page you were going to look at anyway. An episode
 // arrives with its page already (the function carries it for free out of the
-// payload it fetches), a film does not — TMDB's list endpoints have no `imdb_id`
-// — so a film's page is resolved on the click, remembered on the device, and a
+// payload it fetches), a film does not - TMDB's list endpoints have no `imdb_id`
+// - so a film's page is resolved on the click, remembered on the device, and a
 // title with no page to be had falls back to an IMDb search for its name. A
 // click therefore never lands on TVmaze or TMDB.
 const IMDB_CACHE_KEY = 'ct-imdb';
@@ -3184,7 +3184,7 @@ function imdbLookupRemember(tmdbId, url) {
     const keys = Object.keys(cache);
     if (keys.length > IMDB_CACHE_MAX) keys.slice(0, keys.length - IMDB_CACHE_MAX).forEach(key => delete cache[key]);
     localStorage.setItem(IMDB_CACHE_KEY, JSON.stringify(cache));
-  } catch (e) { /* private mode — the click just resolves again next time */ }
+  } catch (e) { /* private mode - the click just resolves again next time */ }
 }
 function imdbTmdbId(item) {
   return item && item.media === 'movie' && /^m\d+$/.test(String(item.id)) ? String(item.id).slice(1) : '';
@@ -3204,13 +3204,13 @@ function calImdbHref(item) {
   }
   return imdbSearchUrl(item);
 }
-// True while a film's own page is still unknown — the case worth intercepting.
+// True while a film's own page is still unknown - the case worth intercepting.
 function calImdbPending(item) {
   if (item.imdb) return false;
   const tmdbId = imdbTmdbId(item);
   return Boolean(tmdbId) && !imdbLookupCache()[tmdbId];
 }
-// The attributes of a link to the release's own IMDb page — the one place they
+// The attributes of a link to the release's own IMDb page - the one place they
 // are built, so the drawer's title and its ↗, and the title on every tile, cannot
 // drift apart. A film's page is not known until it is clicked (see calOpenImdb),
 // so such an anchor carries the lookup instead of a final URL: its href is an
@@ -3284,7 +3284,7 @@ function calIndex(payload, win) {
       weight: Math.max(0, Math.min(100, Number(movie.popularity) || 0)),
       genres: [], premiere: '', url: movie.id ? 'https://www.themoviedb.org/movie/' + movie.id : '',
       // A film's IMDb page is not in TMDB's list response (see imdb-id.js), so it
-      // is resolved when the title is clicked — `id` carries the TMDB id the
+      // is resolved when the title is clicked - `id` carries the TMDB id the
       // lookup needs.
       imdb: ''
     };
@@ -3310,7 +3310,7 @@ function calIndex(payload, win) {
     bump(platform, Boolean(episode.streaming));
   });
 
-  // The strips that air every single day — a soap, a news bulletin, a talk show —
+  // The strips that air every single day - a soap, a news bulletin, a talk show -
   // are what turns a month of episodes into an unreadable wall, so the "Episode
   // releases" scope leaves them out. Nothing here is hard-coded: a title whose
   // episodes land on more than a third of the window's days is running daily (a
@@ -3360,7 +3360,7 @@ function calIndex(payload, win) {
 }
 // A strip that airs every day is not what "which episode of which show is on
 // today" is asking about. A premiere still comes through, and so does anything
-// searched for by name — typing the title *is* the request for it.
+// searched for by name - typing the title *is* the request for it.
 function calIsDaily(item) {
   const daily = calState.data && calState.data.daily;
   if (!daily || item.premiere) return false;
@@ -3374,20 +3374,20 @@ function calMatches(item, opts) {
   const type = (opts && opts.type) || calFilters.type;
   // An empty value counts as 'all': the platform <select> is rebuilt by the page
   // render, and for the moment before its options are repopulated a select can
-  // read back as '' — which must not filter the calendar down to nothing. `opts`
+  // read back as '' - which must not filter the calendar down to nothing. `opts`
   // can name a platform instead, which is how the platform list judges a
   // candidate without switching the live filter.
   const platform = (opts && opts.platform !== undefined) ? opts.platform : calFilters.platform;
   if (type !== 'all' && item.media !== type) return false;
   const onPlatform = Boolean(platform && platform !== 'all') && (item.platforms || []).indexOf(platform) !== -1;
-  // Asking for a platform is asking for that platform's releases — the same call
+  // Asking for a platform is asking for that platform's releases - the same call
   // a search makes, and the reason choosing Netflix must not answer with a CBS
   // month. Its own episodes come through even when they are not premieres; the
   // nightly strips still do not, which is what "Everything" is for.
   const askedFor = onPlatform && !calIsDaily(item);
   // The Show select is the noise dial. "New & notable" keeps premieres and films
   // and hides the weekly run of shows already on; "Episode releases" is its other
-  // half — every episode of every show on its release day, with neither the films
+  // half - every episode of every show on its release day, with neither the films
   // nor the daily strips, which is the only shape in which a month reads as the
   // schedule it is; "Everything" is both sources raw.
   if (scope === 'episodes') {
@@ -3401,7 +3401,7 @@ function calMatches(item, opts) {
   return true;
 }
 // What a day you have opened is: the whole day, not the month's noise dial. The
-// scope's rules exist so a *month* does not drown — a single day is a day you
+// scope's rules exist so a *month* does not drown - a single day is a day you
 // asked about, so they are off here and the drawer lists every show on it. What
 // the scope implies about media still holds ("Episode releases" must not start
 // listing films), and so do the type, platform and search filters, so the day
@@ -3425,8 +3425,8 @@ function calAdopt(entry, key) {
   // The platform <select> belongs to the payload, so a new payload rebuilds it.
   calState.platformsKey = '';
 }
-// Drops windows the clock has made obsolete — a month that has ended can never
-// be asked for again — and caps what is left, so browsing a year cannot grow the
+// Drops windows the clock has made obsolete - a month that has ended can never
+// be asked for again - and caps what is left, so browsing a year cannot grow the
 // map without bound.
 function calPruneCache(today) {
   calState.cache.forEach((entry, key) => {
@@ -3443,7 +3443,7 @@ function calPruneCache(today) {
   }
 }
 // One window is several small requests, never one big one: a movies request per
-// region plus the episodes in pieces — the schedule response on its own, then
+// region plus the episodes in pieces - the schedule response on its own, then
 // the past in ranges of CAL_BACKFILL_CHUNK days. Each stays inside the free
 // plan's 50-subrequest cap, where the old single union (~250 upstream calls in
 // one invocation) blew past it and arrived as "Too many subrequests" warnings.
@@ -3456,7 +3456,7 @@ async function calFetchPart(query) {
   if (!response.ok) throw new Error('Calendar service returned ' + response.status);
   return response.json();
 }
-// Days are added in UTC, the way the function counts them — a local-midnight
+// Days are added in UTC, the way the function counts them - a local-midnight
 // parse would shift the range for anyone off UTC.
 function calAddDays(iso, days) {
   const date = new Date(iso + 'T00:00:00Z');
@@ -3556,7 +3556,7 @@ async function calFetchWindow(win, fresh) {
     }
   }
   if (!landed) throw new Error('Unable to load the calendar');
-  if (landed < parts.length) warnings.push('Calendar · ' + (parts.length - landed) + ' of ' + parts.length + ' data requests failed — showing what arrived');
+  if (landed < parts.length) warnings.push('Calendar · ' + (parts.length - landed) + ' of ' + parts.length + ' data requests failed - showing what arrived');
   return {
     range: { from: win.from, to: win.to, region: calRegion },
     generatedAt: new Date().toISOString(),
@@ -3565,20 +3565,20 @@ async function calFetchWindow(win, fresh) {
     warnings,
   };
 }
-// mode '' — paint the window from cache if it is still fresh, else fetch it.
-//     'refresh' — always fetch (the background poll, the tab coming back).
-//     'fresh' — always fetch, with ?fresh=, which is the only way to bypass the
+// mode '' - paint the window from cache if it is still fresh, else fetch it.
+//     'refresh' - always fetch (the background poll, the tab coming back).
+//     'fresh' - always fetch, with ?fresh=, which is the only way to bypass the
 //               edge cache's own 15-minute copy of the response.
 // ── A TITLE FOUND BY NAME ─────────────────────────────────────────────────
 // The calendar's own list comes from TMDB's discover index, and a title can be
 // in TMDB without being in any discover list (a streaming release whose
 // provider TMDB has not attached yet). So when the search box finds nothing
-// local, the title is asked for by name directly — one lookup — and shown
+// local, the title is asked for by name directly - one lookup - and shown
 // beside the month, with the same Add button the rest of the Admin calendar
 // carries. Without this, a title that exists can simply never be found.
 let calDirectTimer = null;
 // The window the calendar has on screen, read back from the cache key the load
-// was stored under ('from|to|region') — the same string the cache is keyed by,
+// was stored under ('from|to|region') - the same string the cache is keyed by,
 // so the two cannot disagree about what is loaded.
 function calLoadedRange() {
   const parts = String(calState.key || '').split('|');
@@ -3667,7 +3667,7 @@ async function loadCalendar(mode) {
     updateCalendar();
     return;
   }
-  // A copy the page already has — stale, or the window still on screen — is
+  // A copy the page already has - stale, or the window still on screen - is
   // painted straight away and quietly replaced when the fetch lands, so moving
   // between months never flashes a loader for data that is right there.
   if (cached) calAdopt(cached, key);
@@ -3695,7 +3695,7 @@ async function loadCalendar(mode) {
     // A refresh that fails keeps the window that is already on screen and says
     // so; only a failure with nothing to show is an error state.
     if (painting) {
-      calState.notice = 'Could not refresh right now — showing the last load.';
+      calState.notice = 'Could not refresh right now - showing the last load.';
     } else {
       calState.status = 'error';
       calState.error = error && error.message ? error.message : 'Unable to load the calendar';
@@ -3749,13 +3749,13 @@ function calThumbHTML(item) {
   return '<span class="cal-thumb placeholder" aria-hidden="true">' + (item.media === 'movie' ? '🎬' : '📺') + '</span>';
 }
 // A tile is a release: its poster, its title and its badges. **The title is the
-// IMDb link** — the same destination the drawer's title has, so a title means one
-// thing wherever it is — while the rest of the tile (the poster, the badges, the
+// IMDb link** - the same destination the drawer's title has, so a title means one
+// thing wherever it is - while the rest of the tile (the poster, the badges, the
 // gaps between them) opens the day's complete list, which is what a cell of three
 // entries needs a way into. The two cannot nest: a link inside a button is
 // invalid markup, and a button inside a link would swallow the day. So the day's
 // opener is a transparent button laid over the whole tile and the title is lifted
-// above it — whichever one you aim at is the one that acts.
+// above it - whichever one you aim at is the one that acts.
 // The Admin embed's one extra button: a release added straight to the
 // watchlist, with no form in between. Tiles get a compact ＋ (a 145px cell has
 // no room for a label), drawer rows get "＋ Add". Done state survives repaints
@@ -3797,7 +3797,7 @@ function calFindItem(id, date) {
 }
 // A calendar listing as a watchlist row. The platform is already the
 // watchlist's own spelling (the function filters on it), the release day is
-// the watch date — a row without one is shown nowhere — and a season premiere
+// the watch date - a row without one is shown nowhere - and a season premiere
 // carries its season number the way a logged series does.
 function calQuickAddPayload(item, date) {
   const isMovie = item.media === 'movie';
@@ -3811,8 +3811,8 @@ function calQuickAddPayload(item, date) {
   };
 }
 // The POST, read the way the page needs it: the status, and the endpoint's own
-// JSON only when it really sent JSON. A 200 that is not that JSON — an edge
-// page, a cached shell answering in the endpoint's place — used to be read as
+// JSON only when it really sent JSON. A 200 that is not that JSON - an edge
+// page, a cached shell answering in the endpoint's place - used to be read as
 // success, because the parse failure was swallowed; the tick appeared and
 // nothing had been stored. The content type is the cheapest way to tell the
 // two apart, and a body that will not parse is not a confirmation either.
@@ -3855,7 +3855,7 @@ async function calQuickAdd(button) {
     // store, and the server's duplicate rule makes asking twice harmless.
     if (!calEntrySaved(saved)) saved = await calPostEntry(payload);
     if (!calEntrySaved(saved)) throw new Error((saved.result && saved.result.error) || 'The entry was not saved');
-    // The server's own duplicate rule is the guard — an "already saved" answer
+    // The server's own duplicate rule is the guard - an "already saved" answer
     // is a done state, not an error.
     calAdded.add(dupNormTitle(item.title));
     // Re-read past the CDN cache, then verify the row is in the fresh snapshot.
@@ -3871,7 +3871,7 @@ async function calQuickAdd(button) {
     }
     if (!loadFailed && !calRowSaved(payload)) {
       calAdded.delete(dupNormTitle(item.title));
-      calState.notice = 'That add did not reach your watchlist — nothing was saved. Try again.';
+      calState.notice = 'That add did not reach your watchlist - nothing was saved. Try again.';
       updateCalendar();
       return;
     }
@@ -3906,7 +3906,7 @@ function calItemHTML(item, date) {
 const calWord = (count, word) => word + (count === 1 ? '' : 's');
 // Counts read as a list of what is actually in the view: a calendar filtered to
 // episodes has no business announcing "0 films" beside its episodes. When every
-// count is zero the zeros are shown anyway — the drawer's empty line wants a
+// count is zero the zeros are shown anyway - the drawer's empty line wants a
 // number to sit next to.
 function calCountParts(counts, bold) {
   const part = (count, word) => (bold ? '<strong>' + count + '</strong>' : count) + ' ' + calWord(count, word);
@@ -3928,8 +3928,8 @@ function calDayCounts(list) {
 // agenda and the counts all read from, so they can never disagree.
 //
 // A title found by name joins it when its date is inside the window. That is
-// what makes a film TMDB's discover lists cannot see — no watch provider in any
-// region, so no provider-filtered query returns it — a release *in the month*
+// what makes a film TMDB's discover lists cannot see - no watch provider in any
+// region, so no provider-filtered query returns it - a release *in the month*
 // rather than a footnote beside it: it lands on its own day, counts in the
 // day's figure, opens the day's drawer and sorts with the rest of that day.
 function calFilteredDays() {
@@ -3955,7 +3955,7 @@ function calFilteredDays() {
 // The notable few of a day, not its first few, and not one kind's first few: a
 // film opening that Friday and a headline premiere are both what a day is worth
 // opening for, and the two sources cannot be ranked against each other by score
-// alone (see calTrend — TVmaze's weight saturates, TMDB's popularity does not).
+// alone (see calTrend - TVmaze's weight saturates, TMDB's popularity does not).
 // So the day's most popular film takes the first slot, its best premiere the
 // second, and the rest of the cell is the strongest of what is left. A day whose
 // films are all below the floor is a day with no film opening to speak of, and
@@ -3963,8 +3963,8 @@ function calFilteredDays() {
 // the whole day either way, and the drawer behind that button is the complete day.
 const CAL_FILM_FLOOR = 5;  // TMDB popularity below which nobody is looking for the film yet
 const calPreview = list => {
-  // A title TMDB lists without anyone looking for it yet — the long tail of
-  // undated-window filler — does not take a cell slot from a show, or a quiet
+  // A title TMDB lists without anyone looking for it yet - the long tail of
+  // undated-window filler - does not take a cell slot from a show, or a quiet
   // Saturday would preview three films nobody can watch. A day of *only* those
   // still shows them: something has to be in the cell.
   const known = list.filter(item => item.media !== 'movie' || item.weight >= CAL_FILM_FLOOR);
@@ -4010,7 +4010,7 @@ function calGridHTML(month, days, today) {
   const head = '<div class="cal-grid-head">' + CAL_WEEKDAYS.map(day => '<span>' + day + '</span>').join('') + '</div>';
   return '<div class="cal-grid">' + head + '<div class="cal-grid-body">' + cells + '</div></div>';
 }
-// Phones get an agenda instead of a seven-column grid — a month of narrow cells
+// Phones get an agenda instead of a seven-column grid - a month of narrow cells
 // is unreadable at 375px, and this view also naturally skips empty days.
 function calAgendaHTML(month, days) {
   const dates = Object.keys(days).filter(date => date >= month.first && date <= month.last).sort();
@@ -4042,7 +4042,7 @@ function calSummaryHTML(parts) {
 }
 // Where the films in this window came from, when one of the sources is worth
 // naming. The service feed (Watchmode) is the one that reaches a film no
-// provider filter can, so a month that got films from it says so — otherwise
+// provider filter can, so a month that got films from it says so - otherwise
 // the extra titles look like they came from nowhere.
 function calCoverageHTML() {
   const data = calState.data;
@@ -4058,8 +4058,8 @@ function calCoverageHTML() {
   return parts.join(' · ');
 }
 // The weeks the service feed answered for, when they are not the weeks on
-// screen. The feed dates a service's arrivals a few weeks out — it is the
-// close months it knows — so a window beyond that (next year, seen from this
+// screen. The feed dates a service's arrivals a few weeks out - it is the
+// close months it knows - so a window beyond that (next year, seen from this
 // year) is answered for the close weeks instead, and the page says which
 // weeks those were rather than claiming a year of coverage it does not have.
 function calFeedWindowHTML() {
@@ -4079,8 +4079,8 @@ function calFilterFlagHTML() {
   else if (calFilters.scope === 'all') bits.push('Everything');
   if (calFilters.type === 'movie') bits.push('films only');
   else if (calFilters.type === 'episode') bits.push('TV only');
-  // The platform is the loudest filter of all — one service can be a tenth of a
-  // month — so the line that names the filters in force names it too.
+  // The platform is the loudest filter of all - one service can be a tenth of a
+  // month - so the line that names the filters in force names it too.
   if (calFilters.platform && calFilters.platform !== 'all') bits.push('on ' + calFilters.platform);
   const query = String(calFilters.search || '').trim();
   if (query) bits.push('“' + query + '”');
@@ -4166,7 +4166,7 @@ function calYearHTML(days) {
     const shown = open ? list : list.slice(0, CAL_YEAR_PREVIEW);
     const hidden = list.length - shown.length;
     // "nothing announced yet" is a claim about the year, so it may only be made
-    // when the month really has nothing — a month hidden by the filters says so
+    // when the month really has nothing - a month hidden by the filters says so
     // instead, the same way the month view's .cal-none does.
     const meta = list.length
       ? calCountParts(counts, false).join(' · ')
@@ -4231,14 +4231,14 @@ function updateCalendar() {
   // The platform filter's options come from the loaded window: every platform
   // with a release in it (see the note on CAL_PLATFORM_CAP), which is what keeps
   // the services you watch choosable in a thin month or a year at a glance. Each
-  // candidate is judged as though it were the chosen one — `platform:` in `opts`
-  // — so an option can never paint an empty calendar, and a platform that is
+  // candidate is judged as though it were the chosen one - `platform:` in `opts`
+  // - so an option can never paint an empty calendar, and a platform that is
   // merely unrepresented in this window stays offered (it is in `data.platforms`),
   // so a remembered filter is not silently reset by a month that lacks it.
   //
   // This has to run *before* anything is painted, because the platform in force
   // decides what the paint contains. A stored platform the window does not carry
-  // at all — a service whose releases are gone — otherwise left an empty month
+  // at all - a service whose releases are gone - otherwise left an empty month
   // whose select and summary line still named it; dropping it first is what keeps
   // the select, the summary and the grid from ever disagreeing.
   const offered = new Set();
@@ -4274,7 +4274,7 @@ function updateCalendar() {
   const bar = document.getElementById('cal-months');
   if (bar) bar.innerHTML = calScopeBarHTML() + (calState.scope === 'year' ? calMonthBarHTML(days) : calYearSummaryHTML(days));
   // When the month strip has to scroll (phones), the selected month is the one
-  // that matters — and after a rebuild it can be sitting off-screen behind the
+  // that matters - and after a rebuild it can be sitting off-screen behind the
   // strip's own scroll position.
   const tabs = document.querySelector('.cal-month-tabs');
   const activeTab = tabs && tabs.querySelector('.cal-month-tab.active');
@@ -4302,7 +4302,7 @@ function updateCalendar() {
     main.innerHTML = notice + calDirectHTML() + calYearHTML(days);
   } else {
     const monthDays = Object.keys(days).filter(date => date >= month.first && date <= month.last);
-    const none = monthDays.length ? '' : '<div class="cal-none">Nothing matches these filters in ' + escapeHTML(month.label) + ' — try “Everything” or a different platform.</div>';
+    const none = monthDays.length ? '' : '<div class="cal-none">Nothing matches these filters in ' + escapeHTML(month.label) + ' - try “Everything” or a different platform.</div>';
     main.innerHTML = notice + calDirectHTML() + calGridHTML(month, days, today) + calAgendaHTML(month, days) + none;
   }
   calPosters(main);
@@ -4313,7 +4313,7 @@ function updateCalendar() {
 // The complete list for one day. The grid can only ever show three entries a
 // cell, so this is where "every single thing" is actually readable.
 function calRowHTML(item, date) {
-  // Both links — the title and the ↗ affordance — go to IMDb, so a release has
+  // Both links - the title and the ↗ affordance - go to IMDb, so a release has
   // one destination and no way to land on a source API by accident (the
   // attributes are built by calImdbAttrs, the same ones a tile's title uses).
   const imdb = calImdbAttrs(item);
@@ -4456,7 +4456,7 @@ document.addEventListener('keydown', event => {
   if (event.key === 'Escape' && calState.openDay) calCloseDay();
 });
 
-// The calendar's own markup — filters, month strip and grid — without the page
+// The calendar's own markup - filters, month strip and grid - without the page
 // around it, so the Admin page can embed the same calendar rather than a copy.
 function calShellHTML() {
   const regionOptions = '<option value="' + CAL_REGION_ALL + '">All regions</option>' +
@@ -4483,7 +4483,7 @@ function calShellHTML() {
     '<div class="footer">Release data: <a href="https://www.tvmaze.com" target="_blank" rel="noopener">TVmaze</a> (CC BY-SA) and <a href="https://www.themoviedb.org" target="_blank" rel="noopener">TMDB</a></div>';
 }
 // The selects are rebuilt by the page render, so a filter kept across a tab
-// switch has to be put back into them — on the calendar page and in the Admin
+// switch has to be put back into them - on the calendar page and in the Admin
 // embed alike. `admin` decides whether listings carry the one-click Add button.
 function calInitShell(admin) {
   calAdminAdd = Boolean(admin);
@@ -4499,7 +4499,7 @@ function calInitShell(admin) {
     region.addEventListener('change', () => {
       calRegion = region.value;
       try { localStorage.setItem('ct-cal-region', calRegion); } catch (e) {}
-      // A region is a different window key, so this is a first load for it — and
+      // A region is a different window key, so this is a first load for it - and
       // the CDN may already hold the same region from another device, which
       // ?fresh= is what gets past.
       loadCalendar('fresh');
@@ -4520,8 +4520,8 @@ function renderCalendar() {
     '<div class="page-header">' +
       '<div class="ph-left"><h1>Release Calendar</h1><p>Rolling: this year month by month, next year at a glance · films from TMDB and the Watchmode service feed, episodes from TVmaze</p></div>' +
       '<div class="ph-right">' +
-        '<div class="dh-pill">🎬 <strong id="cal-mcount">—</strong> films</div>' +
-        '<div class="dh-pill">📺 <strong id="cal-ecount">—</strong> episodes</div>' +
+        '<div class="dh-pill">🎬 <strong id="cal-mcount">-</strong> films</div>' +
+        '<div class="dh-pill">📺 <strong id="cal-ecount">-</strong> episodes</div>' +
       '</div>' +
     '</div>' +
     calShellHTML();
@@ -4545,7 +4545,7 @@ function renderSuggestions() {
   const typeOptions  = types.map(t  => `<option value="${escapeHTML(t)}">${escapeHTML(t)}</option>`).join('');
 
   document.getElementById('app').innerHTML = `
-    <div class="page-header"><div class="ph-left"><h1>What Should I Watch?</h1><p>Spin for a random pick from your own watchlist — the Submit tab is where you recommend a <em>new</em> title</p></div></div>
+    <div class="page-header"><div class="ph-left"><h1>What Should I Watch?</h1><p>Spin for a random pick from your own watchlist - the Submit tab is where you recommend a <em>new</em> title</p></div></div>
     <div class="sugg-page">
       <div class="sugg-inner">
         <div class="sugg-filters">
@@ -4571,7 +4571,7 @@ function renderSuggestions() {
           <span class="sbi">🎲</span> Spin for a Suggestion
         </button>
         <button class="try-btn" id="sugg-try" data-act="suggTryAgain" disabled>
-          <span class="arr">↻</span> Not feeling it — try another
+          <span class="arr">↻</span> Not feeling it - try another
         </button>
         <div class="sugg-count" id="sugg-count"></div>
       </div>
@@ -4773,7 +4773,7 @@ function initLineChart(canvasId, labels, data) {
 let suggData = []; // loaded Suggestions rows
 // A read that failed is not an empty inbox. suggData alone cannot say which of
 // the two it is, and the sidebar renders a joke about nobody submitting anything
-// — so the distinction is kept here, the way loadData keeps loadFailed.
+// - so the distinction is kept here, the way loadData keeps loadFailed.
 let suggLoadFailed = false;
 
 // `bust` reads past the CDN's (and the browser's) five-minute copy. A submit
@@ -4816,7 +4816,7 @@ function renderSubmit() {
       <div class="submit-left">
         <div class="submit-form-card">
           <h2 class="submit-heading">New Suggestion</h2>
-          <p class="submit-sub">Fill in the details below — all submissions are saved straight to the list.</p>
+          <p class="submit-sub">Fill in the details below - all submissions are saved straight to the list.</p>
 
           <div class="sf-field">
             <label class="sf-lbl" for="sf-title">Title <span class="sf-req">*</span></label>
@@ -4834,7 +4834,7 @@ function renderSubmit() {
             <div class="sf-field">
               <label class="sf-lbl" for="sf-genre">Genre</label>
               <select id="sf-genre" class="sf-input" data-glide data-glide-menu-width="220" data-glide-placeholder="Select genre">
-                <option value="">— Select —</option>
+                <option value="">- Select -</option>
                 ${genreOpts}
               </select>
             </div>
@@ -4843,7 +4843,7 @@ function renderSubmit() {
           <div class="sf-field">
             <label class="sf-lbl" for="sf-plat">Platform</label>
             <select id="sf-plat" class="sf-input" data-glide data-glide-menu-width="220" data-glide-placeholder="Select platform">
-              <option value="">— Select —</option>
+              <option value="">- Select -</option>
               ${platOpts}
               <option value="Other">Other</option>
             </select>
@@ -4871,7 +4871,7 @@ function renderSubmit() {
         </div>
         <div class="note-card">
           <div class="note-icon">💡</div>
-          <div class="note-body"><strong>How it works</strong>Submissions go straight into my suggestions list — they won't automatically appear in the main tracker, they're a wishlist to pick from.</div>
+          <div class="note-body"><strong>How it works</strong>Submissions go straight into my suggestions list - they won't automatically appear in the main tracker, they're a wishlist to pick from.</div>
         </div>
       </div>
     </div>`;
@@ -4886,7 +4886,7 @@ function renderSubmitSidebar() {
     box.innerHTML =
       '<div class="submit-side-card">' +
         '<div class="submit-side-title">Recent Suggestions</div>' +
-        '<div class="sr-empty">Couldn\'t load the suggestions just now — this is a failed read, not an empty list.</div>' +
+        '<div class="sr-empty">Couldn\'t load the suggestions just now - this is a failed read, not an empty list.</div>' +
         '<div class="sr-retry"><button class="try-btn" type="button" data-act="suggRetry">↻ Try again</button></div>' +
       '</div>';
     return;
@@ -4895,13 +4895,13 @@ function renderSubmitSidebar() {
     const m = {};
     suggData.forEach(r => { if (r.Genre) m[r.Genre] = (m[r.Genre] || 0) + 1; });
     const e = Object.entries(m).sort((a,b) => b[1]-a[1]);
-    return e[0] ? e[0][0] : '—';
+    return e[0] ? e[0][0] : '-';
   })();
   const topPlat = (() => {
     const m = {};
     suggData.forEach(r => { if (r.Platform) m[r.Platform] = (m[r.Platform] || 0) + 1; });
     const e = Object.entries(m).sort((a,b) => b[1]-a[1]);
-    return e[0] ? e[0][0] : '—';
+    return e[0] ? e[0][0] : '-';
   })();
 
   const recent = suggData.slice(-5).reverse();
@@ -4910,7 +4910,7 @@ function renderSubmitSidebar() {
     const meta = [r.Type, r.Genre, r.Platform].filter(Boolean).map(escapeHTML).join(' · ');
     return '<div class="sr-item">' +
       '<div class="sr-icon">' + ICONS[i % ICONS.length] + '</div>' +
-      '<div><div class="sr-name">' + escapeHTML(r.Title || '—') + '</div><div class="sr-meta">' + (meta || '—') + '</div></div>' +
+      '<div><div class="sr-name">' + escapeHTML(r.Title || '-') + '</div><div class="sr-meta">' + (meta || '-') + '</div></div>' +
     '</div>';
   }).join('') : '<div class="sr-empty">😶 Apparently nobody wants me to watch anything. Rude.</div>';
 
@@ -4976,8 +4976,8 @@ async function submitSuggestion() {
     msg.innerHTML = landed
       ? '<div class="sf-success">✓ Suggestion submitted! It\'s now in the suggestions list.</div>'
       : '<div class="sf-success">✓ Suggestion saved.' + (suggLoadFailed
-        ? ' The list below could not be refreshed — reload the page to see it.</div>'
-        : ' It is not in the list just read back, which may be a moment behind — reload to check.</div>');
+        ? ' The list below could not be refreshed - reload the page to see it.</div>'
+        : ' It is not in the list just read back, which may be a moment behind - reload to check.</div>');
   } catch (e) {
     msg.innerHTML = '<div class="sf-error">Something went wrong. Please try again.</div>';
   }
@@ -4992,7 +4992,7 @@ async function submitSuggestion() {
    The generated markup used to carry inline on* attributes and one style=
    attribute. Either one forces 'unsafe-inline' into the deployed policy, and
    with 'unsafe-inline' in script-src the policy stops restricting script
-   execution at all — so the header set could not contain a compromised response,
+   execution at all - so the header set could not contain a compromised response,
    which is the only thing it exists for. Every handler is now a data attribute
    read by the three listeners below, and the label's styling is a class
    (.ph-filter-label in styles.css).
@@ -5000,13 +5000,13 @@ async function submitSuggestion() {
    The pagination controls carry data-page-step, not data-page: the nav tabs
    already use data-page for the page they point at, and a shared name meant one
    document-level listener stepped the Data table's page counter on every tab
-   click — you would return to Data on page 1 with nothing to explain it.
+   click - you would return to Data on page 1 with nothing to explain it.
 
    Two details are load-bearing:
      * filter objects are looked up by NAME on each dispatch rather than captured
        in a table at load time. datFilters is reassigned wholesale by the Data
        tab's reset, so a captured reference would silently stop applying filters
-       after a reset — and that failure would read as a broken table, not as a
+       after a reset - and that failure would read as a broken table, not as a
        detached object.
      * the call mirrors the inline handler it replaced, argument for argument: an
        on* attribute received whatever its string passed, and its `this` was the
@@ -5039,7 +5039,7 @@ function applyDelegated(el, event, attr) {
     // device it was made on.
     if (objName === 'calFilters') calSaveFilters();
     // A search that finds nothing in the month is looked up by name instead
-    // (see calDirectSearch) — the month is built from TMDB's discover index,
+    // (see calDirectSearch) - the month is built from TMDB's discover index,
     // and a title can exist without being in it.
     if (objName === 'calFilters' && key === 'search') calDirectSearch(el.value);
     return;
@@ -5050,7 +5050,7 @@ function applyDelegated(el, event, attr) {
     updateDataTable();
     // Stepping to another page replaces the whole table and the pagination
     // bar, so the reader is left at the bottom of a page of rows they have
-    // already read — and the button they pressed is gone, taking the focus
+    // already read - and the button they pressed is gone, taking the focus
     // with it. Put the focus back on the same step (the other one takes it
     // when that one is now disabled) and bring the top of the table into
     // view, which is where the rows they have not read yet begin. The focus
@@ -5103,7 +5103,7 @@ document.addEventListener('input', onDelegated);
    would paint at zero; a custom property written through CSSOM is not covered
    by style-src, so the same value survives the policy. The value is clamped
    because an invalid custom property makes width revert to auto, i.e. the bar
-   would fill its whole track — the opposite of what it means.
+   would fill its whole track - the opposite of what it means.
 
    An observer rather than a paint call at each render: the bars are emitted from
    several template strings, and the Data / All-time tables repaint on their own

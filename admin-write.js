@@ -1,19 +1,19 @@
-/* admin-write.js — one door to the admin service, and one rule behind it.
+/* admin-write.js - one door to the admin service, and one rule behind it.
  *
  * The admin page edits the same entry from two places: the form (every column)
  * and a search row (the title, in place). Two surfaces writing one record is
  * exactly how a record starts disagreeing with itself, so this file owns the
  * parts that must not be written twice:
  *
- *   mergeStored()     what a partial edit starts from — the store's own values,
+ *   mergeStored()     what a partial edit starts from - the store's own values,
  *                     not the display-normalised row the page renders
  *   findDuplicates()  the gate every create and every update passes through
  *   send()            the POST, its timeout, its 401, and "did the endpoint
  *                     really answer with a saved entry"
  *
  * The calendar's one-click add and the zero-fill repair still POST on their own:
- * both have behaviour the editor does not want — an add retries once and then
- * checks the listing it read back, and the repair answers per row — and neither
+ * both have behaviour the editor does not want - an add retries once and then
+ * checks the listing it read back, and the repair answers per row - and neither
  * creates or edits a record a reader chose in the admin page. Anything that
  * edits an entry the admin page is looking at comes through here.
  *
@@ -31,7 +31,7 @@
 
   // The columns an entry write carries. The service builds a COMPLETE entry out
   // of the body and writes every one of them, so a body that leaves a column out
-  // is not a partial update — it is a row with that column blanked.
+  // is not a partial update - it is a row with that column blanked.
   const ENTRY_FIELDS = ['name', 'season', 'type', 'genre', 'platform', 'episodes', 'screentime', 'watchDate'];
 
   // The type words the service accepts: the ones the store was filled with and
@@ -87,7 +87,7 @@
   // The entry a partial edit starts from. `stored` is the wire row's own values
   // (what the store holds); `changes` are the fields the surface actually edited.
   // Everything untouched keeps the stored value, so renaming a title cannot
-  // re-case it, merge a genre spelling or shorten a platform as a side effect —
+  // re-case it, merge a genre spelling or shorten a platform as a side effect -
   // the display normalisers (`smartCaseName`, `normalizeGenre`, `normalizePlatform`)
   // only ever run for rendering.
   //
@@ -112,10 +112,10 @@
   // The gate every create and every update passes through before it is allowed
   // near the network. Two tiers, because the tracker deliberately allows a
   // rewatch:
-  //   * exact  — same title, kind, season, watch date AND screentime: certainly
+  //   * exact  - same title, kind, season, watch date AND screentime: certainly
   //              the same row logged twice, so the write is refused outright and
   //              no override is offered.
-  //   * exists — same title, kind and season but not an exact repeat (another
+  //   * exists - same title, kind and season but not an exact repeat (another
   //              date, or the same date saved with different details): the title
   //              is already in the list, so an add stops and says so either way;
   //              "Add anyway" is the deliberate override for the genuine rewatch
@@ -154,7 +154,7 @@
   //
   // A 200 that is not the endpoint's JSON is NOT a save. An edge page or a
   // cached shell answering in the endpoint's place used to read as success
-  // because the parse failure was swallowed — the tick appeared and nothing was
+  // because the parse failure was swallowed - the tick appeared and nothing was
   // stored. The content type is the cheapest way to tell the two apart, and a
   // body that will not parse is not a confirmation either.
   function send(payload, options) {
@@ -202,7 +202,7 @@
     }).then(done, error => done({
       ok: false, expired: false, status: 0, result: null,
       error: error && error.name === 'AbortError'
-        ? 'Saving took too long — check the connection and try again.'
+        ? 'Saving took too long - check the connection and try again.'
         : ((error && error.message) || 'Unable to save entry'),
     }));
   }

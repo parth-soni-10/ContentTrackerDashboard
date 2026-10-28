@@ -1,4 +1,4 @@
-/* Timeline Calendar — host-agnostic.
+/* Timeline Calendar - host-agnostic.
  *
  * The host supplies the list and the header element; the kit supplies the
  * pinned bar's shape, its menu and the reveal. Everything host-specific is a

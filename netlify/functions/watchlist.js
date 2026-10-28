@@ -2,7 +2,7 @@ const db = require('./lib/db');
 
 /* ── CORS: the one cross-origin read this endpoint allows ────────────────────
  * The portfolio shows a slice of this dashboard and reads this endpoint for it.
- * It is served from one host — https://parth-portfolio-wb.pages.dev, which every
+ * It is served from one host - https://parth-portfolio-wb.pages.dev, which every
  * link and self-reference in that repository uses. Its workers.dev address used
  * to be named here as a second origin; that deployment is gone, so the allowance
  * names the one host the site is actually served from.
@@ -18,7 +18,7 @@ const db = require('./lib/db');
  * response.
  *
  * Scoped to named origins, never `*`. These rows are public either way (this
- * page renders them), so this is hygiene rather than secrecy — but a wildcard
+ * page renders them), so this is hygiene rather than secrecy - but a wildcard
  * would cover every future caller, and the rule is easier to audit when it says
  * who it is for. localhost is allowed on any port because that is how the
  * portfolio is developed (a throwaway static server) and such an origin only
@@ -56,7 +56,7 @@ exports.handler = async event => {
 
   /* Preflight. This endpoint is a plain GET and the portfolio sends no headers
      that would trigger one, but answering keeps the allowance honest for any
-     caller that does — and the 405 this used to return is exactly what made a
+     caller that does - and the 405 this used to return is exactly what made a
      browser read of this endpoint look impossible. */
   if (event.httpMethod === 'OPTIONS') {
     if (!origin) return json(405, { error: 'Method not allowed' });
@@ -83,7 +83,7 @@ exports.handler = async event => {
   const isGoalRead = wants.goal === '1';
 
   /* Rows and goal in one read. The dashboard's first load used to ask for these
-     separately — `?goal=1` and then the list — which the 15 Oct 2026 sweep
+     separately - `?goal=1` and then the list - which the 15 Oct 2026 sweep
      measured as two reads of the same store on one page load: 384 ms for the
      goal, 396 ms for the rows. The goal is one row of the settings table, so
      there was never a reason for the second round trip.
@@ -105,7 +105,7 @@ exports.handler = async event => {
     if (isCombinedRead) {
       const [rows, goal] = await Promise.all([db.listEntries(), db.readGoal()]);
       // readGoal answers null when the settings row could not be read. Saying so
-      // is what keeps a failed read from arriving as `{hrs: 0}` — a goal the
+      // is what keeps a failed read from arriving as `{hrs: 0}` - a goal the
       // reader would take as fact, and which setGoal would read as *unlocked*.
       if (goal === null) return json(502, { error: 'Unable to load the goal' }, cors(origin));
       return json(200, { rows, goal }, cors(origin));

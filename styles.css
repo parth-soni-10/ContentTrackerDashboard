@@ -1,7 +1,7 @@
 /* =====================================================
-   CONTENT TRACKER — "STREAMING ANALYTICS" DESIGN
+   CONTENT TRACKER - "STREAMING ANALYTICS" DESIGN
    Brand: deep green (watchlist) + warm gold (ratings)
-   Fonts: Inter (UI) — system stack, no external requests
+   Fonts: Inter (UI) - system stack, no external requests
    Radius scale: 14px cards, 8px controls, 999px pills.
    Motion: transform/opacity only; prefers-reduced-motion honored.
    ===================================================== */
@@ -10,7 +10,7 @@
   --bg: #f3f6f4;
   --surface: #ffffff;
   --surface-soft: #f8faf8;
-  /* Brand accent — deep green scheme */
+  /* Brand accent - deep green scheme */
   --green: #245c42;
   --green-mid: #3d8b63;
   --green-lite: #7cc4a0;
@@ -19,7 +19,7 @@
   --border-mid: #bcd3c4;
   --gold: #c98a3d;
   --gold-pale: #fdf4e7;
-  /* Text — green-neutral palette */
+  /* Text - green-neutral palette */
   --text: #10231a;
   --text-mid: #3a5445;
   --text-soft: #4e7a64;
@@ -30,7 +30,7 @@
   --r: 14px;
   --nav-h: 60px;
 
-  /* Slide Commit — the sheet that replaced confirm() on row deletion. The
+  /* Slide Commit - the sheet that replaced confirm() on row deletion. The
      accent is --red: every host for this control is destructive. */
   --sc-sheet-bg: var(--surface);
   --sc-sheet-ink: var(--text);
@@ -40,7 +40,7 @@
   --sc-sheet-accent: var(--red);
   --sc-sheet-on-accent: #fff;
 
-  /* Swipe Row — admin rows reveal their actions behind the row. */
+  /* Swipe Row - admin rows reveal their actions behind the row. */
   --sr-surface-bg: var(--surface-soft);
   --sr-pane-bg: var(--surface);
   --sr-ink: var(--text);
@@ -51,7 +51,7 @@
   --sr-radius: 8px;
 }
 
-/* Dark theme — same variables re-scoped so every component flips automatically */
+/* Dark theme - same variables re-scoped so every component flips automatically */
 html.dark {
   --bg: #0c1410;
   --surface: #131e17;
@@ -250,7 +250,7 @@ html.dark .theme-toggle .icon-moon.show { display: none; }
 .readme-main { max-width: 1440px; width: 100%; margin: 0 auto; padding: 30px 32px 48px; display: grid; grid-template-columns: 1fr 320px; gap: 28px; }
 .cards-label { font-size: 11px; line-height: 16px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: var(--text-soft); margin-bottom: 14px; }
 .cards-grid  { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-/* Slim variant — a one-line row of nav shortcuts instead of four big cards, so
+/* Slim variant - a one-line row of nav shortcuts instead of four big cards, so
    Recently Watched and the recap sit above the fold. Descriptions move to the
    link's title tooltip. */
 .cards-grid.slim { grid-template-columns: repeat(4, 1fr); gap: 10px; }
@@ -312,7 +312,7 @@ thead th:last-child  { border-top-right-radius: var(--r); }
 tbody tr:last-child td:first-child { border-bottom-left-radius: var(--r); }
 tbody tr:last-child td:last-child  { border-bottom-right-radius: var(--r); }
 tbody td { padding: 11px 16px; color: var(--text); border-bottom: 1px solid var(--border); }
-/* Episode count under the title — phones only (see the ≤600px block). */
+/* Episode count under the title - phones only (see the ≤600px block). */
 .meta-mobile { display: none; }
 tbody tr:last-child td { border-bottom: none; }
 .row-num { color: var(--text-soft); font-size: 11px; width: 32px; }
@@ -320,7 +320,7 @@ tbody tr:last-child td { border-bottom: none; }
 .type-pill.movie { background: var(--gold-pale);  color: var(--gold); }
 .type-pill.show  { background: var(--green-pale); color: var(--green); }
 /* Paging the table scrolls its top back into view (the page-step handler in
-   app.js), and the sticky nav sits over the top of the viewport — the scroll
+   app.js), and the sticky nav sits over the top of the viewport - the scroll
    margin parks the table's first row just under the nav instead of behind it.
    It reads --nav-h so the phone height (73px) is covered by the same rule. */
 #dat-table { scroll-margin-top: calc(var(--nav-h) + 12px); }
@@ -391,12 +391,12 @@ html.dark .rm-badge.genre { background: #24382c; color: var(--text-mid); }
 /* ── RECENT WATCHES ── */
 .rw-section { margin-top: 24px; }
 /* minmax(0, 1fr) keeps the three tracks equal even when one title's badges are
-   wide — otherwise a long meta row stretches its own column. */
+   wide - otherwise a long meta row stretches its own column. */
 .rw-strip { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
 .rw-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r); padding: 14px 16px; display: flex; align-items: center; gap: 12px; box-shadow: var(--shadow-sm); transition: box-shadow .2s, transform .2s; animation: fadeUp .5s ease both; }
 .rw-card:hover { box-shadow: 0 2px 4px rgba(20,40,32,.06), 0 16px 32px -16px rgba(20,40,32,.2); transform: translateY(-3px); }
 /* The poster + text block starts as a span and is swapped for an <a> (class
-   name-link) once the media lookup resolves — both states share this rule. */
+   name-link) once the media lookup resolves - both states share this rule. */
 .rw-link, .rw-card .name-link { flex: 1; min-width: 0; display: flex; align-items: center; gap: 12px; text-decoration: none; color: inherit; }
 .rw-poster { width: 54px; height: 80px; flex-shrink: 0; border-radius: 6px; object-fit: cover; background: linear-gradient(135deg, var(--green-pale), var(--surface-soft)); border: 1px solid var(--border); box-shadow: 0 2px 8px -3px rgba(16,35,26,.35); }
 .rw-poster.placeholder { display: flex; align-items: center; justify-content: center; font-size: 22px; }
@@ -511,7 +511,7 @@ html.dark .rm-badge.genre { background: #24382c; color: var(--text-mid); }
 .dup-tag.keep { color: var(--green); background: var(--green-pale); }
 .dup-tag.copy { color: #c0392b; background: rgba(224, 80, 77, 0.1); }
 
-/* Database cleanup — the raw invalid rows, in a table that scrolls on its own.
+/* Database cleanup - the raw invalid rows, in a table that scrolls on its own.
    The app's global table styles (`table`, `thead th`, `tbody td`) were written
    when #dat-table was the only table on the site: a sticky green header, row
    borders and the ≤900px column drops. This table opts out of all of them
@@ -533,7 +533,7 @@ html.dark .rm-badge.genre { background: #24382c; color: var(--text-mid); }
 .admin-zero-line strong { color: var(--text); font-weight: 600; }
 .clean-table .admin-clean-del { width: auto; min-width: 0; padding: 5px 12px; min-height: 0; }
 
-/* Add-time duplicate warning — the block that stands in for a save that was
+/* Add-time duplicate warning - the block that stands in for a save that was
    stopped. It sits where the success message would have been, so it reuses
    .sf-error and adds the structure: what was matched, which rows already hold
    it, and (for a rewatch) the deliberate override. */
@@ -545,7 +545,7 @@ html.dark .rm-badge.genre { background: #24382c; color: var(--text-mid); }
 .admin-dup-line strong { font-weight: 600; color: var(--text); white-space: nowrap; }
 .admin-dup-line span { text-align: right; }
 /* The detail line is information rather than alarm, so it takes the body's
-   mid tone instead of the .sf-error red — 4.6:1 was the red's ceiling on the
+   mid tone instead of the .sf-error red - 4.6:1 was the red's ceiling on the
    pale background. The border is themed like the other destructive buttons. */
 .admin-dup-tail { margin-top: 9px; font-size: 13px; color: var(--text-mid); }
 .admin-dup-force { width: auto; margin-top: 10px; padding: 8px 14px; min-height: 0; color: var(--red); border-color: var(--border-mid); }
@@ -610,10 +610,10 @@ html.dark .cal-drawer-top { background: linear-gradient(115deg, #123526, #1d4a36
    chosen last, so a short month must not read as an empty one. */
 .cal-flag { display: inline-block; margin-right: 2px; padding: 1px 8px; border-radius: 999px; font-size: 11px; font-weight: 700; letter-spacing: .02em; color: var(--green-mid); background: var(--green-pale); border: 1px solid var(--border-mid); vertical-align: 1px; }
 .cal-month-sum strong { color: var(--text-mid); font-weight: 600; font-variant-numeric: tabular-nums; }
-/* "updated 14:32" — the auto-update made visible. */
+/* "updated 14:32" - the auto-update made visible. */
 .cal-updated { color: var(--text-soft); font-variant-numeric: tabular-nums; white-space: nowrap; }
 /* A background refresh that failed, while the last good window is still up: an
-   aside, not an alarm — the data on screen is real, only its age is. */
+   aside, not an alarm - the data on screen is real, only its age is. */
 .cal-notice { margin-bottom: 14px; padding: 9px 14px; background: var(--surface); border: 1px solid var(--border); border-left: 3px solid var(--gold); border-radius: 8px; font-size: 12.5px; color: var(--text-mid); }
 
 /* ── YEAR SCOPES ── */
@@ -679,7 +679,7 @@ html.dark .cal-warn { border-color: #4a3a24; }
 .cal-cell.cal-blank { background: transparent; border: 0; box-shadow: none; }
 /* Days before today are quiet, not empty: the window is the whole month, so a
    past day carries the releases that were on it. The recessed background and the
-   muted day number below say "behind us" without washing the posters out — the
+   muted day number below say "behind us" without washing the posters out - the
    dimming this used to carry was right when those cells could only be blank. */
 .cal-cell.past { background: var(--surface-soft); box-shadow: none; }
 .cal-cell.today { border-color: var(--green-mid); box-shadow: 0 0 0 2px rgba(64,145,108,.15), var(--shadow-sm); }
@@ -732,7 +732,7 @@ html.dark .cal-warn { border-color: #4a3a24; }
 .cal-direct .cal-thumb { width: 34px; height: 50px; }
 .cal-direct .cal-add { align-self: center; margin-top: 0; width: 26px; height: 26px; }
 
-/* The agenda is the ≤600px view (see the mobile block) — the DOM is always
+/* The agenda is the ≤600px view (see the mobile block) - the DOM is always
    there, but only phones show it. */
 .cal-agenda { display: none; }
 .cal-agenda-day { margin-bottom: 10px; padding: 10px; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow-sm); }
@@ -804,7 +804,7 @@ html.cal-lock, html.cal-lock body { overflow: hidden; }
               mask-image: linear-gradient(to right, #000 calc(100% - 16px), transparent); }
   .nav-tabs::-webkit-scrollbar { display: none; }
   .data-filters { padding: 12px 20px; }
-  /* Calendar — seven columns between 601px and 900px are ~90px wide each, so
+  /* Calendar - seven columns between 601px and 900px are ~90px wide each, so
      the platform line and the bigger poster give way to keep titles readable. */
   .cal-main { padding: 14px 20px 32px; }
   /* Room for a year's worth of month tabs: they wrap onto a second row here
@@ -815,7 +815,7 @@ html.cal-lock, html.cal-lock body { overflow: hidden; }
   .cal-grid-head, .cal-grid-body { gap: 6px; }
   .cal-cell { min-height: 128px; padding: 6px 6px 4px; }
   /* Seven columns are ~73px each at 601px, and a nowrap "Series premiere" tag is
-     81px — wide enough to push the whole document sideways. The tags come out of
+     81px - wide enough to push the whole document sideways. The tags come out of
      the cell entirely here, which leaves the poster and a two-line title, and
      the day drawer (whose rows have the width for it) keeps the detail. The
      agenda below 600px is a different container and keeps its meta. */
@@ -833,7 +833,7 @@ html.cal-lock, html.cal-lock body { overflow: hidden; }
      ran past the viewport and the body's overflow-x:hidden clipped the last
      columns away with no way to reach them at all. Scrolling the table beats
      losing Rating / Watch Date. Note the sticky header only applies where the
-     table fits without scrolling — inside a horizontally scrolling wrapper the
+     table fits without scrolling - inside a horizontally scrolling wrapper the
      header sticks to that wrapper, which never scrolls vertically (same as the
      phone layout below). */
   #dat-table { overflow-x: auto; -webkit-overflow-scrolling: touch; }
@@ -844,7 +844,7 @@ html.cal-lock, html.cal-lock body { overflow: hidden; }
   body { background: var(--bg); }
   nav { backdrop-filter: none; }
 
-  /* Nav — brand + theme toggle on a fixed top row, tabs in their own scroll
+  /* Nav - brand + theme toggle on a fixed top row, tabs in their own scroll
      strip below. Previously one long scrolling strip put Timeline / Random Pick
      / Submit off-screen with a hidden scrollbar and no cue, so they were simply
      undiscoverable, and the theme toggle sat off-screen with them. */
@@ -906,9 +906,9 @@ html.cal-lock, html.cal-lock body { overflow: hidden; }
   .treemap { height: 180px; }
   .tm-name { font-size: 14px; }
 
-  /* Data filters — wrap into rows */
+  /* Data filters - wrap into rows */
   .data-filters { flex-wrap: wrap; padding: 12px 16px; gap: 8px; }
-  /* Calendar — a seven-column grid is unreadable at 375px, so phones get the
+  /* Calendar - a seven-column grid is unreadable at 375px, so phones get the
      agenda instead: one row per release, empty days skipped entirely. */
   .cal-grid { display: none; }
   .cal-agenda { display: block; }
@@ -937,7 +937,7 @@ html.cal-lock, html.cal-lock body { overflow: hidden; }
   .df-divider { display: none; }
   .data-main { padding: 12px 16px 32px; }
 
-  /* Data table — horizontal scroll, with the Name column frozen and the two
+  /* Data table - horizontal scroll, with the Name column frozen and the two
      lowest-value columns (#, Episodes) dropped so the title stays readable
      while you swipe through the rest. The episode count moves under the title
      so that information stays on the page. */
@@ -1008,8 +1008,8 @@ html.cal-lock, html.cal-lock body { overflow: hidden; }
 /* Timeline journal */
 .timeline {
   max-width: 900px; margin: 0 auto; padding: 28px 28px 48px;
-  /* timeline-calendar.js pins one bar under the nav — and under the jump bar
-     when there is one — and names the month the eye is in. The months' own
+  /* timeline-calendar.js pins one bar under the nav - and under the jump bar
+     when there is one - and names the month the eye is in. The months' own
      headings stay in the flow: the bar is a compact copy of the current one. */
   --tlc-bg: var(--bg);
   --tlc-menu-bg: var(--surface);
@@ -1037,7 +1037,7 @@ html.cal-lock, html.cal-lock body { overflow: hidden; }
 .timeline > [data-tl-header] { margin-bottom: 4px; }
 .tl-section { margin-bottom: 26px; scroll-margin-top: calc(var(--nav-h) + 62px); }
 /* The month headings scroll with their items; the pinned bar above carries the
-   live one. Once the kit is running the heading is a duplicate on screen — it
+   live one. Once the kit is running the heading is a duplicate on screen - it
    stays in the document, hidden, as the section's own label for a screen
    reader. Without JavaScript the heading is the only label, so it shows. */
 .tl-head { font-size: 14px; font-weight: 700; color: var(--text); letter-spacing: -.2px; display: flex; align-items: center; gap: 8px; margin-bottom: 6px; padding: 8px 0 6px; }
@@ -1053,7 +1053,7 @@ html.cal-lock, html.cal-lock body { overflow: hidden; }
 .tl-season { color: var(--text-soft); font-weight: 400; }
 .tl-meta { font-size: 12px; color: var(--text-soft); white-space: nowrap; }
 .tl-date { font-size: 13px; color: var(--text-mid); }
-/* Year jump bar — pins under the nav so you can skip around a 370-item log. */
+/* Year jump bar - pins under the nav so you can skip around a 370-item log. */
 .tl-jump { position: sticky; top: var(--nav-h); z-index: 4; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; padding: 8px 0 10px; background: var(--bg); }
 .tl-jump-label { font-size: 11px; text-transform: uppercase; letter-spacing: .8px; color: var(--text-soft); font-weight: 700; margin-right: 2px; }
 .tl-jump-btn { font: inherit; font-size: 12px; font-weight: 600; color: var(--green); background: var(--green-pale); border: 1px solid var(--border-mid); border-radius: 20px; padding: 4px 12px; cursor: pointer; }
@@ -1108,7 +1108,7 @@ html.dark .tool-btn { background: var(--green-pale); }
 .goal-note { font-size: 12px; color: var(--text-soft); margin-top: 8px; }
 .goal-lock-note { color: var(--gold); }
 
-/* Poster + title in the Data table — the whole cell links to IMDb */
+/* Poster + title in the Data table - the whole cell links to IMDb */
 .name-link { display: flex; align-items: center; gap: 10px; min-width: 0; }
 .poster { width: 42px; height: 60px; flex-shrink: 0; border-radius: 5px; object-fit: cover; background: linear-gradient(135deg, var(--green-pale), var(--surface-soft)); border: 1px solid var(--border); }
 .poster.placeholder { display: flex; align-items: center; justify-content: center; font-size: 18px; }
@@ -1118,7 +1118,7 @@ a.name-link:hover .title-cell { color: var(--green-mid); text-decoration: underl
 
 /* ── Replacements for the removed inline style attributes ─────────────
    style-src is 'self', so a style= attribute in generated markup is refused
-   outright and the element renders unstyled — a silent, layout-only failure.
+   outright and the element renders unstyled - a silent, layout-only failure.
    Each rule below is the exact declaration the attribute used to carry; the
    four progress-bar widths moved to the --w custom property set by
    paintWidths() in app.js. */

@@ -2,7 +2,7 @@
 // duplicate rule on an edit, and the yearly goal.
 //
 // These run against a real in-memory SQLite (node:sqlite) built from the
-// committed migration, so the SQL under test is the SQL that runs in D1 — a
+// committed migration, so the SQL under test is the SQL that runs in D1 - a
 // hand-written fake would only ever agree with itself. node:sqlite arrived in
 // Node 22.5; on Node 20 (the engine floor in package.json) the suite skips
 // these rather than failing on a missing module.
@@ -77,7 +77,7 @@ const isoRow = (store, id) => store.file.prepare("SELECT * FROM entries WHERE id
 test("the cleanup scan finds every row the page cannot show", { skip: NO_SQLITE }, async () => {
   await withStore(async () => {
     // The measured row: no watch date, but a real screentime. `mapRows` drops it
-    // (year 0), so it is in no list, chart or search — and the old predicate
+    // (year 0), so it is in no list, chart or search - and the old predicate
     // (`watch_date IS NULL AND screentime <= 0`) skipped it, which let the card
     // answer "the database is clean" without having looked at it.
     await db.createEntry({ name: "down cemetry", type: "Movie", screentime: 508 });
@@ -97,7 +97,7 @@ test("the cleanup scan finds every row the page cannot show", { skip: NO_SQLITE 
 test("a row whose date is stored but unreadable is unreachable too", { skip: NO_SQLITE }, async () => {
   await withStore(async store => {
     // Nothing the write paths produce any more (parseDateParts rejects it), but
-    // an import or a hand-edited row can still hold one — and `toWireRow` reads
+    // an import or a hand-edited row can still hold one - and `toWireRow` reads
     // it as no year at all, so the site cannot show it either.
     store.file.prepare(
       "INSERT INTO entries (name, type, screentime, watch_date, dup_key, created_at, updated_at)" +
@@ -128,7 +128,7 @@ test("an edit cannot create a duplicate the add path refuses", { skip: NO_SQLITE
     assert.deepEqual(refused, { duplicate: first.id }, "the edit names the row it collided with");
     assert.equal(isoRow(store, second.id).watch_date, "2026-10-30", "and changed nothing");
 
-    // An edit that does not collide still saves — including one that changes a
+    // An edit that does not collide still saves - including one that changes a
     // field the duplicate key ignores.
     const saved = await db.updateEntry(second.id, {
       name: "You, Me, Us",
@@ -159,7 +159,7 @@ test("an edit cannot create a duplicate the add path refuses", { skip: NO_SQLITE
 test("editing a row that is gone says so instead of reporting a save", { skip: NO_SQLITE }, async () => {
   await withStore(async () => {
     const updated = await db.updateEntry(999, { name: "Ghost", type: "Movie", watchDate: "2026-10-29" });
-    assert.equal(updated, 0, "no row, no id — the endpoint answers 404 for this");
+    assert.equal(updated, 0, "no row, no id - the endpoint answers 404 for this");
   });
 });
 

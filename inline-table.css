@@ -1,4 +1,4 @@
-/* Inline Table Control — the little form a cell becomes.
+/* Inline Table Control - the little form a cell becomes.
  *
  * It sits exactly where the value was, so the row never jumps: the editor is
  * as tall as the control it replaced (a padded line, not a panel), and it

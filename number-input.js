@@ -1,4 +1,4 @@
-/* Animated Number Input — digits that arrive, typed exactly as they are.
+/* Animated Number Input - digits that arrive, typed exactly as they are.
  *
  *   <input class="input" type="text" inputmode="decimal" value="26"
  *          data-number-input data-ni-step="5" data-ni-min="5" data-ni-max="120"
@@ -17,12 +17,12 @@
  * typed text into a number and back. "0.10", "1.005" and "-0.5" survive
  * keystroke by keystroke, trailing zeros included, because the value in the
  * field is the only value there is. Stepping is the one place arithmetic
- * happens, and it is done on scaled integers (BigInt) rather than floats — so
+ * happens, and it is done on scaled integers (BigInt) rather than floats - so
  * 0.1 + 0.2 is 0.3 here, not 0.30000000000000004.
  *
  * Native <input type="number"> is converted to a text field with a decimal
  * keypad, because a number input silently empties itself while you are in the
- * middle of typing "1." or "-" — which is exactly the state this kit must keep.
+ * middle of typing "1." or "-" - which is exactly the state this kit must keep.
  */
 (function (global) {
   'use strict';
@@ -30,7 +30,7 @@
   var doc = global.document;
   var mounted = [];
   /* Destroy unwraps the field, which the boot observer sees as an input added to
-     the page — and would mount straight back. Fields torn down by the kit are
+     the page - and would mount straight back. Fields torn down by the kit are
      skipped until that batch has run. */
   var teardown = [];
 
@@ -342,7 +342,7 @@
     // A host that redraws its screen (cents. rebuilds the app shell on every
     // route change; Content Tracker replaces the goal card after Set) leaves the
     // old mount observing a detached field, and its window resize listener would
-    // stay registered for the life of the page — one per redraw. Drop the dead
+    // stay registered for the life of the page - one per redraw. Drop the dead
     // mounts before adding the replacement.
     mounted.slice().forEach(function (m) {
       if (!m.input.isConnected) m.destroy();

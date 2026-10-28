@@ -1,4 +1,4 @@
-/* Inline Disclosure Menu — the row's ":" trigger and the panel it opens.
+/* Inline Disclosure Menu - the row's ":" trigger and the panel it opens.
  *
  * Every colour is a hook with a neutral fallback, so a host that already has
  * tokens (--card, --ink, --line) needs no rules of its own; a host on a dark

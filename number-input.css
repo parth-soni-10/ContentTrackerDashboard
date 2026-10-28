@@ -1,4 +1,4 @@
-/* Animated Number Input — host-agnostic.
+/* Animated Number Input - host-agnostic.
  *
  * The host styles its own field; the kit only supplies the mirror that draws
  * the digits and the two step buttons. Custom properties:
@@ -20,7 +20,7 @@
   /* The mirror draws the glyphs; the field keeps the caret, the selection and
      every editing behaviour, so its own text is invisible, not removed.
      text-fill rather than color, so the field's real colour stays readable and
-     the mirror can inherit the exact colour the host set — on any theme. */
+     the mirror can inherit the exact colour the host set - on any theme. */
   -webkit-text-fill-color: transparent;
   caret-color: var(--ni-caret, currentColor);
   background-clip: padding-box;

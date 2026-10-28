@@ -1,8 +1,8 @@
-// D1 access for the Worker — the watchlist's own store.
+// D1 access for the Worker - the watchlist's own store.
 //
 // The history, because it explains the shape of this file: the watchlist lived
 // in a Google Sheet, then in Netlify Database (managed Postgres, queried with
-// `pg`), and now in D1. The Sheet is retired and unread — lib/sheets.js and the
+// `pg`), and now in D1. The Sheet is retired and unread - lib/sheets.js and the
 // one-shot importer that copied its rows across were deleted once the importer's
 // verify pass showed the two stores matching row for row (380 entries, none
 // missing, none extra, no disagreement). Nothing here can reach it.
@@ -10,28 +10,28 @@
 // What did *not* change in the move to D1, and must not:
 //   * the wire shape. A row still goes out as { _row, Name, Season, …, 'Watch
 //     Date' } with a display date like "3-Sep-26" and a Month/Year pair, which
-//     is what app.js has always mapped — so the frontend needed no change to
+//     is what app.js has always mapped - so the frontend needed no change to
 //     read a third store either.
 //   * the duplicate rule: name (case-insensitive), season ('S2' = 'Season 2' =
 //     '2'), watch date and screentime all equal is the same watch logged twice,
-//     and the guard additionally requires the same stored type — a film and a
+//     and the guard additionally requires the same stored type - a film and a
 //     same-named series are different watches even on the same day. It is
 //     implemented here in JS against the rows that share a name, the way
 //     it was against the sheet, because that normalisation exists in exactly one
-//     place — seasonKey below.
+//     place - seasonKey below.
 //
 // What did change: how a concurrent double submit is stopped. Postgres was given
 // an advisory lock on the title and the check ran inside that transaction. D1
 // has no session locks (and no interactive transactions), so the rule's key is
 // computed once, here, into `dup_key`, and the insert carries
-// `WHERE NOT EXISTS (… dup_key = ?)` — one atomic statement, which is a stronger
+// `WHERE NOT EXISTS (… dup_key = ?)` - one atomic statement, which is a stronger
 // guarantee than the lock was: two adds arriving together cannot both write,
 // whether they reach the same instance or not.
 //
 // The connection is injected: functions/_router.js calls setDatabase(env.DB)
 // per request.
 // The Netlify build used to get its connection string from NETLIFY_DB_URL (or
-// @netlify/database) — there is no equivalent now, because there is nothing to
+// @netlify/database) - there is no equivalent now, because there is nothing to
 // connect to: D1 is a binding.
 
 let database = null;
@@ -68,8 +68,8 @@ const GOAL_PROPERTY = 'watch-goal';
 // ── Dates ──────────────────────────────────────────────────────────────────
 // Two shapes are accepted wherever a date comes in: ISO (what an <input
 // type="date"> sends) and the sheet's display format (what old rows and the
-// import carry). Everything is stored as 'YYYY-MM-DD' — a plain string, so no
-// timezone and no session DateStyle can move a watch date by a day — and read
+// import carry). Everything is stored as 'YYYY-MM-DD' - a plain string, so no
+// timezone and no session DateStyle can move a watch date by a day - and read
 // back as that same ISO text. Parts outside the calendar (month 13, 30
 // February) are rejected rather than stored: without that a "date" of 2026-13-99
 // sorted oddly and rendered as "99-undefined-26".
@@ -100,7 +100,7 @@ const isoOf = parts => parts ? `${parts.y}-${pad(parts.mo)}-${pad(parts.d)}` : n
 const displayOf = parts => parts ? `${parts.d}-${MONTH_SHORT[parts.mo - 1]}-${String(parts.y).slice(2)}` : '';
 const nowIso = () => new Date().toISOString();
 
-// Normalizes a season so 'S1', 'Season 01' and '1' compare equal — the single
+// Normalizes a season so 'S1', 'Season 01' and '1' compare equal - the single
 // definition the duplicate rule rests on.
 function seasonKey(value) {
   let text = String(value || '').trim().toLowerCase()
@@ -165,7 +165,7 @@ async function listSuggestions() {
 // Rows the watchlist itself can never show: the page's `mapRows` drops every
 // row whose year reads as 0, so a stored row without a *usable* watch date is
 // invisible in every list, chart and search on the site, whatever its
-// screentime says. This is the one read that exposes them — the admin cleanup
+// screentime says. This is the one read that exposes them - the admin cleanup
 // card lists them as the raw rows (ids and timestamps included) so they can be
 // deleted deliberately.
 //
@@ -173,7 +173,7 @@ async function listSuggestions() {
 // row is built from, rather than as `watch_date IS NULL AND screentime <= 0` in
 // SQL. That predicate was narrower than the reason this read exists: a row with
 // no date but a real screentime (id 352, "down cemetry", 508 minutes, on the
-// live store) reads as year 0 too, is shown nowhere, and the scan skipped it —
+// live store) reads as year 0 too, is shown nowhere, and the scan skipped it -
 // so the card answered "the database is clean" without having looked. Reading
 // the table and asking the date parser is the only way the scan and `mapRows`
 // cannot disagree about which rows are reachable.
@@ -205,7 +205,7 @@ const intOr = (value, max) => (Number.isFinite(Number(value)) ? Math.max(0, Math
 // because it cannot occur in a title, so 'A' + '1' can never collide with 'A1'.
 //
 // The title part is read the way the page reads it (AdminWrite.dupNormTitle):
-// trimmed, lower-cased, and with runs of spaces collapsed — "The   Bear" and
+// trimmed, lower-cased, and with runs of spaces collapsed - "The   Bear" and
 // "The Bear" are one title, and the page's gate treats them as one, so a guard
 // that read them as two would be the looser half of a rule the page already
 // applies. Rows written before this collapse still carry their original spacing
@@ -255,20 +255,20 @@ async function createEntry(entry) {
   const existing = await rows('SELECT id FROM entries WHERE dup_key = ? AND type = ? LIMIT 1', [key, values.type]);
   if (existing.length) return { duplicate: Number(existing[0].id) };
   // The statement changed nothing and no row claims the key: the write did not
-  // happen, and there is no id to report. Saying so is the only honest answer —
+  // happen, and there is no id to report. Saying so is the only honest answer -
   // a caller that reads a 200 out of this would tell the page an entry exists
   // that is nowhere in the store.
   throw new Error('The entry was not written');
 }
 
 // Returns { id } for a saved edit, { duplicate: id } when the edit would produce
-// a second row the add path refuses, or 0 when the id matches no row — the
+// a second row the add path refuses, or 0 when the id matches no row - the
 // callers answer 404 ENTRY_MISSING for that rather than reporting a write that
 // did not happen.
 //
 // The duplicate rule applies to an edit for the same reason it applies to an
 // add: an update recomputes `dup_key`, and without this guard it would write a
-// pair the insert path refuses — then `createEntry()` for that key would report
+// pair the insert path refuses - then `createEntry()` for that key would report
 // an arbitrary one of the two. `id <> ?` is what makes it a guard on *other*
 // rows; the row being edited is never its own duplicate.
 async function updateEntry(id, entry) {
@@ -314,7 +314,7 @@ async function appendSuggestion(values) {
 //
 // Returns { hrs: 0, year: '' } only when the store genuinely holds no goal, and
 // **null when the read failed**. The two used to be the same value, and `setGoal`
-// decides whether the year is locked from this return value — so one transient
+// decides whether the year is locked from this return value - so one transient
 // D1 error during a Set read as "no goal set" and replaced a goal the docs call
 // locked for the year. A failure has to be distinguishable to be refusable.
 async function readGoal() {
@@ -332,7 +332,7 @@ async function readGoal() {
 }
 
 // Returns { status: 'ok', goal } or { status: 'error', message }. A set goal for
-// a year stays locked until 1 January — enforced here so no device can change it
+// a year stays locked until 1 January - enforced here so no device can change it
 // mid-year (an identical re-set is a no-op).
 async function setGoal(hrs, year) {
   const current = await readGoal();
@@ -427,7 +427,7 @@ async function writeWmCache(key, value) {
 /**
  * The TMDB record of a film the release feed named: its canonical title, its
  * poster, its rating and its popularity. A poster and an id never change, so
- * a row here is written once and read forever — the second load of a month
+ * a row here is written once and read forever - the second load of a month
  * costs no credits at all.
  */
 async function readWmLookup(tmdbId) {

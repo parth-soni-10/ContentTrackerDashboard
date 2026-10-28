@@ -6,7 +6,7 @@
  * application runs.
  *
  * Nothing here is inline, because the deployed CSP is style-src 'self' with no
- * 'unsafe-inline' — a <style> block would be dropped and the page would render
+ * 'unsafe-inline' - a <style> block would be dropped and the page would render
  * as bare markup on exactly the pages that have no script to fall back on. */
 
 /* The loader is a fixed overlay; without JavaScript nothing would ever hide it.

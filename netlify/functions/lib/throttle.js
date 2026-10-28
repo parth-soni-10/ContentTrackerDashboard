@@ -1,6 +1,6 @@
 // A best-effort brute-force damper for the password-checking functions.
 //
-// In-memory, so it is per function instance and resets on a cold start — that is
+// In-memory, so it is per function instance and resets on a cold start - that is
 // the honest ceiling of what a Netlify function can do without a shared store.
 // It exists to make guessing slow and noisy rather than to be a wall; the wall
 // is the password's entropy plus FAILURE_DELAY_MS, which every failed attempt
@@ -68,7 +68,7 @@ function clearFailures(ip) {
 //
 // Same in-memory, per-instance caveat as the failure window above: this raises
 // the cost of a scripted sweep, it is not a wall. It differs from the login
-// damper in one way that matters — a *successful* call counts too. The login
+// damper in one way that matters - a *successful* call counts too. The login
 // window limits guessing, so only failures matter; here the write itself is the
 // thing being limited, so counting only failures would let a script that always
 // succeeds through at full speed.
@@ -111,13 +111,13 @@ function recordWrite(ip) {
 // A lookup limiter for the two public endpoints that spend a third party's
 // quota: tmdb-search (a TMDB search, external_ids, details, providers and an
 // OMDb call) and imdb-id (one TMDB call). They are not writes, so the write
-// window is the wrong shape — the page asks for one lookup per title it shows,
+// window is the wrong shape - the page asks for one lookup per title it shows,
 // and "Load all ratings" walks through every unrated row at a concurrency of 3.
 //
 // So the ceiling is per *tier*, not one number: the light path (poster + rating,
 // one title at a time) allows a whole pass, while the full path (5 upstream calls
 // each) is deliberately tighter. What keeps the light path honest is the edge
-// cache a light answer is stored under for a day — asking again for a title the
+// cache a light answer is stored under for a day - asking again for a title the
 // CDN already answered costs nothing, so the ceiling only bounds distinct titles.
 //
 // Same caveat as everything else in this file: in-memory and per-instance, so it

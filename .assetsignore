@@ -2,8 +2,8 @@
 #
 # The assets directory is the repository root (same as Netlify's publish
 # directory), so everything not listed here would be served. Cloudflare parses
-# `_headers` even though it is listed below — verified against the deployed
-# Dashboard Portal, which applies its CSP while serving no `/_headers` — so the
+# `_headers` even though it is listed below - verified against the deployed
+# Dashboard Portal, which applies its CSP while serving no `/_headers` - so the
 # header policy stays in effect without the file itself being readable.
 .git/
 .github/
@@ -21,7 +21,7 @@ brag-output/
 # `node --test`'s sources would be served at /tests/.
 tests/
 
-# Local secrets for `wrangler dev` — the same file .gitignore refuses.
+# Local secrets for `wrangler dev` - the same file .gitignore refuses.
 .dev.vars
 
 README.md
@@ -32,8 +32,8 @@ package.json
 package-lock.json
 wrangler.toml
 .assetsignore
-# The function half of the site. Pages compiles this directory at deploy time —
-# a file here is a route, not an asset — and the upload is a staged copy of the
+# The function half of the site. Pages compiles this directory at deploy time -
+# a file here is a route, not an asset - and the upload is a staged copy of the
 # repository, so without this rule the router and the catch-all would also be
 # published as static files under /functions/.
 functions/

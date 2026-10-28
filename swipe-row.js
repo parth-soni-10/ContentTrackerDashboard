@@ -1,4 +1,4 @@
-/* Swipe Row — a list row that slides aside to reveal its actions.
+/* Swipe Row - a list row that slides aside to reveal its actions.
  *
  *   <div class="summary-item" data-swipe-row>
  *     ...

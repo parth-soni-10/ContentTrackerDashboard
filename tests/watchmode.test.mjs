@@ -1,7 +1,7 @@
 // The Watchmode source layer: the client, the D1 cache and the calendar's film
 // path that uses them.
 //
-// Every test here runs against a stubbed fetch — no network, no credits, no
+// Every test here runs against a stubbed fetch - no network, no credits, no
 // API key. The shapes the stubs answer with are the ones the API documents:
 // a release row carries the service it landed on and that service's own date,
 // a title's sources carry the service and its type ('sub', 'free', 'tve' and
@@ -90,7 +90,7 @@ function fakeD1() {
   return { binding, cache, lookups, statements };
 }
 
-/** A D1 whose tables do not exist — a site whose migration has not been run. */
+/** A D1 whose tables do not exist - a site whose migration has not been run. */
 const missingTablesD1 = {
   prepare() {
     return {
@@ -541,7 +541,7 @@ const calendarRequest = (query = {}) => ({
 
 test("a film no provider filter can reach arrives through the service feed", async () => {
   // The measured case: TMDB lists no watch provider for this film in any
-  // region, so no provider-filtered query returns it — and the service feed
+  // region, so no provider-filtered query returns it - and the service feed
   // carries it anyway.
   const { impl, calls } = calendarUpstream([
     {
@@ -719,7 +719,7 @@ test("a title asked for by name is attributed when TMDB lists no service", async
 test("a film record TMDB does not have is a fallback, not a warning", async () => {
   // The measured case: the feed names a film TMDB has no /movie record for, so
   // the record call answers 404. The feed's own row still carries a title, a
-  // date and the service — which is a release a calendar can show — so the film
+  // date and the service - which is a release a calendar can show - so the film
   // stays, nothing about it reaches the page, and the miss is written down so
   // the id is never asked for again.
   const { impl: upstream } = calendarUpstream([

@@ -15,7 +15,7 @@
 -- What changed from Postgres, and why:
 --   * BIGSERIAL → INTEGER PRIMARY KEY AUTOINCREMENT. Still an identity that does
 --     not shift when a row above it is deleted, and AUTOINCREMENT (rather than a
---     bare INTEGER PRIMARY KEY) keeps ids from being reused after a delete — the
+--     bare INTEGER PRIMARY KEY) keeps ids from being reused after a delete - the
 --     page holds ids between requests, so a reused one would name the wrong row.
 --   * DATE/TIMESTAMPTZ → TEXT. Dates are stored as 'YYYY-MM-DD' and timestamps as
 --     ISO 8601, written by the data layer, so there is no timezone between the
@@ -26,7 +26,7 @@
 --   * a `dup_key` column. Postgres serialised concurrent adds with an advisory
 --     lock on the title; D1 has no session locks, so the duplicate rule's key is
 --     computed in the data layer and the insert itself carries
---     `WHERE NOT EXISTS (… dup_key = ?)` — one atomic statement instead of a lock
+--     `WHERE NOT EXISTS (… dup_key = ?)` - one atomic statement instead of a lock
 --     plus a check.
 --
 -- `season` stays free text because that is what gets typed ("S2", "Season 2",

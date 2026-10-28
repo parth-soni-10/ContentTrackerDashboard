@@ -1,4 +1,4 @@
-/* Timeline Calendar — a date spine over a long, dated list.
+/* Timeline Calendar - a date spine over a long, dated list.
  *
  *   <div data-timeline-calendar>
  *     <div data-tl-header data-tl-caption="Timeline" data-tl-noun="month"></div>
@@ -8,7 +8,7 @@
  *
  * The host keeps its own markup, its own headings and its own scroll. The kit
  * paints one compact bar, pins it to the top of the list, and names the group
- * the eye is in — the way a calendar app's pinned date does. The bar is also a
+ * the eye is in - the way a calendar app's pinned date does. The bar is also a
  * menu button: it lists the groups and jumps to the one chosen.
  *
  * It moves nothing out of the document. With no JavaScript the list still
@@ -30,7 +30,7 @@
   var doc = global.document;
   var mounted = [];
   /* A redraw replaces the host's list, which the boot observer sees as a new
-     subtree — and would mount into the old one again if it were still there.
+     subtree - and would mount into the old one again if it were still there.
      Roots torn down by the kit are skipped until that batch has run. */
   var teardown = [];
   var frame = 0;
@@ -152,13 +152,13 @@
 
     /* Moving focus into the menu must never move the page: the bar is sticky,
        and a scroll the reader did not ask for would change the group under the
-       line — and with it the very current marker the menu just highlighted. */
+       line - and with it the very current marker the menu just highlighted. */
     function focusEl(el) {
       if (el) el.focus({ preventScroll: true });
     }
 
     /* preventScroll keeps the page still, but it also keeps the menu from
-       scrolling to a current group far down a long list — so show it here,
+       scrolling to a current group far down a long list - so show it here,
        inside the menu only. */
     function revealItem(el) {
       if (!el) return;
@@ -196,7 +196,7 @@
       focusAndReveal(items[i] || items[0]);
     }
 
-    /* Where the bar's foot will be once it is pinned — not where it is now.
+    /* Where the bar's foot will be once it is pinned - not where it is now.
        Opened while the bar is still in the flow (a short list, a page not yet
        scrolled), its rect is far below the line it pins to; the sticky offset
        is the bar's own `top`. */
@@ -280,7 +280,7 @@
 
     /* Which group is the eye in? The last one whose top has crossed the line
        under the pinned bar. Walking from last frame's group rather than
-       scanning the list keeps this to a few rects per frame — a history can
+       scanning the list keeps this to a few rects per frame - a history can
        hold hundreds of rows and every one of them would otherwise be read on
        every scroll. */
     function paint(animate) {
@@ -329,7 +329,7 @@
     mounted.push(api);
     paint(false);
     // A host may size its offscreen rows with content-visibility (cents. does),
-    // in which case their boxes are placeholders until they are rendered — and
+    // in which case their boxes are placeholders until they are rendered - and
     // a jump lands before that has happened. One trailing read after the jump
     // has settled corrects the name without waiting for the next scroll.
     global.setTimeout(function () {

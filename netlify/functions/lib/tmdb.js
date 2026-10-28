@@ -1,8 +1,8 @@
 // The one place the media APIs are asked "which of these results is the title
 // the caller meant?".
 //
-// It lives in a lib file because two functions ask it — the poster/rating
-// lookup (tmdb-search.js) and the calendar's own searches (calendar.js) — and
+// It lives in a lib file because two functions ask it - the poster/rating
+// lookup (tmdb-search.js) and the calendar's own searches (calendar.js) - and
 // two copies of a matcher is how they drift apart.
 //
 // The rule, in one place: an exact name outranks popularity, and a known kind

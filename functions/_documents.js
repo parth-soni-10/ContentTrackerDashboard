@@ -6,7 +6,7 @@
  * crawler that asks for the text, so this module carries a Markdown rendering of
  * the pages that have one, and the router beside it (`_router.js`) chooses
  * between the HTML asset and the Markdown here with ordinary HTTP content
- * negotiation (RFC 9110) — the same POST-less, auth-less URL, two
+ * negotiation (RFC 9110) - the same POST-less, auth-less URL, two
  * representations:
  *
  *   Accept: text/markdown  →  text/markdown; charset=utf-8 + Vary: Accept
@@ -17,8 +17,8 @@
  * is free to hand a browser the Markdown blob (or an agent the HTML) because it
  * keyed the entry on the URL alone.
  *
- * Markdown is also served at a real URL per page — /index.md, /about.md,
- * /contact.md, /privacy.md — because the llms.txt proposal (v2) asks for the
+ * Markdown is also served at a real URL per page - /index.md, /about.md,
+ * /contact.md, /privacy.md - because the llms.txt proposal (v2) asks for the
  * Markdown version to exist at a URL a linker can point at, not only behind a
  * header a simple fetcher may not send:
  *   <link rel="alternate" type="text/markdown" href="/index.md">
@@ -84,7 +84,7 @@ export const MARKDOWN_ALIASES = {
   "/privacy.md": "/privacy",
 };
 
-export const HOME_MARKDOWN = `# Content Tracker — media watchlist and analytics dashboard
+export const HOME_MARKDOWN = `# Content Tracker - media watchlist and analytics dashboard
 
 Content Tracker is a personal media analytics dashboard at ${SITE_URL}. It records every film and series its author watches, then turns that history into statistics: the genres and streaming platforms that dominate, the hours watched each month, and how the current year compares with the same months of the previous one.
 
@@ -92,14 +92,14 @@ The watchlist is one personal collection of about 380 titles, not a catalogue an
 
 ## What the dashboard shows
 
-- **Readme** — the headline numbers: total titles, all-time screentime, this year so far, the top platform, recently watched titles, a year-on-year comparison, and the yearly watch goal.
-- **Current Year** — this year's titles and hours, split by show and film, with the platform, genre and monthly-viewing charts.
-- **All Time** — the complete history across every year, filterable by year, platform, genre and type.
-- **Data** — the full watchlist as a searchable, sortable table with CSV export.
-- **Timeline** — the history month by month, grouped by year.
-- **Calendar** — upcoming film releases and TV episodes on the streaming services the watchlist follows, with a day-by-day drawer.
-- **Random Pick** — a random title from the watchlist, filterable by genre and type.
-- **Submit** — a suggestion box for titles that are not in the watchlist yet.
+- **Readme** - the headline numbers: total titles, all-time screentime, this year so far, the top platform, recently watched titles, a year-on-year comparison, and the yearly watch goal.
+- **Current Year** - this year's titles and hours, split by show and film, with the platform, genre and monthly-viewing charts.
+- **All Time** - the complete history across every year, filterable by year, platform, genre and type.
+- **Data** - the full watchlist as a searchable, sortable table with CSV export.
+- **Timeline** - the history month by month, grouped by year.
+- **Calendar** - upcoming film releases and TV episodes on the streaming services the watchlist follows, with a day-by-day drawer.
+- **Random Pick** - a random title from the watchlist, filterable by genre and type.
+- **Submit** - a suggestion box for titles that are not in the watchlist yet.
 
 ## What the numbers mean
 
@@ -160,9 +160,9 @@ Content Tracker is run by ${AUTHOR.name}, based in Dublin, Ireland. It is a smal
 
 ## Best way to reach me
 
-- **Email**: ${AUTHOR.email} — the fastest route for anything about the site, its data or its code.
-- **GitHub**: [${AUTHOR.repository.replace(/^https?:\/\//, "")}](${AUTHOR.repository}) — issues and pull requests are welcome for bugs in the code.
-- **Portfolio**: ${AUTHOR.portfolio} — background, other projects and the same contact details.
+- **Email**: ${AUTHOR.email} - the fastest route for anything about the site, its data or its code.
+- **GitHub**: [${AUTHOR.repository.replace(/^https?:\/\//, "")}](${AUTHOR.repository}) - issues and pull requests are welcome for bugs in the code.
+- **Portfolio**: ${AUTHOR.portfolio} - background, other projects and the same contact details.
 
 ## What to include
 
@@ -345,7 +345,7 @@ export function negotiateRepresentation(acceptHeader) {
   if (!ranges.length) return "html";
 
   // HTML is listed (and seeded) first so a genuine tie keeps the site's
-  // default — both types matching the same `*/*` entry is the common case, and
+  // default - both types matching the same `*/*` entry is the common case, and
   // a browser that sends `*/*` must get HTML, not Markdown.
   const candidates = [
     { representation: "html", type: "text/html" },

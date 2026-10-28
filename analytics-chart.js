@@ -1,4 +1,4 @@
-/* Analytics Chart — one line, one series, a tooltip per point.
+/* Analytics Chart - one line, one series, a tooltip per point.
  *
  *   <div data-analytics-chart data-ac-label="reserves"></div>
  *
@@ -12,7 +12,7 @@
  * host needs to compare, it renders two charts.
  *
  * The picture is `role="img"` with a one-sentence summary (first, last, high,
- * low), and the whole series is in a visually hidden table underneath — a
+ * low), and the whole series is in a visually hidden table underneath - a
  * screen reader should not have to arrow through 30 points to learn the
  * direction. Arrowing through them is there anyway, for anyone who wants the
  * exact number at a date: the root is focusable, Left/Right/Home/End move a
@@ -148,7 +148,7 @@
     table.appendChild(head);
     data.forEach(function (point) {
       var row = mk('tr');
-      row.appendChild(mk('th', null, xLabel(point) || '—'));
+      row.appendChild(mk('th', null, xLabel(point) || '-'));
       row.appendChild(mk('td', null, format(point.value)));
       table.appendChild(row);
     });

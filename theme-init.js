@@ -2,7 +2,7 @@
 // paint, so a dark-mode visitor never sees a white flash.
 //
 // An external file rather than an inline <script> in index.html, because the
-// deployed CSP is script-src 'self' with no 'unsafe-inline' and no hash — an
+// deployed CSP is script-src 'self' with no 'unsafe-inline' and no hash - an
 // inline copy would be blocked, and the only symptom would be the flash coming
 // back for dark-mode visitors.
 //
@@ -12,7 +12,7 @@
 //
 // Wrapped in try/catch because localStorage throws outright when storage is
 // disabled, and a theme preference is never worth an exception on the critical
-// path — the stylesheet's default theme is a perfectly good outcome.
+// path - the stylesheet's default theme is a perfectly good outcome.
 // First, before anything that can fail: mark the document as scripted. The
 // stylesheet hides the loading overlay only while <html> carries `no-js`, so
 // removing it here is what shows the loader again; if this file never runs (JS
@@ -25,5 +25,5 @@ try {
     document.documentElement.classList.add('dark');
   }
 } catch (e) {
-  /* storage disabled — fall through to the default theme */
+  /* storage disabled - fall through to the default theme */
 }

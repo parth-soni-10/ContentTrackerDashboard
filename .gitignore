@@ -1,13 +1,13 @@
 /.freebuff
 /brag-output/
 
-# Nothing is installed any more — there is no build step and no dependency — but
+# Nothing is installed any more - there is no build step and no dependency - but
 # a stray install would still never belong in the repo.
 /node_modules
 
 # Local secrets. A key in here is what lets the functions be exercised by hand
 # (`wrangler dev` reads .dev.vars; .env is what a local runner reads), so the
-# file has to exist — and it must never be committable, or the first
+# file has to exist - and it must never be committable, or the first
 # `git add -A` publishes it.
 /.env
 /.env.local
@@ -19,7 +19,7 @@
 # Local secret file for wrangler dev, same rule as .env above.
 /.dev.vars
 
-# Local Cloudflare tool state (local D1/cache, dev-server state) — never
+# Local Cloudflare tool state (local D1/cache, dev-server state) - never
 # committed.
 /.wrangler/
 

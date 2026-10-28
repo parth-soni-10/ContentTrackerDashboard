@@ -1,11 +1,11 @@
-// The shared yearly watch goal. Reading it is public — the goal is drawn on the
+// The shared yearly watch goal. Reading it is public - the goal is drawn on the
 // README card the site shows everyone (the read is `watchlist?goal=1`, in
-// lib/db.js) — but writing it is an admin act, gated here exactly as
+// lib/db.js) - but writing it is an admin act, gated here exactly as
 // admin-entry.js and admin-import.js gate their writes.
 //
 // Why it is not open, which is what it was: `setGoal` in lib/db.js refuses to
 // change a goal once the year's is set, so a single unauthenticated write is not
-// a transient annoyance — it pins the target for the rest of the year, and every
+// a transient annoyance - it pins the target for the rest of the year, and every
 // card that reads it (progress, pace, the lock note) is then wrong with nothing
 // the owner can do about it until 1 January. The write is one row of shared
 // state, and its cost is permanent; the read stays open because it carries

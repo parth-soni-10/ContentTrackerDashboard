@@ -1,6 +1,6 @@
 // The admin session cookie: signed once here, validated wherever an admin
 // endpoint is called. It was duplicated inside admin-login.js and admin-entry.js
-// until the one-off data importer needed the same check — three copies of a
+// until the one-off data importer needed the same check - three copies of a
 // signature check is how they drift apart.
 //
 // The token is `base64url(payload).base64url(hmacSHA256(payload))`, signed with

@@ -1,4 +1,4 @@
-/* Gooey Nav — host-agnostic liquid pill.
+/* Gooey Nav - host-agnostic liquid pill.
  *
  * Set --gn-fill to the colour of the active pill (it defaults to currentColor at
  * 8% so an unconfigured host still shows a soft shape). The nav's own radius,
@@ -7,7 +7,7 @@
  *
  * Give it an opaque colour. .gn-goo runs the blob through a blur and an alpha
  * ramp (the filter that used to fuse a trailing droplet), so anything under
- * roughly half opacity is thresholded away and the pill never appears — a tint
+ * roughly half opacity is thresholded away and the pill never appears - a tint
  * has to be mixed against the surface it sits on, not left transparent.
  */
 
@@ -61,7 +61,7 @@
   transition: none;
 }
 
-/* No pill is drawn when the nav cannot take one — a closed phone dropdown, a
+/* No pill is drawn when the nav cannot take one - a closed phone dropdown, a
    column, a hidden pane. Without this the layer would keep the last desktop
    rectangle painted over whatever the nav became. */
 .gooey-nav:not(.gn-on) .gn-goo {
@@ -83,7 +83,7 @@
 }
 
 /* Everything but the two liquid layers sits above them. A column (a phone
-   dropdown) is not drawn at all — the script takes .gn-on off — so this rule is
+   dropdown) is not drawn at all - the script takes .gn-on off - so this rule is
    what puts the host's own active row back in charge there. */
 .gooey-nav > :not(.gn-goo):not(.gn-svg) {
   position: relative;

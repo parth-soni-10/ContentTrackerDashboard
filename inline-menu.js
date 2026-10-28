@@ -1,4 +1,4 @@
-/* Inline Disclosure Menu — the ":" on a row, and the actions behind it.
+/* Inline Disclosure Menu - the ":" on a row, and the actions behind it.
  *
  *   InlineMenu.attach(button, {
  *     label: 'Actions for Lidl, 12 Oct',

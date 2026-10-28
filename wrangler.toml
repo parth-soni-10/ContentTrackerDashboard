@@ -3,8 +3,8 @@
 #   npx wrangler pages dev .           → local test on http://localhost:8788
 #   npx wrangler pages deploy          → publish .pages-dist to the project
 #
-# There is no Worker config and no Worker. The function half of the site — every
-# path under /.netlify/functions/ — is a Pages Function: `functions/[[path]].js`
+# There is no Worker config and no Worker. The function half of the site - every
+# path under /.netlify/functions/ - is a Pages Function: `functions/[[path]].js`
 # catches every request and hands it to `functions/_router.js`, which routes it
 # to the module under netlify/functions/ that answers it. Pages compiles those
 # files as part of the deploy, so nothing is bundled here and `wrangler deploy`
@@ -26,8 +26,8 @@ compatibility_date = "2026-10-01"
 compatibility_flags = ["nodejs_compat"]
 
 # The watchlist store: one D1 database, one row per title, and the only copy.
-# The schema is a committed migration in migrations/ — wrangler's own default
-# directory — applied with:
+# The schema is a committed migration in migrations/ - wrangler's own default
+# directory - applied with:
 #   npx wrangler d1 migrations apply content-tracker-watchlist --local
 # D1 does not run migrations on deploy, so that command is part of releasing a
 # schema change.
@@ -43,7 +43,7 @@ database_id = "c5c4e1f6-6f5e-4c0b-955d-b0e2d6b27826"
 # Provisioned once, shared by every site in this collection, then bound here:
 #   npx wrangler kv namespace create site-feedback
 # and uncomment the block below with the id it returns. No id is committed
-# before it exists — a placeholder id fails the deploy instead of the binding.
+# before it exists - a placeholder id fails the deploy instead of the binding.
 # [[kv_namespaces]]
 # binding = "SITE_FEEDBACK"
 # id = "<id from wrangler kv namespace create site-feedback>"

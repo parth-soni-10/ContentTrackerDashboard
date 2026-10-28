@@ -32,7 +32,7 @@ exports.handler = async event => {
   // checked before the comparison, so a blocked caller never reaches the HMAC
   // work either; and every failure also waits FAILURE_DELAY_MS, which slows a
   // single-IP sweep even below the limit. Per instance and in-memory, which is
-  // the honest ceiling here — the password's entropy is the real defence.
+  // the honest ceiling here - the password's entropy is the real defence.
   const ip = clientIp(event);
   const state = failureState(ip);
   if (state.blocked) {

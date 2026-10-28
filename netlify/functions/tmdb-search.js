@@ -37,9 +37,9 @@ exports.handler = async event => {
   const type = clean(params.type, 20);
   if (!title) return json(400, { error: 'Title is required' });
 
-  // This endpoint is world-callable and spends other people's quota — a TMDB
+  // This endpoint is world-callable and spends other people's quota - a TMDB
   // search plus external_ids here, and up to details, providers and an OMDb call
-  // on the full path — while the one thing it does that anyone can reach is a
+  // on the full path - while the one thing it does that anyone can reach is a
   // single INSERT, and that one is limited. So is this: the light tier allows a
   // whole ratings pass, the full tier (five upstream calls a request) is tighter.
   // Checked after validation, so a malformed call costs nothing.
@@ -54,7 +54,7 @@ exports.handler = async event => {
   }
   recordLookup(ip, tier);
 
-  // Lightweight poster + rating lookup — one TMDB search, no details/providers.
+  // Lightweight poster + rating lookup - one TMDB search, no details/providers.
   if (light) {
     try {
       const searchUrl = new URL('https://api.themoviedb.org/3/search/multi');
@@ -80,7 +80,7 @@ exports.handler = async event => {
           extUrl.searchParams.set('api_key', process.env.TMDB_API_KEY);
           const extResponse = await fetch(extUrl);
           if (extResponse.ok) imdbId = (await extResponse.json()).imdb_id || null;
-        } catch (e) { /* non-fatal — fall back to OMDB below */ }
+        } catch (e) { /* non-fatal - fall back to OMDB below */ }
         if (process.env.OMDB_API_KEY) {
           const omdb = await omdbLookup(match.name || match.title, match.media_type === 'movie' ? 'Movie' : 'Series');
           const imdb = Number(omdb?.imdbRating);
@@ -94,7 +94,7 @@ exports.handler = async event => {
         if (rating != null) rating = Math.max(0, Math.min(10, rating));
       }
       // A poster and an IMDb id never change, and a rating changes by a tenth at
-      // most — so the answer is cacheable for a day, which is what makes the
+      // most - so the answer is cacheable for a day, which is what makes the
       // ceiling above about *distinct titles* rather than about clicks.
       return json(200, {
         poster: match && match.poster_path ? 'https://image.tmdb.org/t/p/w185' + match.poster_path : null,

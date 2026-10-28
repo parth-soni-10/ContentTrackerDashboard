@@ -1,4 +1,4 @@
-/* Dynamic Button — a button that resizes to whatever it is saying.
+/* Dynamic Button - a button that resizes to whatever it is saying.
  *
  *   DynamicButton.say(btn, 'Copied ✓');          // crossfade in, and grow to fit
  *   DynamicButton.restore(btn);                  // crossfade back to the resting label
@@ -9,28 +9,28 @@
  * to the new width in one frame, and for that frame both labels are painted on
  * top of each other. Here the resting label becomes a layer, the state label
  * arrives as another, the two crossfade, and the width animates from one
- * layer's width to the other's — so a button that says "Copy CSV" and then
+ * layer's width to the other's - so a button that says "Copy CSV" and then
  * "Copied ✓" changes size rather than size-jumping.
  *
  * The resting label stays in flow (at opacity 0 while a state is showing), so
  * the button's height is still its own and its padding, gap and display are
  * unchanged. Everything else is untouched too: classes, aria, disabled, the
- * handler. No markup change is required — say() mounts the button on first use
- * — and with the script absent the button simply changes its own text, the way
+ * handler. No markup change is required - say() mounts the button on first use
+ * - and with the script absent the button simply changes its own text, the way
  * it always did.
  *
  * Sizing is measured, never assumed: the shown layer's own width plus whatever
  * the button's own box adds around it, border-box or content-box. A button the
- * layout stretches — width:100%, a flex item that grows — is detected at mount
+ * layout stretches - width:100%, a flex item that grows - is detected at mount
  * and keeps its own width; only its labels crossfade, because that box was
  * never the label's to decide. A box the host's own CSS pins (a 34px square
- * icon button) is the third case: it is a floor, not a target — a state that
+ * icon button) is the third case: it is a floor, not a target - a state that
  * fits inside it leaves the box exactly where it is, and one that needs more
  * room grows it and gives the box back on restore, rather than being silently
  * clipped by the box it was handed. Fonts that arrive late, and a resize,
  * re-measure quietly in one frame instead of animating to a stale width.
  *
- * A host that rebuilds its DOM — a screen that re-renders, a list that redraws —
+ * A host that rebuilds its DOM - a screen that re-renders, a list that redraws -
  * throws the old button away without saying anything. The kit keeps one resize
  * listener for the whole page rather than one per mount, and prunes a button it
  * finds detached, so mounting again on the fresh button is all a host has to do
@@ -176,7 +176,7 @@
       // was created a moment ago and mount()'s quiet frame is still on. Both have
       // to settle *before* the layers flip, or the host's first swap happens in
       // the same recalc that re-enabled the transitions and pops in instead of
-      // cross-fading — the fixture the host was told to write would be the one
+      // cross-fading - the fixture the host was told to write would be the one
       // swap nobody ever sees. Reading geometry flushes the styles, and the swap
       // itself waits one frame so the browser has painted both layers at their
       // start values before it interpolates between them.

@@ -1,4 +1,4 @@
-/* Slide Commit — a slide-to-confirm handle in place of a blocking confirm().
+/* Slide Commit - a slide-to-confirm handle in place of a blocking confirm().
  *
  * The gesture is the confirmation: a drag that returns true only when the knob
  * reaches the end of the rail. A tap cannot do it, so the dialog is harder to

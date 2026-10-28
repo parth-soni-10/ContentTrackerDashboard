@@ -22,7 +22,7 @@ async function handleDirect(body, action, id) {
       if (!Number.isInteger(id)) return json(400, { error: 'A valid entry id is required' });
       const deleted = await db.deleteEntry(id);
       // An id that matches nothing means the entry moved or was already removed
-      // — in the sheet that could not happen, because the write addressed a
+      // - in the sheet that could not happen, because the write addressed a
       // physical row; here it is worth saying so instead of reporting success.
       if (!deleted) return json(404, { error: 'That entry no longer exists', code: 'ENTRY_MISSING' });
       return json(200, { rowNumber: deleted });
@@ -73,7 +73,7 @@ exports.handler = async event => {
 
   // The cleanup card asks for the rows it lists before deleting any of them:
   // every entry the page shows has a usable watch date, so the rows without one
-  // — blank imports, abandoned adds — are only reachable through this one read.
+  // - blank imports, abandoned adds - are only reachable through this one read.
   // Same session gate.
   if (body.action === 'invalid') {
     try {

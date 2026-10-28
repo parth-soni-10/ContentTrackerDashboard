@@ -13,8 +13,8 @@ exports.handler = async event => {
   if (event.httpMethod !== 'POST') return json(405, { error: 'Method not allowed' });
   if (!db.dbEnabled()) return json(500, { error: 'Suggestion service is not configured' });
 
-  // This endpoint is world-writable by design — it is how a visitor asks for a
-  // title — so the limit is on volume per client, not on access. Throttling only
+  // This endpoint is world-writable by design - it is how a visitor asks for a
+  // title - so the limit is on volume per client, not on access. Throttling only
   // failures here would be useless: a script whose writes succeed would never be
   // slowed down, and the suggestions table is the thing being polluted.
   const ip = clientIp(event);

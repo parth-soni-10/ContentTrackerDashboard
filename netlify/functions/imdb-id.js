@@ -1,12 +1,12 @@
 // Resolves one title's IMDb page, for the calendar's links.
 //
 // The calendar links every release to IMDb rather than to the API the row came
-// from. The episode half needs no help — TVmaze lists the show's IMDb id in the
+// from. The episode half needs no help - TVmaze lists the show's IMDb id in the
 // same payload the calendar already fetches, so `calendar.js` carries it for
 // free. A film is the opposite case: TMDB's list endpoints (`/discover/movie`,
 // the provider sweeps) carry no `imdb_id` at all, and only `/movie/{id}/`.
 // external_ids has it. Asking for every film at calendar time would be one extra
-// request per release — hundreds in a single month view — so a film's id is
+// request per release - hundreds in a single month view - so a film's id is
 // resolved the moment its title is clicked instead: one lookup, cached at the
 // CDN for a day and in the browser beyond that, and the page falls back to an
 // IMDb search when there is no id to be had.
@@ -28,7 +28,7 @@ exports.handler = async event => {
 
   const params = event.queryStringParameters || {};
   const id = Number(params.id);
-  // 'tv' exists for completeness — the calendar has no TMDB show ids today (its
+  // 'tv' exists for completeness - the calendar has no TMDB show ids today (its
   // episodes come from TVmaze), but the lookup is the same shape either way.
   const type = params.type === 'tv' ? 'tv' : 'movie';
   if (!Number.isInteger(id) || id <= 0) {
@@ -39,7 +39,7 @@ exports.handler = async event => {
   if (!key) return json(500, { error: 'TMDB is not configured in this environment' }, { 'Cache-Control': 'no-store' });
 
   // One TMDB call per miss, and the answer is cached for a day both at the edge
-  // and on the device — so this is the *light* tier: it must never be the reason
+  // and on the device - so this is the *light* tier: it must never be the reason
   // a reader cannot open a title. It is here because "cached" is not "bounded":
   // a script that varies the id bypasses the cache on every call.
   const ip = clientIp(event);
@@ -60,7 +60,7 @@ exports.handler = async event => {
     }
     const data = await res.json().catch(() => ({}));
     const imdb = String((data && data.imdb_id) || '').trim();
-    // A null answer is a real answer (the film has no IMDb page on TMDB) — and it
+    // A null answer is a real answer (the film has no IMDb page on TMDB) - and it
     // is cached, so a title without one is not looked up on every click.
     return json(200, { imdb: /^tt\d+$/.test(imdb) ? 'https://www.imdb.com/title/' + imdb + '/' : null }, {
       'Cache-Control': 'public, max-age=86400'
