@@ -56,9 +56,9 @@
 .tlc-caption {
   font-size: 10px;
   font-weight: 600;
-  letter-spacing: .14em;
-  text-transform: uppercase;
-  opacity: .5;
+  letter-spacing: 0;
+  text-transform: none;
+  opacity: .7;
   white-space: nowrap;
 }
 

@@ -2,16 +2,16 @@
 const WATCHLIST_URL = '/.netlify/functions/watchlist';
 const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 const PEMOJI = {
-  'Netflix': '🔴',
-  'Amazon Prime Video': '🔵',
-  'Apple TV+': '⚫',
-  'HBO Max': '🟣',
-  'Disney+': '🔷',
-  'Peacock': '🦚',
-  'Hulu': '🟢',
-  'Theater': '🎬',
-  'Paramount+': '⭐',
-  'MUBI': '🎞️'
+
+
+
+
+
+
+
+
+
+
 };
 
 // ── STATE ─────────────────────────────────────────────────────────────────
@@ -45,6 +45,13 @@ let goalReady = Promise.resolve();
 
 function escapeHTML(value) {
   return String(value ?? '').replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
+}
+
+// One icon set. The sprite lives at the top of index.html, so every mark is
+// the same 24px line drawing in currentColor rather than an emoji whose shape
+// and colour depend on the reader's font.
+function ic(name) {
+  return '<svg class="i" aria-hidden="true" focusable="false"><use href="#i-' + name + '"></use></svg>';
 }
 
 // ── LABELS A BUTTON SAYS WHILE IT WORKS ───────────────────────────────────
@@ -210,12 +217,12 @@ function posterFallback(el) {
   if (el.tagName === 'IMG') {
     const box = document.createElement('span');
     box.className = el.className + ' placeholder';
-    box.textContent = '🎬';
+    box.innerHTML = ic('film');
     el.replaceWith(box);
     return;
   }
   el.classList.add('placeholder');
-  el.textContent = '🎬';
+  el.innerHTML = ic('film');
 }
 // Read-only star display for a 0-10 rating (IMDb/TMDB scale), plus the number.
 function ratingStars(value) {
@@ -370,7 +377,7 @@ function bindNavigation() {
 function renderDataError() {
   document.getElementById('app').innerHTML =
     '<div class="page-header"><div class="ph-left"><h1>Couldn\'t load your watchlist</h1><p>The watchlist service didn\'t respond.</p></div></div>' +
-    '<div class="note-card note-card-wide"><div class="note-icon" aria-hidden="true">⚠️</div><div class="note-body"><strong>The data service is unreachable right now.</strong> This is usually temporary. Give it a moment and try again.</div></div>' +
+    '<div class="note-card note-card-wide"><div class="note-icon" aria-hidden="true">' + ic('alert') + '</div><div class="note-body"><strong>The data service is unreachable right now.</strong> This is usually temporary. Give it a moment and try again.</div></div>' +
     '<div class="submit-page"><button class="try-btn btn-wide" id="data-retry" type="button">↻ Retry</button></div>';
   const btn = document.getElementById('data-retry');
   if (btn) {
@@ -628,7 +635,65 @@ async function loadData(skipRerender, bust) {
 const maxYear = () => new Date().getFullYear();
 const fmtHrs   = m  => (m / 60).toFixed(1).replace(/\.0$/, '') + ' hrs';
 const fmtK     = n  => n.toLocaleString('en-GB');
-const pe       = p  => PEMOJI[p] || '📺';
+
+// ── PROVIDER MARKS ────────────────────────────────────────────────────────
+// A small flat brand mark beside a platform name. Paths are the CC0 Simple
+// Icons glyphs; the three wordmark services (Disney+, HBO Max, Hulu) use a
+// short monogram instead, because a full wordmark turns to mush at 12px.
+// Every mark is a tinted square, so bars, stat cards and table cells share it.
+const PROVIDER_MARKS = {
+  netflix:   { markup: '<path d="m5.398 0 8.348 23.602c2.346.059 4.856.398 4.856.398L10.113 0H5.398zm8.489 0v9.172l4.715 13.33V0h-4.715zM5.398 1.5V24c1.873-.225 2.81-.312 4.715-.398V14.83L5.398 1.5z"/>' },
+  prime:     { markup: '<path d="M3.6 13.4c4.5 3.3 11.9 3.1 16.8-.7" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/><path d="M17.9 12.4l2.7-.4-.5 2.7" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>' },
+  apple:     { markup: '<path d="M12.152 6.896c-.948 0-2.415-1.078-3.96-1.04-2.04.027-3.91 1.183-4.961 3.014-2.117 3.675-.546 9.103 1.519 12.09 1.013 1.454 2.208 3.09 3.792 3.039 1.52-.065 2.09-.987 3.935-.987 1.831 0 2.35.987 3.96.948 1.637-.026 2.676-1.48 3.676-2.948 1.156-1.688 1.636-3.325 1.662-3.415-.039-.013-3.182-1.221-3.22-4.857-.026-3.04 2.48-4.494 2.597-4.559-1.429-2.09-3.623-2.324-4.39-2.376-2-.156-3.675 1.09-4.61 1.09zM15.53 3.83c.843-1.012 1.4-2.427 1.245-3.83-1.207.052-2.662.805-3.532 1.818-.78.896-1.454 2.338-1.273 3.714 1.338.104 2.715-.688 3.559-1.701"/>' },
+  disney:    { text: 'D+', cls: 'pm-serif' },
+  max:       { text: 'HBO', cls: 'pm-word' },
+  peacock:   { markup: '<g fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M12 12.6V5.6"/><path d="M9.2 12.8 7.4 6.6"/><path d="M14.8 12.8l1.8-6.2"/><path d="M6.6 13.4 4.8 8.4"/><path d="M17.4 13.4l1.8-5"/><path d="M6.4 14.4h11.2"/></g>' },
+  hulu:      { text: 'hulu', cls: 'pm-word' },
+  theater:   { icon: 'film' },
+  paramount: { markup: '<path d="M3 19.5 8.4 5.8l3.3 7.2 2.3-3.8 7 10.3H3Z"/>' },
+  youtube:   { markup: '<path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>' },
+  crunchy:   { markup: '<path d="M2.909 13.436C2.914 7.61 7.642 2.893 13.468 2.898c5.576.005 10.137 4.339 10.51 9.819q.021-.351.022-.706C24.007 5.385 18.64.006 12.012 0S.007 5.36 0 11.988 5.36 23.994 11.988 24q.412 0 .815-.027c-5.526-.338-9.9-4.928-9.894-10.538Zm16.284.155a4.1 4.1 0 0 1-4.095-4.103 4.1 4.1 0 0 1 2.712-3.855 8.95 8.95 0 0 0-4.187-1.037 9.007 9.007 0 1 0 8.997 9.016q-.001-.847-.15-1.651a4.1 4.1 0 0 1-3.278 1.63Z"/>' },
+  mubi:      { text: 'MUBI', cls: 'pm-word' }
+};
+function providerKey(name) {
+  const t = String(name || '').toLowerCase();
+  if (!t) return 'other';
+  if (t.includes('netflix')) return 'netflix';
+  // Channel add-ons name Amazon too; their own service is the more useful mark.
+  if (t.includes('lionsgate')) return 'lionsgate';
+  if (t.includes('universal')) return 'universal';
+  if (t.includes('prime') || t.includes('amazon')) return 'prime';
+  if (t.includes('apple')) return 'apple';
+  if (t.includes('disney')) return 'disney';
+  if (t.includes('hbo') || /^max\b/.test(t)) return 'max';
+  if (t.includes('peacock')) return 'peacock';
+  if (t.includes('hulu')) return 'hulu';
+  if (t.includes('theater') || t.includes('cinema')) return 'theater';
+  if (t.includes('paramount')) return 'paramount';
+  if (t.includes('youtube')) return 'youtube';
+  if (t.includes('crunchyroll')) return 'crunchy';
+  if (t.includes('mubi')) return 'mubi';
+  if (t.includes('sony')) return 'sony';
+  if (t.includes('eurosport')) return 'eurosport';
+  if (t.includes('cbs')) return 'cbs';
+  if (t.includes('sky')) return 'sky';
+  if (t.includes('jio')) return 'jio';
+  if (t.includes('lionsgate')) return 'lionsgate';
+  if (t.includes('universal')) return 'universal';
+  if (t.includes('osn')) return 'osn';
+  if (t.includes('angel')) return 'angel';
+  return 'other';
+}
+function providerMark(name) {
+  const key = providerKey(name);
+  const mark = PROVIDER_MARKS[key];
+  if (mark) {
+    const inner = mark.icon ? ic(mark.icon) : (mark.text ? escapeHTML(mark.text) : `<svg viewBox="0 0 24 24" aria-hidden="true">${mark.markup}</svg>`);
+    return `<span class="pm pm-${key}${mark.cls ? ' ' + mark.cls : ''}" aria-hidden="true">${inner}</span>`;
+  }
+  const letter = (String(name || '').trim().charAt(0) || '?').toUpperCase();
+  return `<span class="pm pm-${key}" aria-hidden="true">${escapeHTML(letter)}</span>`;
+}
 
 function uniqueVals(key) {
   return [...new Set(rawData.map(r => r[key]).filter(Boolean))].sort();
@@ -714,7 +779,7 @@ function renderAdmin() {
     document.getElementById('app').innerHTML = `
       <div class="page-header"><div class="ph-left"><h1>Admin</h1><p>Sign in to add a title directly to the tracker</p></div></div>
       <div class="admin-page"><div class="admin-card">
-        <div class="admin-icon" aria-hidden="true">🔒</div>
+        <div class="admin-icon" aria-hidden="true">${ic('lock')}</div>
         <h2>Admin access</h2><p class="submit-sub">Enter the admin password to continue.</p>
         <form id="admin-login-form">
           <div class="sf-field"><label class="sf-lbl" for="admin-password">Password</label><input id="admin-password" name="password" class="sf-input" type="password" autocomplete="current-password" required></div>
@@ -800,7 +865,7 @@ function renderAdminForm() {
       <div id="admin-zero-count" class="admin-zero-count" aria-live="polite"></div>
       <button class="try-btn admin-clean-btn" id="admin-zero-fill" type="button">Fill them in</button>
       <div id="admin-zero-results" class="admin-clean-results" aria-live="polite"></div>
-    </div></div><div class="submit-right"><div class="note-card"><div class="note-icon" aria-hidden="true">💡</div><div class="note-body"><strong>Protected entry</strong>The password is checked server-side and never leaves this site.</div></div><button class="try-btn" id="admin-lock" type="button">Lock Admin</button></div><div class="submit-form-card submit-wide"><h2 class="submit-heading">Release Calendar</h2><p class="submit-sub">The same releases as the Calendar tab - the ＋ on a listing adds it straight to the watchlist, with its release day as the watch date.</p><div class="cal-embed">${calShellHTML()}</div></div></div>`;
+    </div></div><div class="submit-right"><div class="note-card"><div class="note-icon" aria-hidden="true">${ic('bulb')}</div><div class="note-body"><strong>Protected entry</strong>The password is checked server-side and never leaves this site.</div></div><button class="try-btn" id="admin-lock" type="button">Lock Admin</button></div><div class="submit-form-card submit-wide"><h2 class="submit-heading">Release Calendar</h2><p class="submit-sub">The same releases as the Calendar tab - the + on a listing adds it straight to the watchlist, with its release day as the watch date.</p><div class="cal-embed">${calShellHTML()}</div></div></div>`;
   document.getElementById('admin-entry-form').addEventListener('submit', submitAdminEntry);
   ['genre', 'platform'].forEach(key => {
     const select = document.getElementById('admin-' + key);
@@ -1804,7 +1869,7 @@ function renderReadme() {
   const projectedHrs = elapsed ? Math.round((cyrST / 60) / elapsed * 12) : Math.round(cyrST / 60);
   const paceDiff = Math.round((cyrST / 60) - (goalHrs / 12) * elapsed);
   const paceNote = goalError
-    ? '⚠️ ' + goalError
+    ? goalError
     : (paceDiff >= 0 ? 'On track' : 'Behind') + ' by ' + Math.abs(paceDiff) + ' hrs · on pace for ' + projectedHrs + ' hrs/yr (last year ' + fmtHrs(prevST) + ').';
   // ── Year over year, like for like ───────────────────────────────────────
   // Comparing year-to-date against a whole previous year (9 months vs 12) made
@@ -1898,22 +1963,22 @@ function renderReadme() {
         <div class="readme-stat">
           <div class="rs-label">Total Titles</div>
           <div class="rs-val">${total}</div>
-          <div class="rs-sub">${shows} shows · ${movies} movies</div>
+          <div class="rs-sub"><span class="rs-count">${shows} shows</span> · <span class="rs-count rs-count-alt">${movies} movies</span></div>
         </div>
         <div class="readme-stat">
           <div class="rs-label">All Time Screentime</div>
           <div class="rs-val">${fmtK(Math.round(allST / 60))}<small> hrs</small></div>
-          <div class="rs-sub">≈ ${Math.round(allST / 60 / 24).toLocaleString('en-GB')} days of screen time</div>
+          <div class="rs-sub">≈ <span class="rs-count rs-count-alt">${Math.round(allST / 60 / 24).toLocaleString('en-GB')} days</span> of screen time</div>
         </div>
         <div class="readme-stat">
           <div class="rs-label">This Year (${cy})</div>
           <div class="rs-val">${Math.round(cyrST / 60)}<small> hrs</small></div>
-          <div class="rs-sub"><span class="rs-accent">${cyrData.length} titles</span> watched in ${cy}</div>
+          <div class="rs-sub"><span class="rs-accent">${cyrData.length} titles</span> watched in <span class="rs-year">${cy}</span></div>
         </div>
         <div class="readme-stat">
           <div class="rs-label">Top Platform</div>
-          <div class="rs-val">${topPlat ? pe(topPlat[0]) : ''}${topPlat ? escapeHTML(topPlat[0]) : '-'}</div>
-          <div class="rs-sub">${topPlat ? topPlat[1] + ' titles all time' : ''}</div>
+          <div class="rs-val">${topPlat && topPlat[0] !== '-' ? providerMark(topPlat[0]) : ''}${topPlat ? escapeHTML(topPlat[0]) : '-'}</div>
+          <div class="rs-sub">${topPlat ? '<span class="rs-count">' + topPlat[1] + ' titles</span> all time' : ''}</div>
         </div>
       </div>
     </div>
@@ -1921,10 +1986,10 @@ function renderReadme() {
       <div>
         <div class="cards-label">What's inside</div>
         <div class="cards-grid slim">
-          <a class="info-card slim" href="#current" title="This year's stats - shows vs movies, platform breakdown, genre split and monthly viewing trend."><div class="ic-icon">📅</div><div class="ic-body"><h2>Current Year</h2></div></a>
-          <a class="info-card slim" href="#alltime" title="Complete viewing history across all years. Filter by year, platform or genre to spot long-term patterns."><div class="ic-icon">📈</div><div class="ic-body"><h2>All Time</h2></div></a>
-          <a class="info-card slim" href="#data" title="Full list of every title logged. Search by name, filter by type, genre, platform or month."><div class="ic-icon">🗂️</div><div class="ic-body"><h2>Data</h2></div></a>
-          <a class="info-card slim" href="#suggestions" title="Can't decide what to watch? Spin for a random pick from your own list, filtered by genre or type."><div class="ic-icon gold">🎲</div><div class="ic-body"><h2>Random Pick</h2></div></a>
+          <a class="info-card slim" href="#current" title="This year's stats - shows vs movies, platform breakdown, genre split and monthly viewing trend."><div class="ic-icon">${ic('calendar')}</div><div class="ic-body"><h2>Current Year</h2></div></a>
+          <a class="info-card slim" href="#alltime" title="Complete viewing history across all years. Filter by year, platform or genre to spot long-term patterns."><div class="ic-icon">${ic('trend')}</div><div class="ic-body"><h2>All Time</h2></div></a>
+          <a class="info-card slim" href="#data" title="Full list of every title logged. Search by name, filter by type, genre, platform or month."><div class="ic-icon">${ic('table')}</div><div class="ic-body"><h2>Data</h2></div></a>
+          <a class="info-card slim" href="#suggestions" title="Can't decide what to watch? Spin for a random pick from your own list, filtered by genre or type."><div class="ic-icon">${ic('dice')}</div><div class="ic-body"><h2>Random Pick</h2></div></a>
         </div>
         <div class="rw-section">
           <div class="cards-label">Recently Watched</div>
@@ -1936,31 +2001,31 @@ function renderReadme() {
             <div class="recap-cell"><div class="recap-val">${cyrData.length}</div><div class="recap-lbl">titles</div></div>
             <div class="recap-cell"><div class="recap-val">${fmtK(Math.round(cyrST / 60))}</div><div class="recap-lbl">hours</div></div>
             <div class="recap-cell"><div class="recap-val recap-name">${escapeHTML(String(cyTopGenre[0]))}</div><div class="recap-lbl">top genre</div></div>
-            <div class="recap-cell"><div class="recap-val recap-name">${pe(String(cyTopPlat[0]))} ${escapeHTML(String(cyTopPlat[0]))}</div><div class="recap-lbl">top platform</div></div>
+            <div class="recap-cell"><div class="recap-val recap-name">${cyTopPlat[0] !== '-' ? providerMark(cyTopPlat[0]) : ''}${escapeHTML(String(cyTopPlat[0]))}</div><div class="recap-lbl">top platform</div></div>
             <div class="recap-cell"><div class="recap-val">${escapeHTML(String(cyBestMo[0]))}</div><div class="recap-lbl">best month</div></div>
             <div class="recap-cell"><div class="recap-val">${streak}</div><div class="recap-lbl">day streak</div></div>
           </div>
-          <div class="recap-bar"><div class="recap-fill" data-w="${100 - stShowsPct}"></div></div>
-          <div class="recap-foot">${100 - stShowsPct}% movies · ${stShowsPct}% shows (by time)</div>
+          <div class="recap-bar"><div class="recap-fill" data-w="${stShowsPct}"></div></div>
+          <div class="recap-foot"><span class="recap-movies">${100 - stShowsPct}% movies</span><span class="recap-foot-sep">·</span><span class="recap-shows">${stShowsPct}% shows</span><span class="recap-foot-note">(by time)</span></div>
         </div>
       </div>
       <div class="readme-sidebar">
         <div class="fact-card">
           <div class="fact-title">Quick Facts</div>
-          <div class="fact-row"><div class="fact-l"><span>🎭</span> Top Genre</div><div class="fact-r">${topGenre ? escapeHTML(topGenre[0]) : '-'}</div></div>
-          <div class="fact-row"><div class="fact-l"><span>📆</span> Best Month</div><div class="fact-r">${bestMo ? bestMo[0] : '-'}</div></div>
-          <div class="fact-row"><div class="fact-l"><span>📊</span> Avg / Month</div><div class="fact-r">${avgMo} titles</div></div>
-          <div class="fact-row"><div class="fact-l"><span>📺</span> Shows (of titles)</div><div class="fact-r">${total ? (shows / total * 100).toFixed(1) : 0}%</div></div>
-          <div class="fact-row"><div class="fact-l"><span>🎬</span> Movies (of titles)</div><div class="fact-r">${total ? (movies / total * 100).toFixed(1) : 0}%</div></div>
+          <div class="fact-row"><div class="fact-l">Top Genre</div><div class="fact-r">${topGenre ? escapeHTML(topGenre[0]) : '-'}</div></div>
+          <div class="fact-row"><div class="fact-l">Best Month</div><div class="fact-r">${bestMo ? bestMo[0] : '-'}</div></div>
+          <div class="fact-row"><div class="fact-l">Avg / Month</div><div class="fact-r">${avgMo} titles</div></div>
+          <div class="fact-row"><div class="fact-l">Shows (of titles)</div><div class="fact-r">${total ? (shows / total * 100).toFixed(1) : 0}%</div></div>
+          <div class="fact-row"><div class="fact-l">Movies (of titles)</div><div class="fact-r">${total ? (movies / total * 100).toFixed(1) : 0}%</div></div>
         </div>
         <div class="fact-card">
           <div class="fact-title">Insights</div>
-          <div class="ins-row"><div class="ins-l">🔥 Longest binge streak</div><div class="ins-r">${streak} day${streak === 1 ? '' : 's'}</div></div>
-          <div class="ins-row"><div class="ins-l">🕒 Screen-time split</div><div class="ins-r">${stShowsPct}%<span class="ins-sub"> shows / ${100 - stShowsPct}% movies</span></div></div>
-          <div class="ins-row"><div class="ins-l">📺 Most time per title</div><div class="ins-r">${escapeHTML(String(bingePlat[0]))}<span class="ins-sub"> ${fmtHrs(bingePlat[1])}/title</span></div></div>
-          ${yoyMonth ? `<div class="ins-row"><div class="ins-l">🔄 ${escapeHTML(yoyMonth.name)}${yoyMonth.monthRunning ? ' so far' : ' ytd'}</div><div class="ins-r">${yoyMonth.curTitles}<span class="ins-sub"> vs ${yoyMonth.prevTitles} ${yoyMonth.monthRunning ? 'by this day last yr' : 'last yr'}</span></div></div>` : ''}
-          <div class="ins-row"><div class="ins-l">🎬 Deepest franchise</div><div class="ins-r">${escapeHTML(String(deepFranchise[0]) || '-')}<span class="ins-sub"> ${fmtHrs(deepFranchise[1])} · ${deepCount}×</span></div></div>
-          <div class="ins-cta">👀 Try next - you've watched little ${escapeHTML(String(leastGenre[0]) || 'any genre')}: something on ${escapeHTML(String(leastPlat[0]) || 'any platform')}?</div>
+          <div class="ins-row"><div class="ins-l">Longest binge streak</div><div class="ins-r">${streak} day${streak === 1 ? '' : 's'}</div></div>
+          <div class="ins-row"><div class="ins-l">Screen-time split</div><div class="ins-r">${stShowsPct}%<span class="ins-sub"> shows / ${100 - stShowsPct}% movies</span></div></div>
+          <div class="ins-row"><div class="ins-l">Most time per title</div><div class="ins-r">${escapeHTML(String(bingePlat[0]))}<span class="ins-sub"> ${fmtHrs(bingePlat[1])}/title</span></div></div>
+          ${yoyMonth ? `<div class="ins-row"><div class="ins-l">${escapeHTML(yoyMonth.name)}${yoyMonth.monthRunning ? ' so far' : ' ytd'}</div><div class="ins-r">${yoyMonth.curTitles}<span class="ins-sub"> vs ${yoyMonth.prevTitles} ${yoyMonth.monthRunning ? 'by this day last yr' : 'last yr'}</span></div></div>` : ''}
+          <div class="ins-row"><div class="ins-l">Deepest franchise</div><div class="ins-r">${escapeHTML(String(deepFranchise[0]) || '-')}<span class="ins-sub"> ${fmtHrs(deepFranchise[1])} · ${deepCount}×</span></div></div>
+          <div class="ins-cta">Try next - you've watched little ${escapeHTML(String(leastGenre[0]) || 'any genre')}: something on ${escapeHTML(String(leastPlat[0]) || 'any platform')}?</div>
         </div>
         <div class="yoy-card">
           <div class="yoy-title">Year on Year</div>
@@ -1980,8 +2045,8 @@ function renderReadme() {
             <button class="try-btn btn-compact" id="goal-set" type="button">Set</button>
           </div>`}
           <div class="goal-note">${paceNote}</div>
-          ${goalHint ? `<div class="goal-note">💡 No goal is set for ${cy} yet. This device remembers ${goalHint} hrs - press Set to publish it, or type another target.</div>` : ''}
-          ${goalLocked ? `<div class="goal-note goal-lock-note">🔒 Locked for ${cy} - unlocks to set a new target on 1 Jan.</div>` : ''}
+          ${goalHint ? `<div class="goal-note">No goal is set for ${cy} yet. This device remembers ${goalHint} hrs - press Set to publish it, or type another target.</div>` : ''}
+          ${goalLocked ? `<div class="goal-note goal-lock-note">Locked for ${cy} - unlocks to set a new target on 1 Jan.</div>` : ''}
         </div>
       </div>
     </div>`;
@@ -2045,15 +2110,13 @@ function renderReadme() {
 // ── PLATFORM BARS HELPER ──────────────────────────────────────────────────
 function buildPlatBars(platCounts) {
   const maxVal = platCounts[0] ? platCounts[0][1] : 1;
-  return platCounts.map((p, i) => {
-    p = [escapeHTML(p[0]), p[1]];
-    // Pre-compute class - no ternary with quotes inside template literal
-    const fillClass = i === 0 ? 'plat-fill top' : 'plat-fill';
-    const pct = (p[1] / maxVal * 100).toFixed(0);
+  return platCounts.map(([name, count]) => {
+    const key = providerKey(name);
+    const pct = (count / maxVal * 100).toFixed(0);
     return `<div class="plat-row">
-      <div class="plat-name">${pe(p[0])} ${escapeHTML(p[0])}</div>
-      <div class="plat-track"><div class="${fillClass}" data-w="${pct}"></div></div>
-      <div class="plat-count">${p[1]}</div>
+      <div class="plat-name">${providerMark(name)}<span class="plat-label" title="${escapeHTML(name)}">${escapeHTML(name)}</span></div>
+      <div class="plat-track"><div class="plat-fill pm-${key}" data-w="${pct}"></div></div>
+      <div class="plat-count">${count}</div>
     </div>`;
   }).join('');
 }
@@ -2169,7 +2232,6 @@ function updateCurrentYear() {
   const diffBadge      = diffPct === null ? '-' : diffSign + diffPct + '%';
   const diffHrs       = Math.round(diff / 60);
   const genrePct      = totalGen ? (topGenre[1] / totalGen * 100).toFixed(1) : 0;
-  const topPlatEmoji  = platCounts[0] ? pe(platCounts[0][0]) : '';
   const topPlatName   = platCounts[0] ? platCounts[0][0] : '-';
   const topPlatCount  = platCounts[0] ? platCounts[0][1] + ' titles' : '';
 
@@ -2215,7 +2277,7 @@ function updateCurrentYear() {
       </div>
       <div class="stat-sidebar">
         <div class="stat-card a1">
-          <div class="stat-info"><div class="stat-label">Top Platform</div><div class="stat-val">${topPlatEmoji} ${topPlatName}</div></div>
+          <div class="stat-info"><div class="stat-label">Top Platform</div><div class="stat-val">${topPlatName !== '-' ? providerMark(topPlatName) : ''}${escapeHTML(topPlatName)}</div></div>
           <span class="stat-badge2">${topPlatCount}</span>
         </div>
         <div class="stat-card a2">
@@ -2330,7 +2392,7 @@ function updateAllTime() {
       </div>
       <div class="stat-sidebar">
         <div class="stat-card a1">
-          <div class="stat-info"><div class="stat-label">Top Platform</div><div class="stat-val">${pe(topPlat[0])} ${escapeHTML(topPlat[0])}</div></div>
+          <div class="stat-info"><div class="stat-label">Top Platform</div><div class="stat-val">${topPlat[0] !== '-' ? providerMark(topPlat[0]) : ''}${escapeHTML(topPlat[0])}</div></div>
           <span class="stat-badge2">${topPlat[1]} titles</span>
         </div>
         <div class="stat-card a2">
@@ -2349,7 +2411,7 @@ function updateAllTime() {
     </div>`;
 
   const moData = countByMonth(d);
-  initLineChart('at-monthly', MONTHS, MONTHS.map(m => moData[m]));
+  initLineChart('at-monthly', MONTHS, MONTHS.map(m => moData[m]), '--blue');
 }
 
 // ── DATA TAB ──────────────────────────────────────────────────────────────
@@ -2370,8 +2432,8 @@ function renderData() {
     <div class="page-header">
       <div class="ph-left"><h1>All Shows &amp; Movies</h1><p>Your complete watchlist · sorted by watch date</p></div>
       <div class="ph-right">
-        <div class="dh-pill">📺 <strong id="dh-shows">-</strong> shows</div>
-        <div class="dh-pill">🎬 <strong id="dh-movies">-</strong> movies</div>
+        <div class="dh-pill">${ic('tv')} <strong id="dh-shows">-</strong> shows</div>
+        <div class="dh-pill">${ic('film')} <strong id="dh-movies">-</strong> movies</div>
         <div class="dh-pill">Total <strong id="dh-total">-</strong></div>
       </div>
     </div>
@@ -2633,7 +2695,7 @@ function updateDataTable() {
   if (countEl) countEl.innerHTML = '<strong>' + d.length + '</strong> title' + (d.length !== 1 ? 's' : '') + ' found';
 
   if (!d.length) {
-    el('dat-table').innerHTML = '<div class="empty-state"><span>🔍</span>No titles match your filters</div>';
+    el('dat-table').innerHTML = '<div class="empty-state"><span>' + ic('search') + '</span>No titles match your filters</div>';
     el('dat-pag').innerHTML = '';
     return;
   }
@@ -2653,8 +2715,7 @@ function updateDataTable() {
     var pillClass  = (r.type && r.type.toLowerCase() === 'movie') ? 'type-pill movie' : 'type-pill show';
     var typeLabel  = escapeHTML(r.type || '-');
     var genre      = escapeHTML(r.genre || '-');
-    var platEmoji  = pe(r.platform || '');
-    var platName   = escapeHTML(r.platform || '-');
+    var platName   = r.platform ? providerMark(r.platform) + escapeHTML(r.platform) : '-';
     var name       = r.name || '-';
     var isMovie      = r.type && r.type.toLowerCase() === 'movie';
     var seasonStr    = isMovie ? '' : ' S' + (r.season || '1');
@@ -2676,7 +2737,7 @@ function updateDataTable() {
       '</span></td>';
     rowsHTML += '<td><span class="' + pillClass + '">' + typeLabel + '</span></td>';
     rowsHTML += '<td>' + genre + '</td>';
-    rowsHTML += '<td>' + platEmoji + ' ' + platName + '</td>';
+    rowsHTML += '<td class="td-plat">' + platName + '</td>';
     rowsHTML += '<td class="td-mid">' + escapeHTML(epsStr) + '</td>';
     rowsHTML += '<td class="td-mid">' + escapeHTML(r.screentime ? r.screentime + ' mins' : '-') + '</td>';
     rowsHTML += '<td class="rating-cell" data-rk="' + escapeHTML(ratingKey) + '">' + (isFinite(Number(r.rating)) && Number(r.rating) > 0 ? ratingStars(r.rating) : '<span class="rt-na">-</span>') + '</td>';
@@ -2808,10 +2869,11 @@ function renderTimeline() {
     const items = byKey[k].map((r, i) => {
       const season = (r.season ? ' <span class="tl-season">S' + escapeHTML(r.season) + '</span>' : '');
       const type = r.type && r.type.toLowerCase() === 'movie' ? 'Movie' : 'Show';
+      const typeKey = type === 'Movie' ? 'movie' : 'show';
       const extra = i >= COLLAPSE_AFTER ? ' tl-extra' : '';
-      return '<div class="tl-item' + extra + '">' +
+      return '<div class="tl-item tl-item-' + typeKey + extra + '">' +
         '<span class="tl-name">' + escapeHTML(r.name) + season + '</span>' +
-        '<span class="tl-meta">' + escapeHTML(type) + ' · ' + escapeHTML(r.genre || '') + '</span>' +
+        '<span class="tl-meta"><span class="tl-type tl-type-' + typeKey + '">' + escapeHTML(type) + '</span> · ' + escapeHTML(r.genre || '') + '</span>' +
         '<span class="tl-date">' + escapeHTML(shortDate(r.watchDate)) + '</span>' +
       '</div>';
     }).join('');
@@ -3764,7 +3826,7 @@ function calPosters(scope) {
 }
 function calThumbHTML(item) {
   if (item.poster) return '<img class="cal-thumb" alt="" loading="lazy" data-src="' + escapeHTML(item.poster) + '">';
-  return '<span class="cal-thumb placeholder" aria-hidden="true">' + (item.media === 'movie' ? '🎬' : '📺') + '</span>';
+  return '<span class="cal-thumb placeholder" aria-hidden="true">' + (item.media === 'movie' ? ic('film') : ic('tv')) + '</span>';
 }
 // A tile is a release: its poster, its title and its badges. **The title is the
 // IMDb link** - the same destination the drawer's title has, so a title means one
@@ -3908,7 +3970,7 @@ function calItemHTML(item, date) {
   const tag = item.media === 'episode' || item.platform
     ? '<span class="cal-tag' + (item.premiere ? ' new' : '') + '">' + escapeHTML(calLabel(item)) + '</span>'
     : '';
-  const platform = item.platform ? '<span class="cal-plat">' + escapeHTML(item.platform) + '</span>' : '';
+  const platform = item.platform ? '<span class="cal-plat">' + providerMark(item.platform) + escapeHTML(item.platform) + '</span>' : '';
   const seen = calTracked.has(dupNormTitle(item.title)) ? '<span class="cal-tag seen" title="Already in your watchlist">✓</span>' : '';
   const day = new Date(date + 'T00:00:00').toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' });
   return '<div class="cal-item">' +
@@ -4035,7 +4097,7 @@ function calAgendaHTML(month, days) {
   // Wrapped in .cal-agenda even when empty: that class is what keeps this
   // message off desktop, where the grid's own note (.cal-none) says the same
   // thing under a month that still shows its shape.
-  if (!dates.length) return '<div class="cal-agenda"><div class="empty-state"><span>🔍</span>Nothing matches these filters in ' + escapeHTML(month.label) + '</div></div>';
+    if (!dates.length) return '<div class="cal-agenda"><div class="empty-state"><span>' + ic('search') + '</span>Nothing matches these filters in ' + escapeHTML(month.label) + '</div></div>';
   return '<div class="cal-agenda">' + dates.map(date => {
     const list = days[date];
     const shown = calPreview(list);
@@ -4231,7 +4293,7 @@ function updateCalendar() {
     return;
   }
   if (calState.status === 'error' && !calState.data) {
-    main.innerHTML = '<div class="note-card note-card-wide"><div class="note-icon" aria-hidden="true">⚠️</div>' +
+    main.innerHTML = '<div class="note-card note-card-wide"><div class="note-icon" aria-hidden="true">' + ic('alert') + '</div>' +
       '<div class="note-body"><strong>Couldn\'t load the release calendar.</strong>' + escapeHTML(calState.error) + '</div></div>' +
       '<div class="cal-retry"><button class="try-btn" type="button" data-act="calendarAction" data-cal="retry">↻ Try again</button></div>';
     return;
@@ -4538,8 +4600,8 @@ function renderCalendar() {
     '<div class="page-header">' +
       '<div class="ph-left"><h1>Release Calendar</h1><p>Rolling: this year month by month, next year at a glance · films from TMDB and the Watchmode service feed, episodes from TVmaze</p></div>' +
       '<div class="ph-right">' +
-        '<div class="dh-pill">🎬 <strong id="cal-mcount">-</strong> films</div>' +
-        '<div class="dh-pill">📺 <strong id="cal-ecount">-</strong> episodes</div>' +
+        '<div class="dh-pill">' + ic('film') + ' <strong id="cal-mcount">-</strong> films</div>' +
+        '<div class="dh-pill">' + ic('tv') + ' <strong id="cal-ecount">-</strong> episodes</div>' +
       '</div>' +
     '</div>' +
     calShellHTML();
@@ -4582,11 +4644,11 @@ function renderSuggestions() {
         </div>
         <div class="result-card" id="sugg-card">
           <div class="result-tag">Your Pick</div>
-          <div class="result-name empty" id="sugg-name"><span>🎬</span>Hit spin to get a suggestion</div>
+          <div class="result-name empty" id="sugg-name"><span>${ic('film')}</span>Hit spin to get a suggestion</div>
           <div class="result-meta" id="sugg-meta"></div>
         </div>
         <button class="spin-btn" id="sugg-spin" data-act="suggSpin">
-          <span class="sbi">🎲</span> Spin for a Suggestion
+          <span class="sbi">${ic('dice')}</span> Spin for a Suggestion
         </button>
         <button class="try-btn" id="sugg-try" data-act="suggTryAgain" disabled>
           <span class="arr">↻</span> Not feeling it - try another
@@ -4651,7 +4713,7 @@ function showSuggResult(item, animate = true) {
   if (!ne || !me) return;
   if (!item) {
     ne.className = 'result-name empty';
-    ne.innerHTML = '<span aria-hidden="true">😕</span>No matches. Try different filters';
+    ne.innerHTML = 'No matches. Try different filters';
     me.innerHTML = '';
     setSuggPoster(null);
     return;
@@ -4660,15 +4722,15 @@ function showSuggResult(item, animate = true) {
   if (animate) ne.addEventListener('animationend', () => ne.classList.remove('spinning'), { once: true });
   ne.textContent = item.name;
   setSuggPoster(item);
-  const typeEmoji = item.type === 'Movie' ? '🎬' : '📺';
+  // the type badge carries the type as text
   // Every one of these is stored free text, so it is escaped on the way into
   // the DOM: a genre or type cell is whatever the admin form (or an imported
   // row) put there.
   me.innerHTML = `
-    <span class="rm-badge plat">${pe(item.platform)} ${escapeHTML(item.platform)}</span>
-    <span class="rm-badge type">${typeEmoji} ${escapeHTML(item.type)}</span>
-    <span class="rm-badge genre">🏷️ ${escapeHTML(item.genre)}</span>
-    <span class="rm-badge time">⏱ ${escapeHTML(fmtHrs(item.screentime))}</span>`;
+    <span class="rm-badge plat">${escapeHTML(item.platform)}</span>
+    <span class="rm-badge type">${escapeHTML(item.type)}</span>
+    <span class="rm-badge genre">${escapeHTML(item.genre)}</span>
+    <span class="rm-badge time">${escapeHTML(fmtHrs(item.screentime))}</span>`;
   burstConfetti();
 }
 
@@ -4734,11 +4796,11 @@ function hexToRgba(hex, alpha) {
   if (!isFinite(n)) return 'rgba(45,106,79,' + alpha + ')';
   return 'rgba(' + ((n >> 16) & 255) + ',' + ((n >> 8) & 255) + ',' + (n & 255) + ',' + alpha + ')';
 }
-function initLineChart(canvasId, labels, data) {
+function initLineChart(canvasId, labels, data, colorVar) {
   const el = document.getElementById(canvasId);
   if (!el) return;
   if (charts[canvasId]) { try { charts[canvasId].destroy(); } catch (e) {} }
-  const lineColor = cssVar('--green', '#2d6a4f');
+  const lineColor = cssVar(colorVar || '--green', '#2d6a4f');
   const gridColor = cssVar('--border', '#e0ede6');
   const tickColor = cssVar('--text-soft', '#7a9e8a');
   const pointFill = cssVar('--surface', '#ffffff');
@@ -4748,17 +4810,17 @@ function initLineChart(canvasId, labels, data) {
       labels,
       datasets: [{
         data,
-        fill: true,
-        tension: .4,
+        fill: false,
+        tension: .25,
         borderColor: lineColor,
-        borderWidth: 2.5,
-        pointRadius: 5,
+        borderWidth: 1.5,
+        pointRadius: 0,
         pointBackgroundColor: pointFill,
         pointBorderColor: lineColor,
-        pointBorderWidth: 2.5,
+        pointBorderWidth: 2,
         backgroundColor: ctx => {
           const g = ctx.chart.ctx.createLinearGradient(0, 0, 0, ctx.chart.height);
-          g.addColorStop(0, hexToRgba(lineColor, 0.18));
+          g.addColorStop(0, hexToRgba(lineColor, 0));
           g.addColorStop(1, hexToRgba(lineColor, 0));
           return g;
         }
@@ -4770,18 +4832,18 @@ function initLineChart(canvasId, labels, data) {
       plugins: {
         legend: { display: false },
         tooltip: {
-          backgroundColor: '#0d1f16',
-          titleColor: '#fff',
-          bodyColor: 'rgba(255,255,255,.7)',
+          backgroundColor: pointFill,
+          titleColor: cssVar('--text', '#191712'),
+          bodyColor: cssVar('--text-soft', '#736c5c'),
           padding: 10,
-          cornerRadius: 8,
+          cornerRadius: 4,
           displayColors: false,
           callbacks: { label: ctx => `${ctx.raw} title${ctx.raw !== 1 ? 's' : ''}` }
         }
       },
       scales: {
-        x: { grid: { display: false }, ticks: { font: { family: 'Inter', size: 13 }, color: tickColor } },
-        y: { grid: { color: gridColor, lineWidth: .8 }, ticks: { font: { family: 'Inter', size: 13 }, color: tickColor }, beginAtZero: true }
+        x: { grid: { display: false }, ticks: { font: { family: 'Inter', size: 11 }, color: tickColor, padding: 6 } },
+        y: { grid: { color: gridColor, lineWidth: 1 }, ticks: { font: { family: 'Inter', size: 11 }, color: tickColor, padding: 6, maxTicksLimit: 4 }, beginAtZero: true }
       }
     }
   });
@@ -4876,7 +4938,7 @@ function renderSubmit() {
           <div id="sf-msg"></div>
 
           <button class="sf-submit-btn" data-act="submitSuggestion">
-            <span>✦</span> Submit Suggestion
+            <span>${ic('plus')}</span> Submit Suggestion
           </button>
         </div>
       </div>
@@ -4888,7 +4950,7 @@ function renderSubmit() {
           </div>
         </div>
         <div class="note-card">
-          <div class="note-icon">💡</div>
+          <div class="note-icon">${ic('bulb')}</div>
           <div class="note-body"><strong>How it works</strong>Submissions go straight into my suggestions list - they won't automatically appear in the main tracker, they're a wishlist to pick from.</div>
         </div>
       </div>
@@ -4923,14 +4985,14 @@ function renderSubmitSidebar() {
   })();
 
   const recent = suggData.slice(-5).reverse();
-  const ICONS  = ['🎬','📺','🍿','🎭','📽️'];
+  // one mark for every suggestion row
   const recentRows = recent.length ? recent.map((r, i) => {
     const meta = [r.Type, r.Genre, r.Platform].filter(Boolean).map(escapeHTML).join(' · ');
     return '<div class="sr-item">' +
-      '<div class="sr-icon">' + ICONS[i % ICONS.length] + '</div>' +
+      '<div class="sr-icon">' + ic('film') + '</div>' +
       '<div><div class="sr-name">' + escapeHTML(r.Title || '-') + '</div><div class="sr-meta">' + (meta || '-') + '</div></div>' +
     '</div>';
-  }).join('') : '<div class="sr-empty">😶 Apparently nobody wants me to watch anything. Rude.</div>';
+  }).join('') : '<div class="sr-empty">Apparently nobody wants me to watch anything. Rude.</div>';
 
   document.getElementById('submit-sidebar-content').innerHTML =
     '<div class="submit-side-card">' +
@@ -4975,7 +5037,7 @@ async function submitSuggestion() {
     if (!res.ok || !json || json.status !== 'ok') {
       msg.innerHTML = '<div class="sf-error">' + escapeHTML(json && json.error ? json.error : 'Could not save the suggestion (' + res.status + '). Please try again.') + '</div>';
       btn.disabled = false;
-      btn.innerHTML = '<span>✦</span> Submit Suggestion';
+      btn.innerHTML = '<span>' + ic('plus') + '</span> Submit Suggestion';
       return;
     }
 
@@ -5001,7 +5063,7 @@ async function submitSuggestion() {
   }
 
   btn.disabled = false;
-  btn.innerHTML = '<span>✦</span> Submit Suggestion';
+  btn.innerHTML = '<span>' + ic('plus') + '</span> Submit Suggestion';
 }
 
 // ── INIT ──────────────────────────────────────────────────────────────────
