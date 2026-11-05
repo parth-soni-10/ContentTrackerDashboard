@@ -132,8 +132,12 @@
   letter-spacing: -.01em;
 }
 
-/* The series as text, for anyone who would rather read it than trace it. */
-.ac-table {
+/* The series as text, for anyone who would rather read it than trace it.
+   The clipping box is a plain div because width:1px on the table itself is not
+   honoured - an auto-layout table takes its content's min-content width instead
+   (560px of nowrap rows for the timeline's twelve months), which widened the
+   whole document and made a 375px page scroll sideways. */
+.ac-sr {
   position: absolute;
   width: 1px;
   height: 1px;
@@ -144,6 +148,7 @@
   white-space: nowrap;
   border: 0;
 }
+.ac-table { width: 100%; border: 0; }
 
 /* The focused reading, in words. Visible: it is the keyboard user's tooltip. */
 .ac-live {

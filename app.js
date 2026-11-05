@@ -672,6 +672,23 @@ function destroyCharts() {
   charts = {};
 }
 
+/* The phone nav is a horizontal scroller: a deep link (#calendar) or a reload
+   can leave the active tab past the right edge, half under the fade - the page
+   is open but the tab that says so is cut off. Only a tab that is actually cut
+   is moved (switching between two visible tabs should not shift the strip). */
+function centerActiveTab() {
+  const strip = document.querySelector('.nav-tabs');
+  const active = strip && strip.querySelector('.nav-tab.active');
+  if (!strip || !active || strip.scrollWidth <= strip.clientWidth + 1) return;
+  const s = strip.getBoundingClientRect();
+  const a = active.getBoundingClientRect();
+  if (a.left >= s.left - 1 && a.right <= s.right + 1) return;
+  const target = strip.scrollLeft + (a.left - s.left) - (s.width - a.width) / 2;
+  // Instant, not smooth: this is a correction, and a smooth scroll is skipped
+  // outright in a background tab, which would leave the tab cut anyway.
+  strip.scrollTo({ left: Math.max(0, target), behavior: 'auto' });
+}
+
 function navigateTo(page) {
   destroyCharts();
   // The calendar keeps work outside the page container: its day drawer lives on
@@ -679,6 +696,7 @@ function navigateTo(page) {
   // nobody is looking at.
   if (page !== 'calendar') { calDropDrawer(); calStopAuto(); }
   document.querySelectorAll('.nav-tab').forEach(t => t.classList.toggle('active', t.dataset.page === page));
+  centerActiveTab();
   document.getElementById('app').innerHTML = '';
   const pages = { readme: renderReadme, current: renderCurrentYear, alltime: renderAllTime, data: renderData, timeline: renderTimeline, calendar: renderCalendar, suggestions: renderSuggestions, submit: renderSubmit, admin: renderAdmin };
   (pages[page] || renderReadme)();
@@ -5062,10 +5080,15 @@ function applyDelegated(el, event, attr) {
     // The scroll behaviour is left to the stylesheet (html { scroll-behavior:
     // smooth }), which flips to auto under prefers-reduced-motion. Passing
     // 'smooth' here would override that and animate for a reader who asked
-    // not to be moved. The table carries the scroll margin that parks its
-    // first row under the sticky nav.
+    // not to be moved. Chromium ignores the table's scroll-margin once the
+    // table is its own horizontal scrollport (measured: it parks the top at 0
+    // with a 91px margin), so the nav offset is applied here instead.
     const table = document.getElementById('dat-table');
-    if (table) table.scrollIntoView({ block: 'start' });
+    if (table) {
+      const navH = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--nav-h')) || 0;
+      const top = table.getBoundingClientRect().top + window.scrollY - navH - 12;
+      window.scrollTo({ top: Math.max(0, top) });
+    }
     return;
   }
   if (attr === 'data-chars') {

@@ -107,7 +107,11 @@ body { font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans
 @keyframes loadBar { 0% { width: 0 } 60% { width: 70% } 100% { width: 100% } }
 
 /* ── NAV ── */
-nav { background: rgba(255,255,255,.9); border-bottom: 1px solid var(--border); display: flex; align-items: center; padding: 0 32px; position: sticky; top: 0; z-index: 100; box-shadow: 0 4px 18px rgba(16,35,26,.05); backdrop-filter: blur(14px); min-height: var(--nav-h); }
+/* The bar's own height is a constant, not --nav-h: --nav-h is the offset the
+   table header, timeline jump bar and month margins park under, and a
+   min-height reading it would keep a stale taller value after the breakpoint
+   changes (a window widened to desktop kept the two-row phone height). */
+nav { background: rgba(255,255,255,.9); border-bottom: 1px solid var(--border); display: flex; align-items: center; padding: 0 32px; position: sticky; top: 0; z-index: 100; box-shadow: 0 4px 18px rgba(16,35,26,.05); backdrop-filter: blur(14px); min-height: 60px; }
 .nav-brand { display: flex; align-items: center; gap: 9px; text-decoration: none; font-family: "Inter", sans-serif; font-size: 15px; font-weight: 700; color: var(--green); letter-spacing: -.25px; padding: 0; margin-right: 34px; white-space: nowrap; cursor: pointer; }
 .nav-brand svg { color: var(--gold); }
 .nav-tabs {
@@ -118,7 +122,7 @@ nav { background: rgba(255,255,255,.9); border-bottom: 1px solid var(--border); 
   --gn-fill: var(--green-pale);
   --gn-radius: 0px;
 }
-.nav-tab { display: flex; align-items: center; gap: 7px; padding: 0 14px; min-height: var(--nav-h); font-size: 13px; font-weight: 500; color: var(--text-soft); cursor: pointer; border-bottom: 2px solid transparent; transition: color .2s, border-color .2s, background-color .2s; white-space: nowrap; user-select: none; }
+.nav-tab { display: flex; align-items: center; gap: 7px; padding: 0 14px; min-height: 60px; font-size: 13px; font-weight: 500; color: var(--text-soft); cursor: pointer; border-bottom: 2px solid transparent; transition: color .2s, border-color .2s, background-color .2s; white-space: nowrap; user-select: none; }
 .nav-tab:hover { color: var(--green); background: var(--green-pale); }
 .nav-tab.active { color: var(--green); font-weight: 700; border-bottom-color: var(--green); background: var(--green-pale); }
 .nav-tab svg { flex-shrink: 0; }
@@ -305,8 +309,17 @@ thead tr { background: transparent; }
 thead th  { padding: 12px 16px; text-align: left; font-size: 12px; line-height: 16px; font-weight: 500; text-transform: uppercase; letter-spacing: .8px; color: rgba(255,255,255,.85); }
 tbody tr:nth-child(even) td { background: var(--bg); }
 tbody tr:hover td { background: var(--green-pale); }
-/* Parks under the sticky nav instead of sliding beneath it. */
-thead th { position: sticky; top: var(--nav-h); z-index: 2; background: var(--green); }
+/* The header's colour is its own: the sticky rule below used to be the only
+   place it was painted, which would have left white labels on white cells
+   wherever that rule does not apply. */
+thead th { background: var(--green); }
+/* Parks under the sticky nav instead of sliding beneath it - but only where the
+   table fits without a scrollport of its own. Inside the ≤1000px horizontal
+   scroller there is no vertical scroll to follow, so a `top` offset pins the
+   header that far down from the table's own top edge, straight over row 1. */
+@media (min-width: 1001px) {
+  thead th { position: sticky; top: var(--nav-h); z-index: 2; }
+}
 thead th:first-child { border-top-left-radius: var(--r); }
 thead th:last-child  { border-top-right-radius: var(--r); }
 tbody tr:last-child td:first-child { border-bottom-left-radius: var(--r); }
@@ -319,11 +332,6 @@ tbody tr:last-child td { border-bottom: none; }
 .type-pill       { display: inline-flex; align-items: center; padding: 2px 10px; border-radius: 20px; font-size: 11px; font-weight: 500; }
 .type-pill.movie { background: var(--gold-pale);  color: var(--gold); }
 .type-pill.show  { background: var(--green-pale); color: var(--green); }
-/* Paging the table scrolls its top back into view (the page-step handler in
-   app.js), and the sticky nav sits over the top of the viewport - the scroll
-   margin parks the table's first row just under the nav instead of behind it.
-   It reads --nav-h so the phone height (73px) is covered by the same rule. */
-#dat-table { scroll-margin-top: calc(var(--nav-h) + 12px); }
 .pagination { display: flex; justify-content: space-between; align-items: center; margin-top: 14px; }
 .pag-info { font-size: 13px; color: var(--text-soft); }
 .pag-btns { display: flex; gap: 8px; }
@@ -785,6 +793,28 @@ html.dark .cal-warn { border-color: #4a3a24; }
 html.cal-lock, html.cal-lock body { overflow: hidden; }
 
 /* ── RESPONSIVE ── */
+/* The one-row nav is ~1130px wide carrying all eight tabs and the theme switch.
+   Between 901px and that width the last tabs and the switch ran past the
+   viewport and the body's overflow-x:hidden clipped them - the same trap the
+   ≤900 strip solved for phones, so the strip scrolls here too. The icons stay
+   until the tablet block drops them. */
+@media (max-width: 1140px) {
+  .nav-tabs { overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none; min-width: 0;
+              -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 16px), transparent);
+              mask-image: linear-gradient(to right, #000 calc(100% - 16px), transparent); }
+  .nav-tabs::-webkit-scrollbar { display: none; }
+  .nav-tab { flex-shrink: 0; }
+}
+/* The 9-column table is ~910px wide, so up to 1000px it needs its own horizontal
+   scrollport: without one the body's overflow-x:hidden clips the last columns
+   (Rating / Watch Date) away with no way to reach them at all. 950px was the
+   old cut-off, but the table plus the page's 32px side padding still came to
+   941px on a 951px viewport - a 7px sideways scroll with the header already
+   sticky. It lives above the tablet block because it applies to a wider range
+   than that block does. */
+@media (max-width: 1000px) {
+  #dat-table { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+}
 /* ── TABLET (≤900px) ── */
 @media (max-width: 900px) {
   nav { padding: 0 16px; }
@@ -829,26 +859,26 @@ html.cal-lock, html.cal-lock body { overflow: hidden; }
   .rw-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .cards-grid { grid-template-columns: 1fr 1fr; }
   .cards-grid.slim { grid-template-columns: 1fr 1fr; }
-  /* The 9-column table is ~915px wide, so from 601px up to roughly 950px it
-     ran past the viewport and the body's overflow-x:hidden clipped the last
-     columns away with no way to reach them at all. Scrolling the table beats
-     losing Rating / Watch Date. Note the sticky header only applies where the
-     table fits without scrolling - inside a horizontally scrolling wrapper the
-     header sticks to that wrapper, which never scrolls vertically (same as the
-     phone layout below). */
-  #dat-table { overflow-x: auto; -webkit-overflow-scrolling: touch; }
 }
 
 /* ── MOBILE (≤600px) ── */
 @media (max-width: 600px) {
   body { background: var(--bg); }
-  nav { backdrop-filter: none; }
+  /* Without the blur, the 90%-white glass reads as content showing through the
+     bar: table and timeline rows stayed legible over the tabs while scrolling,
+     so the top of the page looked sliced open. A phone gets an opaque bar. */
+  nav { backdrop-filter: none; background: var(--surface); }
+  html.dark nav { background: var(--surface); }
 
   /* Nav - brand + theme toggle on a fixed top row, tabs in their own scroll
      strip below. Previously one long scrolling strip put Timeline / Random Pick
      / Submit off-screen with a hidden scrollbar and no cue, so they were simply
      undiscoverable, and the theme toggle sat off-screen with them. */
-  :root { --nav-h: 73px; }   /* must match the measured nav height (see the sticky offsets) */
+  /* The nav is two rows here (brand + theme switch, then the tab strip) and
+     measures 78.4px; the old 73px was the one-row bar, which left the table
+     header, the timeline's jump bar and the month margins 5px under the nav.
+     Rounded up so nothing pinned below it loses its top pixel. */
+  :root { --nav-h: 79px; }
   nav { padding: 0 10px; display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 0 8px; border-bottom: 1px solid var(--border); }
   .nav-brand { padding: 8px 0; margin-right: 0; font-size: 14px; white-space: nowrap; }
   .theme-toggle { grid-column: 2; grid-row: 1; margin: 0; }

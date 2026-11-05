@@ -152,7 +152,11 @@
       row.appendChild(mk('td', null, format(point.value)));
       table.appendChild(row);
     });
-    el.appendChild(table);
+    // Clipped by a plain div: a 1px table box is not honoured (its min-content
+    // width is 560px of nowrap rows), and an unclipped copy widened the page.
+    var sr = mk('div', 'ac-sr');
+    sr.appendChild(table);
+    el.appendChild(sr);
 
     /* One live sentence under the cursor. It is the only place the focused
        reading exists as text, so it must not be display:none. */
