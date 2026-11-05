@@ -170,6 +170,10 @@
 
     this.bind();
     this.refresh();
+    // The closed menu still takes part in layout (opacity 0), so a picker near
+    // the right edge widened the page by the menu's overflow before it was
+    // ever opened. Place it now as well as on open.
+    this.place();
     this.watch();
     instances.set(el, this);
   }
@@ -451,7 +455,7 @@
     if (preferred === 'bottom' && r.bottom + need > window.innerHeight && r.top - need > 0) side = 'top';
     if (preferred === 'top' && r.top - need < 0) side = 'bottom';
     this.menu.dataset.side = side;
-    var align = this.opts && this.opts.align ? this.opts.align : 'left';
+    var align = this.opts && this.opts.align ? this.opts.align : 'auto';
     if (align === 'auto') {
       align = r.left + this.menu.offsetWidth > window.innerWidth - 8 ? 'right' : 'left';
     }
