@@ -133,6 +133,27 @@ function normalizeGenre(value) {
   if (!text) return '';
   return GENRE_MAP[text.toLowerCase()] || text;
 }
+// Genres are free text and sometimes combine two ("Action/Horror",
+// "Sci-Fi & Fantasy"). Tokenising is the one way the watchlist and the
+// calendar's own spelling can be compared without inventing a taxonomy.
+const GENRE_ALIASES = {
+  'science fiction': 'sci-fi',
+  'science-fiction': 'sci-fi',
+  'sci fi': 'sci-fi',
+  'sports': 'sport',
+  'children': 'family',
+  'kids': 'family',
+  'superhero': 'action',
+  'tragic': 'drama'
+};
+function genreTokens(value) {
+  const out = [];
+  String(value || '').split(/[\/,&]+/).forEach(part => {
+    const key = GENRE_ALIASES[part.trim().toLowerCase()] || part.trim().toLowerCase();
+    if (key && out.indexOf(key) === -1) out.push(key);
+  });
+  return out;
+}
 const TYPE_MAP = { 'series/show': 'Series', 'series': 'Series', 'show': 'Series', 'shows': 'Series', 'movie': 'Movie' };
 function normalizeType(value) {
   const text = String(value || '').trim();
@@ -2408,10 +2429,23 @@ function updateAllTime() {
           <div class="stat-info"><div class="stat-label stat-label-stack">titles / month</div></div>
         </div>
       </div>
+    </div>
+    <div class="chart-card taste-map-card">
+      <div class="chart-title">Taste Map</div>
+      <div class="taste-map-legend">
+        <span class="taste-map-key show"><i></i>Series</span>
+        <span class="taste-map-key movie"><i></i>Movies</span>
+        <span class="taste-map-key size"><i></i>Bubble = screentime</span>
+      </div>
+      ${d.length
+        ? '<div class="taste-map-wrap"><canvas id="at-taste" role="img" aria-label="Map of ' + d.length + ' watched titles by watch year and genre"></canvas></div>' +
+          '<div class="taste-map-note">Each bubble is a title in this view; click one to open it in Data.</div>'
+        : '<div class="empty-state"><span>' + ic('search') + '</span>No titles match these filters</div>'}
     </div>`;
 
   const moData = countByMonth(d);
   initLineChart('at-monthly', MONTHS, MONTHS.map(m => moData[m]), '--blue');
+  if (d.length) initTasteMap('at-taste', d);
 }
 
 // ── DATA TAB ──────────────────────────────────────────────────────────────
@@ -2979,6 +3013,11 @@ function bindTimelineNav() {
 // news and talk shows count, TVmaze lists ~300 entries a day, so the default
 // view is premieres + films and the day drawer is where the complete list lives.
 const CALENDAR_URL = '/.netlify/functions/calendar';
+// Bump this whenever the calendar's response shape changes in a way that must
+// invalidate month responses already sitting in a browser or edge cache. It is
+// part of every data URL, not a proof read after the fact: a cached response
+// cannot be made to reveal that it is missing a new field.
+const CAL_DATA_VERSION = 2;
 const CAL_TTL_MS = 20 * 60 * 1000;    // how long a loaded window stays fresh
 const CAL_AUTO_MS = 20 * 60 * 1000;   // and how often the open one is refetched
 const CAL_CACHE_MAX = 4;              // windows kept in memory (this year + the year ahead)
@@ -3025,7 +3064,7 @@ const CAL_TYPES = ['all', 'movie', 'episode'];
 // The widest view is the default: every release of both kinds, on every service
 // the watchlist logs against. "New & notable" is still one select away for a
 // month that reads better with the weekly run of shows thinned out.
-const CAL_FILTER_DEFAULTS = { scope: 'all', type: 'all', platform: 'all', search: '' };
+const CAL_FILTER_DEFAULTS = { scope: 'all', type: 'all', platform: 'all', search: '', forYou: false };
 // The shape of the stored filters, bumped when a default above changes. Storing
 // only happens on a deliberate change, so an untouched device has nothing saved
 // and needs no bump - but a device that once stored the *old* default would keep
@@ -3040,7 +3079,8 @@ function calStoredFilters() {
       scope: CAL_SCOPES.indexOf(saved.scope) === -1 ? fallback.scope : saved.scope,
       type: CAL_TYPES.indexOf(saved.type) === -1 ? fallback.type : saved.type,
       platform: typeof saved.platform === 'string' && saved.platform ? saved.platform.slice(0, 60) : 'all',
-      search: typeof saved.search === 'string' ? saved.search.slice(0, 60) : ''
+      search: typeof saved.search === 'string' ? saved.search.slice(0, 60) : '',
+      forYou: saved.forYou === true
     };
   } catch (e) { return fallback; }
 }
@@ -3054,7 +3094,8 @@ function calSaveFilters() {
       scope: calFilters.scope,
       type: calFilters.type,
       platform: calFilters.platform || 'all',
-      search: calFilters.search
+      search: calFilters.search,
+      forYou: Boolean(calFilters.forYou)
     }));
   } catch (e) { /* private mode */ }
 }
@@ -3238,6 +3279,60 @@ function calTrackedTitles() {
   });
   return set;
 }
+// The calendar's "For you" ranking is intentionally explainable: a release is
+// scored by the genres in the watchlist, lifted against how common that genre is
+// in the loaded window. A genre you watch often but that is rare in the month
+// ranks above the month's wall-to-wall drama, which is what makes the ranking
+// personal instead of just "everything is Drama".
+function calTasteProfile() {
+  const counts = new Map();
+  rawData.forEach(row => {
+    genreTokens(row.genre).forEach(key => counts.set(key, (counts.get(key) || 0) + 1));
+  });
+  return { counts: counts, total: rawData.length || 1 };
+}
+function calTasteBase(days) {
+  const counts = new Map();
+  let total = 0;
+  Object.keys(days).forEach(date => {
+    days[date].forEach(item => {
+      const keys = genreTokens((item.genres || []).join('&'));
+      if (!keys.length) return;
+      total++;
+      keys.forEach(key => counts.set(key, (counts.get(key) || 0) + 1));
+    });
+  });
+  return { counts: counts, total: Math.max(1, total) };
+}
+function calTasteScore(item, profile, base) {
+  let score = 0;
+  const matches = [];
+  genreTokens((item.genres || []).join('&')).forEach(key => {
+    const watched = profile.counts.get(key) || 0;
+    if (!watched) return;
+    const share = watched / profile.total;
+    const baseShare = (base.counts.get(key) || 0) / base.total;
+    score += Math.min(4, share / Math.max(baseShare, 0.006));
+    matches.push(key);
+  });
+  return { score: Math.round(score * 10) / 10, matches: matches };
+}
+function calAnnotateTaste(days) {
+  const profile = calTasteProfile();
+  const base = calTasteBase(days);
+  Object.keys(days).forEach(date => {
+    days[date].forEach(item => {
+      const taste = calTasteScore(item, profile, base);
+      item.taste = taste.score;
+      item.tasteMatches = taste.matches;
+      item.forYou = Boolean(calFilters.forYou) && taste.score >= 2;
+    });
+  });
+}
+function calTasteTitle(item) {
+  const labels = (item.genres || []).filter(name => (item.tasteMatches || []).some(key => genreTokens(name).indexOf(key) !== -1));
+  return labels.length ? 'Matches genres you watch: ' + labels.join(' · ') : 'Matches the genres you watch';
+}
 function calSafeUrl(url) {
   return /^https?:\/\//i.test(String(url || '')) ? String(url) : '';
 }
@@ -3362,7 +3457,8 @@ function calIndex(payload, win) {
       platform: providers[0] || '', platforms: providers, streaming: streaming,
       kind: 'Film', poster: movie.poster || null, rating: Number(movie.rating) || 0,
       weight: Math.max(0, Math.min(100, Number(movie.popularity) || 0)),
-      genres: [], premiere: '', url: movie.id ? 'https://www.themoviedb.org/movie/' + movie.id : '',
+      genres: Array.isArray(movie.genres) ? movie.genres.filter(Boolean).slice(0, 3) : [],
+      premiere: '', url: movie.id ? 'https://www.themoviedb.org/movie/' + movie.id : '',
       // A film's IMDb page is not in TMDB's list response (see imdb-id.js), so it
       // is resolved when the title is clicked - `id` carries the TMDB id the
       // lookup needs.
@@ -3532,6 +3628,7 @@ function calPruneCache(today) {
 const CAL_PART_BATCH = 4;     // requests in flight at once
 const CAL_BACKFILL_CHUNK = 10; // past days per episodes request (20 subrequests)
 async function calFetchPart(query) {
+  query.set('data', String(CAL_DATA_VERSION));
   const response = await fetch(CALENDAR_URL + '?' + query.toString(), { headers: { accept: 'application/json' }, credentials: 'same-origin' });
   if (!response.ok) throw new Error('Calendar service returned ' + response.status);
   return response.json();
@@ -3561,8 +3658,16 @@ function calMergeMovies(parts) {
           popularity: Number(item.popularity) || 0,
           providers: Array.isArray(item.providers) ? item.providers.filter(Boolean).slice(0, 3) : [],
           theater: Boolean(item.theater),
+          genres: Array.isArray(item.genres) ? item.genres.filter(Boolean).slice(0, 3) : [],
         });
         continue;
+      }
+      // Every region's copy of a film carries the same genres, but a merge must
+      // not discard them from the first copy it kept. This is the point where a
+      // fresh API response used to turn back into `genres: []`.
+      if (!Array.isArray(existing.genres)) existing.genres = [];
+      for (const genre of Array.isArray(item.genres) ? item.genres : []) {
+        if (genre && existing.genres.length < 3 && !existing.genres.includes(genre)) existing.genres.push(genre);
       }
       if (item.theater) {
         if (!existing.theater || item.date < existing.date) {
@@ -3695,7 +3800,7 @@ function calDirectSearch(query) {
       return;
     }
     try {
-      const query2 = new URLSearchParams({ title: text, include: 'search', region: calRegion });
+      const query2 = new URLSearchParams({ title: text, include: 'search', region: calRegion, data: String(CAL_DATA_VERSION) });
       const response = await fetch(CALENDAR_URL + '?' + query2.toString(), { headers: { accept: 'application/json' }, credentials: 'same-origin' });
       const payload = response.ok ? await response.json() : null;
       const found = payload && payload.movies && payload.movies[0];
@@ -3707,7 +3812,8 @@ function calDirectSearch(query) {
         platform: (found.providers || [])[0] || '', platforms: found.providers || [], streaming: true,
         kind: 'Film', poster: found.poster || null, rating: Number(found.rating) || 0,
         weight: Math.max(0, Math.min(100, Number(found.popularity) || 0)),
-        genres: [], premiere: '', url: found.id ? 'https://www.themoviedb.org/movie/' + found.id : '',
+        genres: Array.isArray(found.genres) ? found.genres.filter(Boolean).slice(0, 3) : [],
+        premiere: '', url: found.id ? 'https://www.themoviedb.org/movie/' + found.id : '',
         imdb: '', direct: true
       } : null;
       // A stale answer must not replace a newer one: the search box may have
@@ -3972,6 +4078,7 @@ function calItemHTML(item, date) {
     : '';
   const platform = item.platform ? '<span class="cal-plat">' + providerMark(item.platform) + escapeHTML(item.platform) + '</span>' : '';
   const seen = calTracked.has(dupNormTitle(item.title)) ? '<span class="cal-tag seen" title="Already in your watchlist">✓</span>' : '';
+  const forYou = item.forYou ? '<span class="cal-tag foryou" title="' + escapeHTML(calTasteTitle(item)) + '">✦ For you</span>' : '';
   const day = new Date(date + 'T00:00:00').toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' });
   return '<div class="cal-item">' +
       '<button class="cal-item-open" type="button" data-act="calendarAction" data-cal="day" data-date="' + date + '"' +
@@ -3979,7 +4086,7 @@ function calItemHTML(item, date) {
         ' aria-label="' + escapeHTML('Everything on ' + day) + '"></button>' +
       calThumbHTML(item) +
       '<span class="cal-item-text"><a class="cal-item-title"' + calImdbAttrs(item) + '>' + escapeHTML(item.title) + '</a>' +
-      '<span class="cal-item-meta">' + tag + seen + platform + '</span>' + calAddHTML(item, date) + '</span>' +
+      '<span class="cal-item-meta">' + tag + forYou + seen + platform + '</span>' + calAddHTML(item, date) + '</span>' +
     '</div>';
 }
 // "1 episodes" is how a count reads when nobody pluralised it.
@@ -4015,6 +4122,7 @@ function calDayCounts(list) {
 function calFilteredDays() {
   const days = {};
   if (!calState.data) return days;
+  calAnnotateTaste(calState.data.days);
   const direct = calDirectOnScreen();
   const dates = Object.keys(calState.data.days);
   if (direct && dates.indexOf(direct.date) === -1) dates.push(direct.date);
@@ -4049,6 +4157,12 @@ const calPreview = list => {
   // still shows them: something has to be in the cell.
   const known = list.filter(item => item.media !== 'movie' || item.weight >= CAL_FILM_FLOOR);
   const pool = known.length ? known : list;
+  if (calFilters.forYou) {
+    const byTaste = pool.slice().sort((a, b) =>
+      (b.taste || 0) - (a.taste || 0) || b.trend - a.trend || b.rating - a.rating || a.title.localeCompare(b.title));
+    const picks = byTaste.filter(item => (item.taste || 0) > 0).slice(0, CAL_PREVIEW);
+    if (picks.length) return picks;
+  }
   const out = [];
   const add = item => { if (item && out.indexOf(item) === -1) out.push(item); };
   const byTrend = pool.slice().sort((a, b) =>
@@ -4155,6 +4269,7 @@ function calFeedWindowHTML() {
 // say so rather than looking like a month with nothing in it.
 function calFilterFlagHTML() {
   const bits = [];
+  if (calFilters.forYou) bits.push('For you');
   if (calFilters.scope === 'episodes') bits.push('Episode releases');
   else if (calFilters.scope === 'all') bits.push('Everything');
   if (calFilters.type === 'movie') bits.push('films only');
@@ -4405,10 +4520,11 @@ function calRowHTML(item, date) {
   const genres = item.genres.length ? '<span class="cal-row-genres">' + escapeHTML(item.genres.join(' · ')) + '</span>' : '';
   const rating = item.rating > 0 ? '<span class="cal-row-rating">' + ratingStars(item.rating) + '</span>' : '';
   const seen = calTracked.has(dupNormTitle(item.title)) ? '<span class="cal-tag seen" title="Already in your watchlist">✓ in your list</span>' : '';
+  const forYou = item.forYou ? '<span class="cal-tag foryou" title="' + escapeHTML(calTasteTitle(item)) + '">✦ For you</span>' : '';
   return '<div class="cal-row">' + calThumbHTML(item) +
     '<div class="cal-row-main">' +
       '<div class="cal-row-title">' +
-        '<a class="cal-row-imdb"' + imdb + '>' + escapeHTML(item.title) + '</a>' + seen +
+        '<a class="cal-row-imdb"' + imdb + '>' + escapeHTML(item.title) + '</a>' + seen + forYou +
       '</div>' +
       (item.episode ? '<div class="cal-row-ep">' + escapeHTML(item.episode) + '</div>' : '') +
       '<div class="cal-row-meta"><span>' + meta.join(' · ') + '</span>' + genres + rating + '</div>' +
@@ -4419,7 +4535,9 @@ function calRowHTML(item, date) {
 }
 function calDrawerRowsHTML(list, date) {
   let lastTier = -1;
-  return list.map(item => {
+  const ordered = list.slice().sort((a, b) =>
+    calRank(a) - calRank(b) || (calFilters.forYou ? (b.taste || 0) - (a.taste || 0) : 0));
+  return ordered.map(item => {
     const tier = calRank(item);
     const heading = tier !== lastTier && CAL_TIER_LABELS[tier]
       ? '<div class="cal-row-head">' + escapeHTML(CAL_TIER_LABELS[tier]) + '</div>' : '';
@@ -4530,6 +4648,17 @@ function calendarAction(event) {
     updateCalendar();
     return;
   }
+  if (what === 'foryou') {
+    calFilters.forYou = !calFilters.forYou;
+    calSaveFilters();
+    const btn = document.getElementById('cal-fy');
+    if (btn) {
+      btn.classList.toggle('active', calFilters.forYou);
+      btn.setAttribute('aria-pressed', String(Boolean(calFilters.forYou)));
+    }
+    updateCalendar();
+    return;
+  }
   if (what === 'refresh' || what === 'retry') { loadCalendar('fresh'); return; }
 }
 document.addEventListener('keydown', event => {
@@ -4556,6 +4685,7 @@ function calShellHTML() {
         '<svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle cx="6.5" cy="6.5" r="5" stroke="#7a9e8a" stroke-width="1.5"/><path d="M10.5 10.5L14 14" stroke="#7a9e8a" stroke-width="1.5" stroke-linecap="round"/></svg>' +
         '<input id="cal-search" type="text" aria-label="Search titles" placeholder="Search titles…" data-filter="calFilters.search" data-rebuild="calendar">' +
       '</div>' +
+      '<button class="tool-btn cal-fy' + (calFilters.forYou ? ' active' : '') + '" id="cal-fy" type="button" data-act="calendarAction" data-cal="foryou" aria-pressed="' + String(Boolean(calFilters.forYou)) + '" title="Rank this month by the genres you watch most">✦ For you</button>' +
       '<button class="tool-btn" type="button" data-act="calendarAction" data-cal="refresh" title="Fetch the calendar again, bypassing the cache">↻ Refresh</button>' +
     '</div>' +
     '<div id="cal-months"></div>' +
@@ -4571,6 +4701,11 @@ function calInitShell(admin) {
   keep('cal-scope', calFilters.scope);
   keep('cal-type', calFilters.type);
   keep('cal-plat', calFilters.platform);
+  const fy = document.getElementById('cal-fy');
+  if (fy) {
+    fy.classList.toggle('active', Boolean(calFilters.forYou));
+    fy.setAttribute('aria-pressed', String(Boolean(calFilters.forYou)));
+  }
   const search = document.getElementById('cal-search');
   if (search) search.value = calFilters.search;
   const region = document.getElementById('cal-region');
@@ -4653,6 +4788,10 @@ function renderSuggestions() {
         <button class="try-btn" id="sugg-try" data-act="suggTryAgain" disabled>
           <span class="arr">↻</span> Not feeling it - try another
         </button>
+        <button class="try-btn sugg-similar-btn" id="sugg-similar" type="button" data-act="suggSimilar" disabled>
+          <span class="arr">≈</span> More like this
+        </button>
+        <div class="sugg-similar-note" id="sugg-similar-note" hidden></div>
         <div class="sugg-count" id="sugg-count"></div>
       </div>
     </div>`;
@@ -4707,7 +4846,50 @@ function suggTryAgain() {
   showSuggResult(pick, true);
 }
 
-function showSuggResult(item, animate = true) {
+function genreLabel(key) {
+  return String(key || '').split(' ').map(part => part ? part[0].toUpperCase() + part.slice(1) : part).join(' ');
+}
+
+// A title from the same filtered pool, ranked by the traits a reader can see:
+// shared genre first, then kind, then service. No hidden embedding is implied.
+function suggSimilar() {
+  const seed = suggLastPick;
+  if (!seed) return;
+  const seedGenres = genreTokens(seed.genre);
+  const ranked = getSuggFiltered()
+    .filter(row => row.name !== seed.name)
+    .map(row => {
+      const shared = genreTokens(row.genre).filter(key => seedGenres.indexOf(key) !== -1);
+      const sameKind = (String(seed.type).toLowerCase() === 'movie') === (String(row.type).toLowerCase() === 'movie');
+      const samePlatform = Boolean(seed.platform) && seed.platform === row.platform;
+      return { row: row, score: shared.length * 4 + (sameKind ? 2 : 0) + (samePlatform ? 1 : 0), shared: shared, sameKind: sameKind, samePlatform: samePlatform };
+    })
+    .filter(entry => entry.score > 0)
+    .sort((a, b) => b.score - a.score || a.row.name.localeCompare(b.row.name));
+
+  if (!ranked.length) {
+    setSuggNote('No close match in this filtered list.');
+    return;
+  }
+  const best = ranked[0].score;
+  const choices = ranked.filter(entry => entry.score === best);
+  const pick = choices[Math.floor(Math.random() * choices.length)];
+  suggLastPick = pick.row;
+  const common = [];
+  if (pick.shared.length) common.push('the same genre (' + pick.shared.map(genreLabel).join(', ') + ')');
+  if (pick.sameKind) common.push(seed.type.toLowerCase() === 'movie' ? 'it is also a movie' : 'it is also a series');
+  if (pick.samePlatform) common.push('it is also on ' + seed.platform);
+  showSuggResult(pick.row, true, 'Because it has ' + common.join(', ') + ' in common with ' + seed.name + '.');
+}
+
+function setSuggNote(text) {
+  const note = document.getElementById('sugg-similar-note');
+  if (!note) return;
+  note.textContent = text || '';
+  note.hidden = !text;
+}
+
+function showSuggResult(item, animate = true, note = '') {
   const ne = document.getElementById('sugg-name');
   const me = document.getElementById('sugg-meta');
   if (!ne || !me) return;
@@ -4716,6 +4898,9 @@ function showSuggResult(item, animate = true) {
     ne.innerHTML = 'No matches. Try different filters';
     me.innerHTML = '';
     setSuggPoster(null);
+    setSuggNote('');
+    const similar = document.getElementById('sugg-similar');
+    if (similar) similar.disabled = true;
     return;
   }
   ne.className = animate ? 'result-name spinning' : 'result-name';
@@ -4731,6 +4916,9 @@ function showSuggResult(item, animate = true) {
     <span class="rm-badge type">${escapeHTML(item.type)}</span>
     <span class="rm-badge genre">${escapeHTML(item.genre)}</span>
     <span class="rm-badge time">${escapeHTML(fmtHrs(item.screentime))}</span>`;
+  const similar = document.getElementById('sugg-similar');
+  if (similar) similar.disabled = false;
+  setSuggNote(note);
   burstConfetti();
 }
 
@@ -4844,6 +5032,129 @@ function initLineChart(canvasId, labels, data, colorVar) {
       scales: {
         x: { grid: { display: false }, ticks: { font: { family: 'Inter', size: 11 }, color: tickColor, padding: 6 } },
         y: { grid: { color: gridColor, lineWidth: 1 }, ticks: { font: { family: 'Inter', size: 11 }, color: tickColor, padding: 6, maxTicksLimit: 4 }, beginAtZero: true }
+      }
+    }
+  });
+}
+
+// A point on the Taste Map is a title, not a cluster: clicking it is a request
+// to find that title in Data, so the map hands over the exact search the table
+// already understands rather than opening a second detail view.
+function goToDataTitle(name) {
+  const title = String(name || '').trim();
+  if (!title) return;
+  try { history.replaceState(null, '', location.pathname + '?search=' + encodeURIComponent(title) + '#data'); } catch (e) {}
+  dataPageNum = 1;
+  navigateTo('data');
+}
+
+// The All Time map uses the fields the store actually has: watch year and
+// genre position each title, screentime sizes it, and the type colours it. It
+// is deliberately not a semantic similarity map - there are no plot vectors in
+// the store - but it makes phases and clusters in the viewing history visible.
+function initTasteMap(canvasId, rows) {
+  const el = document.getElementById(canvasId);
+  if (!el || !rows.length) return;
+  if (charts[canvasId]) { try { charts[canvasId].destroy(); } catch (e) {} }
+
+  const genreCounts = countBy(rows, 'genre').filter(entry => entry[0] && entry[0] !== '-');
+  const topGenres = genreCounts.slice(0, 8).map(entry => entry[0]);
+  const hasOther = rows.some(row => topGenres.indexOf(row.genre) === -1);
+  const labels = topGenres.concat(hasOther ? ['Other'] : []);
+  const maxST = Math.max(1, ...rows.map(row => Number(row.screentime) || 0));
+  const showColor = cssVar('--green', '#2d6a4f');
+  const movieColor = cssVar('--gold', '#b8860b');
+
+  const points = rows.map(row => {
+    const month = MONTHS.indexOf(row.month);
+    const year = Number(row.year) || 0;
+    const isMovie = String(row.type || '').toLowerCase() === 'movie';
+    const st = Math.max(0, Number(row.screentime) || 0);
+    const color = isMovie ? movieColor : showColor;
+    return {
+      x: year + ((month >= 0 ? month : 0) + .5) / 12,
+      y: topGenres.indexOf(row.genre) === -1 ? 'Other' : row.genre,
+      r: 3.5 + Math.sqrt(st / maxST) * 8.5,
+      name: row.name,
+      season: row.season || '',
+      genre: row.genre || '-',
+      platform: row.platform || '',
+      when: row.month ? row.month.slice(0, 3) + ' ' + row.year : String(row.year),
+      hours: fmtHrs(st),
+      kind: isMovie ? 'Movie' : 'Series',
+      backgroundColor: hexToRgba(color, .5),
+      borderColor: color
+    };
+  });
+
+  const minYear = Math.min(...rows.map(row => row.year));
+  const maxYear = Math.max(...rows.map(row => row.year));
+  charts[canvasId] = new Chart(el, {
+    type: 'bubble',
+    data: {
+      datasets: [{
+        data: points,
+        backgroundColor: points.map(point => point.backgroundColor),
+        borderColor: points.map(point => point.borderColor),
+        borderWidth: 1
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: false,
+      layout: { padding: 4 },
+      interaction: { mode: 'point', intersect: true },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: cssVar('--surface', '#ffffff'),
+          titleColor: cssVar('--text', '#191712'),
+          bodyColor: cssVar('--text-soft', '#736c5c'),
+          borderColor: cssVar('--border', '#e0ede6'),
+          borderWidth: 1,
+          padding: 10,
+          cornerRadius: 4,
+          displayColors: false,
+          callbacks: {
+            title: items => {
+              const point = items[0].raw;
+              return point.name + (point.season ? ' · S' + point.season : '');
+            },
+            label: item => {
+              const point = item.raw;
+              return [point.kind + ' · ' + point.genre, point.platform || 'No platform', point.when + ' · ' + point.hours];
+            }
+          }
+        }
+      },
+      scales: {
+        x: {
+          min: minYear - .4,
+          max: maxYear + .9,
+          grid: { color: cssVar('--border', '#e0ede6') },
+          ticks: {
+            color: cssVar('--text-soft', '#7a9e8a'),
+            font: { family: 'Inter', size: 11 },
+            stepSize: 1,
+            callback: value => Math.abs(value - Math.round(value)) < .01 ? String(Math.round(value)) : ''
+          }
+        },
+        y: {
+          type: 'category',
+          labels,
+          offset: true,
+          grid: { display: false },
+          ticks: { color: cssVar('--text-soft', '#7a9e8a'), font: { family: 'Inter', size: 10 }, padding: 4 }
+        }
+      },
+      onClick: (event, elements, chart) => {
+        const point = elements && elements[0] ? chart.data.datasets[0].data[elements[0].index] : null;
+        if (point) goToDataTitle(point.name);
+      },
+      onHover: (event, elements) => {
+        const target = event.native ? event.native.target : null;
+        if (target) target.style.cursor = elements.length ? 'pointer' : 'default';
       }
     }
   });
@@ -5094,7 +5405,7 @@ async function submitSuggestion() {
        suggSpin reads clientX/clientY off that event to place its ripple.
      * data-act and data-change both name a function in ACTIONS; which attribute an
        element carries is what decides the event it fires on. */
-const ACTIONS = { suggSpin, suggTryAgain, suggRetry, submitSuggestion, updateSuggCount, calendarAction };
+const ACTIONS = { suggSpin, suggTryAgain, suggSimilar, suggRetry, submitSuggestion, updateSuggCount, calendarAction };
 
 // Read the live bindings, so a reassignment of any filter object is picked up.
 const filterByName = () => ({ curFilters, allFilters, datFilters, calFilters });

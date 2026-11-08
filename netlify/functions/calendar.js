@@ -44,6 +44,24 @@ const db = require('./lib/db');
 const TMDB_BASE = TMDB_API_BASE;
 const TVMAZE_BASE = 'https://api.tvmaze.com';
 const IMG_BASE = 'https://image.tmdb.org/t/p/w185';
+// The client appends this to its data URLs (see CAL_DATA_VERSION in app.js), so
+// a response cached before the genre field existed is not reused. Bump both
+// constants together when the payload shape changes.
+const CALENDAR_DATA_VERSION = 2;
+// TMDB discover returns genre ids, while the page compares names. Keeping the
+// mapping here means the calendar can explain a recommendation without a second
+// request for every film just to read its genres.
+const TMDB_GENRES = new Map([
+  [28, 'Action'], [12, 'Adventure'], [16, 'Animation'], [35, 'Comedy'],
+  [80, 'Crime'], [99, 'Documentary'], [10751, 'Family'], [14, 'Fantasy'],
+  [36, 'History'], [27, 'Horror'], [10402, 'Music'], [9648, 'Mystery'],
+  [10749, 'Romance'], [878, 'Science Fiction'], [10770, 'TV Movie'],
+  [53, 'Thriller'], [10752, 'War'], [37, 'Western'],
+]);
+const tmdbGenres = ids => (Array.isArray(ids) ? ids : [])
+  .map(id => TMDB_GENRES.get(Number(id)))
+  .filter(Boolean)
+  .slice(0, 3);
 const TIMEOUT_MS = 6500; // per upstream request
 const MAX_DAYS = 400; // a whole year of window, plus slack for a 366-day one
 const DATED_DAYS = 100; // windows up to this long are fetched to the day
@@ -426,6 +444,7 @@ function tmdbUrl(path, params) {
 // to land last.
 function mergeFilm(movies, item, theater, provider) {
   const existing = movies.get(item.id);
+  const genres = tmdbGenres(item.genre_ids);
   if (!existing) {
     movies.set(item.id, {
       id: item.id,
@@ -436,9 +455,11 @@ function mergeFilm(movies, item, theater, provider) {
       popularity: Math.round(Number(item.popularity) || 0),
       providers: provider ? [provider] : [],
       theater: Boolean(theater),
+      genres: genres,
     });
     return;
   }
+  if ((!existing.genres || !existing.genres.length) && genres.length) existing.genres = genres;
   if (theater) {
     if (!existing.theater || item.release_date < existing.date) {
       existing.date = item.release_date;
@@ -612,6 +633,7 @@ function applyLookup(film, record) {
   if (record.poster) film.poster = record.poster;
   if (record.rating) film.rating = record.rating;
   if (record.popularity) film.popularity = record.popularity;
+  if (Array.isArray(record.genres) && record.genres.length) film.genres = record.genres.slice(0, 3);
 }
 
 // One TMDB record, by id, for a film the release feed named - the poster, the
@@ -639,7 +661,7 @@ async function filmRecord(id, usage, deadline) {
       headers: { accept: 'application/json' },
     });
     if (response.status === 404) {
-      return { tmdbId: Number(id) || 0, title: '', poster: '', rating: 0, popularity: 0 };
+      return { tmdbId: Number(id) || 0, title: '', poster: '', rating: 0, popularity: 0, genres: [] };
     }
     if (!response.ok) return null;
     const details = await response.json();
@@ -649,6 +671,9 @@ async function filmRecord(id, usage, deadline) {
       poster: details.poster_path ? IMG_BASE + details.poster_path : '',
       rating: round1(details.vote_average),
       popularity: Math.round(Number(details.popularity) || 0),
+      genres: tmdbGenres(details.genre_ids).length
+        ? tmdbGenres(details.genre_ids)
+        : (Array.isArray(details.genres) ? details.genres.map(genre => genre.name).filter(Boolean).slice(0, 3) : []),
     };
   } catch (error) {
     return null;
@@ -783,6 +808,7 @@ async function loadWatchmode(from, to, regions, warnings, usage, deadline, movie
       popularity: 0,
       providers: [arrival.platform],
       theater: false,
+      genres: [],
     });
     report.added++;
     pending.push(arrival);
@@ -1149,6 +1175,7 @@ async function searchTitle(title, warnings, region, usage) {
     popularity: Math.round(Number(match.popularity) || 0),
     providers: names.length ? names.slice(0, 3) : ['Other'],
     theater: false,
+    genres: tmdbGenres(match.genre_ids),
     // Marked so the page can say where this came from: it is a title asked for
     // by name, not a release the month's list carried.
     direct: true,
@@ -1194,6 +1221,7 @@ exports.handler = async event => {
     return json(200, {
       range: { from, to, region, regions: regions.length > 1 ? regions : undefined },
       generatedAt: new Date().toISOString(),
+      dataVersion: CALENDAR_DATA_VERSION,
       movies: found ? [found] : [],
       episodes: [],
       coverage,
@@ -1228,6 +1256,7 @@ exports.handler = async event => {
       {
         range: { from, to, region, regions: regions.length > 1 ? regions : undefined },
         generatedAt: new Date().toISOString(),
+        dataVersion: CALENDAR_DATA_VERSION,
         movies,
         episodes,
         // Where the films came from, and what is still to come. The page shows

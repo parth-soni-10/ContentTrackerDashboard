@@ -849,3 +849,31 @@ test("a region the picker does not offer is still honoured", async () => {
     globalThis.fetch = original;
   }
 });
+
+test("a film's TMDB genres survive into the calendar payload", async () => {
+  const { impl } = calendarUpstream([], [{
+    id: 777001,
+    title: "Genre Film",
+    release_date: "2026-10-15",
+    poster_path: "/genre.jpg",
+    vote_average: 6.8,
+    popularity: 5,
+    genre_ids: [878, 53],
+  }]);
+  const original = globalThis.fetch;
+  globalThis.fetch = impl;
+  try {
+    const response = await withEnv(
+      { TMDB_API_KEY: "tmdb-test", WATCHMODE_API_KEY: undefined },
+      () => calendar.handler(calendarRequest({ include: "movies" })),
+    );
+    assert.equal(response.statusCode, 200);
+    const body = JSON.parse(response.body);
+    const film = body.movies.find(item => item.id === 777001);
+    assert.ok(film, "the discover film is in the month");
+    assert.deepEqual(film.genres, ["Science Fiction", "Thriller"]);
+    assert.equal(body.dataVersion, 2, "the shape carries the cache-busting version");
+  } finally {
+    globalThis.fetch = original;
+  }
+});
