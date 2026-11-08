@@ -2479,7 +2479,7 @@ function renderData() {
       <div class="df-select"><select id="df-month" aria-label="Month" data-glide data-glide-menu-width="150" data-filter="datFilters.month" data-rebuild="dataTable" data-page-reset>${monthOpts}</select></div>
       <div class="df-divider"></div>
       <div class="df-search">
-        <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle cx="6.5" cy="6.5" r="5" stroke="#7a9e8a" stroke-width="1.5"/><path d="M10.5 10.5L14 14" stroke="#7a9e8a" stroke-width="1.5" stroke-linecap="round"/></svg>
+        <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle cx="6.5" cy="6.5" r="5" stroke="currentColor" stroke-width="1.5"/><path d="M10.5 10.5L14 14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
         <input id="df-search" type="text" aria-label="Search by name" placeholder="Search by name…" data-filter="datFilters.search" data-rebuild="dataTable" data-page-reset>
       </div>
     </div>
@@ -4682,7 +4682,7 @@ function calShellHTML() {
       '<div class="df-select"><select id="cal-region" aria-label="Film release region" data-glide data-glide-menu-width="220">' + regionOptions + '</select></div>' +
       '<div class="df-divider"></div>' +
       '<div class="df-search">' +
-        '<svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle cx="6.5" cy="6.5" r="5" stroke="#7a9e8a" stroke-width="1.5"/><path d="M10.5 10.5L14 14" stroke="#7a9e8a" stroke-width="1.5" stroke-linecap="round"/></svg>' +
+        '<svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle cx="6.5" cy="6.5" r="5" stroke="currentColor" stroke-width="1.5"/><path d="M10.5 10.5L14 14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>' +
         '<input id="cal-search" type="text" aria-label="Search titles" placeholder="Search titles…" data-filter="calFilters.search" data-rebuild="calendar">' +
       '</div>' +
       '<button class="tool-btn cal-fy' + (calFilters.forYou ? ' active' : '') + '" id="cal-fy" type="button" data-act="calendarAction" data-cal="foryou" aria-pressed="' + String(Boolean(calFilters.forYou)) + '" title="Rank this month by the genres you watch most">✦ For you</button>' +
@@ -4947,7 +4947,8 @@ function setSuggPoster(item) {
 function burstConfetti() {
   const card = document.getElementById('sugg-card');
   if (!card) return;
-  const cols = ['#40916c', '#f4a261', '#74c69d', '#ffd166', '#2d6a4f'];
+  const cols = ['--green', '--gold', '--blue', '--rust', '--plum']
+    .map(name => cssVar(name, '#1f6049'));
   for (let i = 0; i < 12; i++) {
     const dot  = document.createElement('div');
     dot.className = 'confetti-dot';
@@ -4988,9 +4989,9 @@ function initLineChart(canvasId, labels, data, colorVar) {
   const el = document.getElementById(canvasId);
   if (!el) return;
   if (charts[canvasId]) { try { charts[canvasId].destroy(); } catch (e) {} }
-  const lineColor = cssVar(colorVar || '--green', '#2d6a4f');
-  const gridColor = cssVar('--border', '#e0ede6');
-  const tickColor = cssVar('--text-soft', '#7a9e8a');
+  const lineColor = cssVar(colorVar || '--green', '#1f6049');
+  const gridColor = cssVar('--border', '#d6ddd2');
+  const tickColor = cssVar('--text-soft', '#5c675d');
   const pointFill = cssVar('--surface', '#ffffff');
   charts[canvasId] = new Chart(el, {
     type: 'line',
@@ -5021,8 +5022,8 @@ function initLineChart(canvasId, labels, data, colorVar) {
         legend: { display: false },
         tooltip: {
           backgroundColor: pointFill,
-          titleColor: cssVar('--text', '#191712'),
-          bodyColor: cssVar('--text-soft', '#736c5c'),
+          titleColor: cssVar('--text', '#17201a'),
+          bodyColor: cssVar('--text-soft', '#5c675d'),
           padding: 10,
           cornerRadius: 4,
           displayColors: false,
@@ -5062,8 +5063,8 @@ function initTasteMap(canvasId, rows) {
   const hasOther = rows.some(row => topGenres.indexOf(row.genre) === -1);
   const labels = topGenres.concat(hasOther ? ['Other'] : []);
   const maxST = Math.max(1, ...rows.map(row => Number(row.screentime) || 0));
-  const showColor = cssVar('--green', '#2d6a4f');
-  const movieColor = cssVar('--gold', '#b8860b');
+  const showColor = cssVar('--green', '#1f6049');
+  const movieColor = cssVar('--gold', '#8a5b18');
 
   const points = rows.map(row => {
     const month = MONTHS.indexOf(row.month);
@@ -5109,9 +5110,9 @@ function initTasteMap(canvasId, rows) {
         legend: { display: false },
         tooltip: {
           backgroundColor: cssVar('--surface', '#ffffff'),
-          titleColor: cssVar('--text', '#191712'),
-          bodyColor: cssVar('--text-soft', '#736c5c'),
-          borderColor: cssVar('--border', '#e0ede6'),
+          titleColor: cssVar('--text', '#17201a'),
+          bodyColor: cssVar('--text-soft', '#5c675d'),
+          borderColor: cssVar('--border', '#d6ddd2'),
           borderWidth: 1,
           padding: 10,
           cornerRadius: 4,
@@ -5132,9 +5133,9 @@ function initTasteMap(canvasId, rows) {
         x: {
           min: minYear - .4,
           max: maxYear + .9,
-          grid: { color: cssVar('--border', '#e0ede6') },
+          grid: { color: cssVar('--border', '#d6ddd2') },
           ticks: {
-            color: cssVar('--text-soft', '#7a9e8a'),
+            color: cssVar('--text-soft', '#5c675d'),
             font: { family: 'Inter', size: 11 },
             stepSize: 1,
             callback: value => Math.abs(value - Math.round(value)) < .01 ? String(Math.round(value)) : ''
@@ -5145,7 +5146,7 @@ function initTasteMap(canvasId, rows) {
           labels,
           offset: true,
           grid: { display: false },
-          ticks: { color: cssVar('--text-soft', '#7a9e8a'), font: { family: 'Inter', size: 10 }, padding: 4 }
+          ticks: { color: cssVar('--text-soft', '#5c675d'), font: { family: 'Inter', size: 10 }, padding: 4 }
         }
       },
       onClick: (event, elements, chart) => {

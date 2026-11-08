@@ -7,26 +7,26 @@
    ===================================================== */
 
 :root {
-  --bg: #f6f2e7;
-  --surface: #fdfaf2;
-  --surface-soft: #efe9db;
-  /* Brand accent - deep green scheme */
-  --green: #1f4a36;
-  --green-mid: #2f6a4d;
-  --green-lite: #7c9c88;
-  --green-pale: #e4e8d7;
-  --border: #ded5c2;
-  --border-mid: #c2b7a0;
-  --gold: #8f6425;
-  --gold-pale: #f4e8d3;
-  --blue: #2f5d7c;
-  --blue-pale: #e3ebf0;
+  --bg: #f4f5ef;
+  --surface: #ffffff;
+  --surface-soft: #e9ede4;
+  /* Brand accent - Fresh Sage scheme */
+  --green: #1f6049;
+  --green-mid: #2b7257;
+  --green-lite: #7aa58f;
+  --green-pale: #dfeee5;
+  --border: #d6ddd2;
+  --border-mid: #b7c3b8;
+  --gold: #8a5b18;
+  --gold-pale: #f4e9d6;
+  --blue: #30617c;
+  --blue-pale: #e2edf2;
   --rust: #9a4a2f;
   --rust-pale: #f4e4dc;
   --plum: #6d4568;
   --plum-pale: #efe4ee;
-  --teal: #2f6a63;
-  --teal-pale: #e0ebe7;
+  --teal: #2b6b64;
+  --teal-pale: #deeeea;
   /* Provider tiles: --p-* is the glyph, --p-*-bg the paper tint behind it. */
   --p-netflix: #a3322b; --p-netflix-bg: #f5e1de;
   --p-prime: #2f6f8f; --p-prime-bg: #e2edf2;
@@ -41,13 +41,13 @@
   --p-crunchy: #b5651d; --p-crunchy-bg: #f6e7d8;
   --p-mubi: #2f6f5f; --p-mubi-bg: #e0ece8;
   /* Text - green-neutral palette */
-  --text: #191712;
-  --text-mid: #3f3b31;
-  --text-soft: #736c5c;
-  --red: #9c342a;
-  --red-pale: #f4e2dd;
+  --text: #17201a;
+  --text-mid: #405046;
+  --text-soft: #5c675d;
+  --red: #a84733;
+  --red-pale: #f5e3dd;
   --shadow-sm: none;
-  --shadow-md: 0 10px 30px rgba(25,23,18,.12), 0 1px 2px rgba(25,23,18,.06);
+  --shadow-md: 0 10px 30px rgba(23,32,26,.12), 0 1px 2px rgba(23,32,26,.06);
   --r: 6px;
   --nav-h: 60px;
 
@@ -74,25 +74,25 @@
 
 /* Dark theme - same variables re-scoped so every component flips automatically */
 html.dark {
-  --bg: #141310;
-  --surface: #1c1a15;
-  --surface-soft: #25221b;
-  --green: #a9c7b2;
-  --green-mid: #7fa78f;
-  --green-lite: #c9d8cd;
-  --green-pale: #242d25;
-  --border: #37332b;
-  --border-mid: #4d473c;
-  --gold: #d9a96c;
-  --gold-pale: #33291b;
-  --blue: #9dbdd2;
-  --blue-pale: #1d2a31;
+  --bg: #101512;
+  --surface: #171e19;
+  --surface-soft: #202821;
+  --green: #9bceb1;
+  --green-mid: #7fb79c;
+  --green-lite: #c1d6c8;
+  --green-pale: #203026;
+  --border: #313b33;
+  --border-mid: #455247;
+  --gold: #e3b674;
+  --gold-pale: #332817;
+  --blue: #94bfd6;
+  --blue-pale: #1b2a33;
   --rust: #d99a7c;
   --rust-pale: #33221b;
   --plum: #c9a3c2;
   --plum-pale: #2d222d;
-  --teal: #8fc4b8;
-  --teal-pale: #1e2b28;
+  --teal: #8dc9c0;
+  --teal-pale: #1c2c29;
   --p-netflix: #e08b82; --p-netflix-bg: #33201d;
   --p-prime: #8fc4dc; --p-prime-bg: #1b2a31;
   --p-apple: #d8d3c5; --p-apple-bg: #2b2924;
@@ -105,26 +105,25 @@ html.dark {
   --p-youtube: #e08b82; --p-youtube-bg: #33201d;
   --p-crunchy: #e0a36e; --p-crunchy-bg: #33261a;
   --p-mubi: #8fc4b8; --p-mubi-bg: #1e2b28;
-  --text: #f1ecdf;
-  --text-mid: #d0c9b8;
-  --text-soft: #9c9484;
-  --red: #e29a8d;
-  --red-pale: #3a2421;
+  --text: #f1f4ed;
+  --text-mid: #c7d0c7;
+  --text-soft: #97a399;
+  --red: #e6a38d;
+  --red-pale: #35231e;
   /* Dark reds here are light pastels: white on them would be 2.2:1. */
-  --sc-sheet-on-accent: #0c1410;
-  --sr-danger-ink: #0c1410;
+  --sc-sheet-on-accent: #0e1510;
+  --sr-danger-ink: #0e1510;
   --shadow-sm: none;
   --shadow-md: 0 10px 30px rgba(0,0,0,.5), 0 1px 2px rgba(0,0,0,.4);
 }
 html.dark { color-scheme: dark; }
 /* Paper and ink: one serif for display and figures, one sans for the interface.
    Text on a solid --green field uses --on-green, which flips with the theme. */
-:root { --serif: "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, serif; --sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; --on-green: #fbf7ec; }
-html.dark { --on-green: #141310; }
+:root { --serif: "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, serif; --sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; --on-green: #ffffff; }
+html.dark { --on-green: #0e1510; }
 html.dark nav { background: var(--surface); border-bottom-color: var(--border); box-shadow: none; }
 html.dark body { background: var(--bg); }
 html.dark .page-header { background: var(--ph-bg, var(--surface)); }
-html.dark .note-card { background: var(--gold-pale); border-color: #4a3a24; }
 html.dark .note-body { color: var(--text-mid); }
 html.dark .note-body strong { color: var(--text); }
 html.dark tbody tr:nth-child(even) td { background: transparent; }
@@ -186,8 +185,8 @@ nav { background: var(--surface); border-bottom: 1px solid var(--border); displa
 /* The theme control is a switch now: the track is the whole skin, and the
    sun/moon glyphs it used to carry are hidden by data-ss-bare. The 7px of
    vertical padding keeps a 42px tap target around a 28px track. */
-.theme-switch { margin-left: 12px; flex: none; padding: 7px 0; --ss-track: #c3d3c8; --ss-track-on: var(--green); --ss-thumb-color: #fff; }
-html.dark .theme-switch { --ss-track: #2c3a32; --ss-track-on: var(--green); --ss-thumb-color: #eef5f0; }
+.theme-switch { margin-left: 12px; flex: none; padding: 7px 0; --ss-track: var(--border-mid); --ss-track-on: var(--green); --ss-thumb-color: var(--surface); }
+html.dark .theme-switch { --ss-track: var(--border); --ss-track-on: var(--green); --ss-thumb-color: var(--text); }
 .theme-toggle:hover { border-color: var(--border-mid); color: var(--text); background: var(--surface-soft); }
 .theme-toggle:active { background: var(--surface-soft); }
 .theme-toggle svg { width: 16px; height: 16px; }
@@ -502,9 +501,8 @@ tbody tr:last-child td { border-bottom: none; }
 .rm-badge      { display: inline-flex; align-items: center; gap: 5px; padding: 3px 9px; border-radius: 3px; font-size: 12px; font-weight: 500; }
 .rm-badge.plat { background: var(--green-pale); color: var(--green); }
 .rm-badge.type { background: var(--gold-pale);  color: var(--gold); }
-.rm-badge.genre { background: #f0f0f0; color: #555; }
+.rm-badge.genre { background: var(--surface-soft); color: var(--text-mid); }
 .rm-badge.time { background: var(--surface-soft); color: var(--text-mid); }
-html.dark .rm-badge.genre { background: #24382c; color: var(--text-mid); }
 .result-poster { display: block; width: 84px; height: 126px; margin: 0 auto 14px; border-radius: 3px; object-fit: cover; background: var(--surface-soft); border: 1px solid var(--border); box-shadow: none; }
 .result-poster.placeholder { display: flex; align-items: center; justify-content: center; font-size: 26px; }
 @keyframes slotSpin { 0% { transform: translateY(-18px); opacity: 0 } 40% { transform: translateY(4px); opacity: .7 } 70% { transform: translateY(-3px); opacity: .9 } 100% { transform: translateY(0); opacity: 1 } }
@@ -581,15 +579,15 @@ html.dark .rm-badge.genre { background: #24382c; color: var(--text-mid); }
 
 .admin-name-row { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 8px; align-items: stretch; }
 .admin-check-btn { width: auto; min-width: 108px; padding: 0 12px; color: var(--green); background: var(--green-pale); border-color: var(--border-mid); }
-.admin-check-btn:hover:not(:disabled), .admin-autofill-btn:hover:not(:disabled) { color: var(--green); background: #dcefe3; border-color: var(--green-lite); }
-.admin-autofill-btn { color: var(--green); background: #f2f8f4; }
+.admin-check-btn:hover:not(:disabled), .admin-autofill-btn:hover:not(:disabled) { color: var(--green); background: var(--green-pale); border-color: var(--green-lite); }
+.admin-autofill-btn { color: var(--green); background: var(--green-pale); }
 .autofill-spinner { width: 13px; height: 13px; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: autofillSpin .7s linear infinite; }
 @keyframes autofillSpin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .autofill-spinner { animation: none; border-right-color: currentColor; } }
 .admin-name-result { min-height: 20px; margin-top: 6px; font-size: 12px; color: var(--text-soft); }
 .admin-name-result.available { color: var(--green); }
 .admin-name-result.found { color: var(--gold); }
-.admin-match { display: flex; justify-content: space-between; gap: 12px; padding: 7px 9px; margin-top: 5px; background: var(--gold-pale); border: 1px solid #f0d5b8; border-radius: 7px; color: var(--text-mid); }
+.admin-match { display: flex; justify-content: space-between; gap: 12px; padding: 7px 9px; margin-top: 5px; background: var(--gold-pale); border: 1px solid var(--border-mid); border-radius: 7px; color: var(--text-mid); }
 .admin-match strong { color: var(--text); font-weight: 600; }
 .admin-match span { text-align: right; }
 .admin-edit-bar { display: flex; align-items: center; justify-content: space-between; gap: 10px; background: var(--green-pale); border: 1px solid var(--border-mid); border-radius: 10px; padding: 10px 14px; font-size: 13px; color: var(--green); margin-bottom: 14px; }
@@ -647,8 +645,8 @@ html.dark .rm-badge.genre { background: #24382c; color: var(--text-mid); }
 .admin-edit-actions { display: flex; gap: 8px; flex-shrink: 0; }
 .admin-edit-btn,
 .admin-del-btn { width: auto; min-width: 84px; padding: 8px 14px; min-height: 0; }
-.admin-del-btn { color: #e0504d; }
-.admin-del-btn:hover:not(:disabled) { border-color: #e0504d; background: rgba(224, 80, 77, 0.08); color: #c0392b; }
+.admin-del-btn { color: var(--red); }
+.admin-del-btn:hover:not(:disabled) { border-color: var(--red); background: var(--red-pale); color: var(--red); }
 
 /* Duplicate checker */
 .admin-dup-results { margin-top: 6px; display: flex; flex-direction: column; gap: 12px; }
@@ -658,14 +656,14 @@ html.dark .rm-badge.genre { background: #24382c; color: var(--text-mid); }
 .dup-group-head { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; padding: 10px 12px; background: var(--surface-soft); }
 .dup-group-title { font-size: 14px; font-weight: 600; color: var(--text); min-width: 0; }
 .dup-group-meta { font-size: 12px; color: var(--text-soft); }
-.dup-group-btn { margin-left: auto; width: auto; min-width: 0; padding: 6px 12px; min-height: 0; color: #e0504d; }
-.dup-group-btn:hover:not(:disabled) { border-color: #e0504d; background: rgba(224, 80, 77, 0.08); color: #c0392b; }
+.dup-group-btn { margin-left: auto; width: auto; min-width: 0; padding: 6px 12px; min-height: 0; color: var(--red); }
+.dup-group-btn:hover:not(:disabled) { border-color: var(--red); background: var(--red-pale); color: var(--red); }
 .dup-row { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; padding: 8px 12px; font-size: 13px; color: var(--text-mid); border-top: 1px solid var(--border-mid); }
 .dup-row .try-btn { margin-left: auto; }
 .dup-row .admin-del-btn { width: auto; min-width: 84px; padding: 5px 12px; min-height: 0; }
 .dup-tag { font-size: 11px; font-weight: 600; border-radius: 20px; padding: 2px 8px; }
 .dup-tag.keep { color: var(--green); background: var(--green-pale); }
-.dup-tag.copy { color: #c0392b; background: rgba(224, 80, 77, 0.1); }
+.dup-tag.copy { color: var(--red); background: var(--red-pale); }
 
 /* Database cleanup - the raw invalid rows, in a table that scrolls on its own.
    The app's global table styles (`table`, `thead th`, `tbody td`) were written
@@ -705,7 +703,7 @@ html.dark .rm-badge.genre { background: #24382c; color: var(--text-mid); }
    pale background. The border is themed like the other destructive buttons. */
 .admin-dup-tail { margin-top: 9px; font-size: 13px; color: var(--text-mid); }
 .admin-dup-force { width: auto; margin-top: 10px; padding: 8px 14px; min-height: 0; color: var(--red); border-color: var(--border-mid); }
-.admin-dup-force:hover:not(:disabled) { color: var(--red); background: rgba(224, 80, 77, .08); border-color: var(--red); }
+.admin-dup-force:hover:not(:disabled) { color: var(--red); background: var(--red-pale); border-color: var(--red); }
 
 /* ── SUBMIT PAGE ── */
 .submit-page { padding: 28px 32px 48px; display: grid; grid-template-columns: 1fr 320px; gap: 24px; }
@@ -727,7 +725,7 @@ html.dark .rm-badge.genre { background: #24382c; color: var(--text-mid); }
 html.dark .sf-submit-btn { background: var(--green); }
 .sf-success, .sf-error { line-height: 1.5; }
 .sf-success { background: var(--green-pale); border: 1px solid var(--border-mid); border-radius: 4px; padding: 12px 16px; font-size: 13.5px; color: var(--green); font-weight: 500; margin-bottom: 14px; }
-.sf-error { background: var(--red-pale); border: 1px solid #e6b9b0; border-radius: 4px; padding: 12px 16px; font-size: 13.5px; color: var(--red); font-weight: 500; margin-bottom: 14px; }
+.sf-error { background: var(--red-pale); border: 1px solid var(--red); border-radius: 4px; padding: 12px 16px; font-size: 13.5px; color: var(--red); font-weight: 500; margin-bottom: 14px; }
 .submit-right { display: flex; flex-direction: column; gap: 16px; }
 .submit-side-card { background: var(--surface); border: 1px solid var(--border); border-top: 2px solid var(--blue); border-radius: var(--r); padding: 16px 18px; box-shadow: none; }
 .submit-right .submit-side-card:nth-child(1) { border-top-color: var(--green); }
@@ -762,9 +760,9 @@ html.dark .sf-submit-btn { background: var(--green); }
 /* In dark mode --green is a LIGHT green, so white-on-green would be the one
    unreadable thing on the page; these three carry dark text instead, and the
    drawer header keeps a dark gradient the way .page-header does. */
-html.dark .cal-month-tab.active { background: var(--green-mid); color: #07130d; }
-html.dark .cal-month-tab.active:hover { color: #07130d; }
-html.dark .cal-today-tag { background: var(--green-mid); color: #07130d; }
+html.dark .cal-month-tab.active { background: var(--green-mid); color: var(--on-green); }
+html.dark .cal-month-tab.active:hover { color: var(--on-green); }
+html.dark .cal-today-tag { background: var(--green-mid); color: var(--on-green); }
 html.dark .cal-drawer-top { background: var(--green-mid); }
 .cal-month-sum { font-size: 13px; color: var(--text-soft); }
 /* The filter in force, said out loud. The calendar opens with whatever was
@@ -788,13 +786,11 @@ html.dark .cal-drawer-top { background: var(--green-mid); }
 .cal-scope-tab:hover { border-color: var(--green-mid); }
 .cal-scope-tab.active { border-color: var(--green); background: var(--green-pale); }
 .cal-scope-tab.active .cal-scope-year, .cal-scope-tab.active .cal-scope-note { color: var(--green); }
-html.dark .cal-scope-tab.active { background: rgba(64, 145, 108, .18); }
 /* The year scopes are adopted by Rubber Segment (calScopeBarHTML in app.js):
    the thumb is the green wash, so the tabs give up their own fill and shadow
    and the thumb can be seen crossing from one year to the next. Their greens
    and their two-line labels stay exactly as they were. */
 .cal-scopes[data-rubber-segment] { --rs-thumb: var(--green-pale); }
-html.dark .cal-scopes[data-rubber-segment] { --rs-thumb: rgba(64, 145, 108, .18); }
 .cal-scopes[data-rubber-segment] .cal-scope-tab {
   background: transparent;
   box-shadow: none;
@@ -828,7 +824,6 @@ html.dark .cal-scopes[data-rubber-segment] .cal-scope-tab.active {
 .cal-loading .loader-fill { background: var(--green); }
 .cal-warn { display: flex; flex-direction: column; gap: 2px; background: var(--gold-pale); border: 0; border-left: 2px solid var(--gold); border-radius: 0; padding: 10px 14px; margin-bottom: 14px; font-size: 12.5px; color: var(--text-mid); }
 .cal-warn strong { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .9px; color: var(--gold); }
-html.dark .cal-warn { border-color: #4a3a24; }
 .cal-retry { display: flex; justify-content: center; padding: 18px 0 8px; }
 .cal-retry .try-btn { max-width: 220px; }
 .cal-none { text-align: center; font-size: 13px; color: var(--text-soft); padding: 16px 0 4px; }
