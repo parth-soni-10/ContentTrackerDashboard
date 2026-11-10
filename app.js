@@ -3279,6 +3279,11 @@ function calTrackedTitles() {
   });
   return set;
 }
+// A release the watchlist already holds. Days lead with these: what you have is
+// what you came to the calendar for, and the rest of the day is what is on.
+function calInList(item) {
+  return calTracked.has(dupNormTitle(item.title));
+}
 // The calendar's "For you" ranking is intentionally explainable: a release is
 // scored by the genres in the watchlist, lifted against how common that genre is
 // in the loaded window. A genre you watch often but that is rare in the month
@@ -4157,14 +4162,22 @@ const calPreview = list => {
   // still shows them: something has to be in the cell.
   const known = list.filter(item => item.media !== 'movie' || item.weight >= CAL_FILM_FLOOR);
   const pool = known.length ? known : list;
+  const out = [];
+  const add = item => { if (item && out.indexOf(item) === -1) out.push(item); };
+  // Anything already in the watchlist heads the cell, even a film below the
+  // floor or a broadcast episode: it is the one title on this day the reader has
+  // already said they care about. The strongest of them leads.
+  list.filter(calInList)
+    .sort((a, b) => (b.trend || 0) - (a.trend || 0) || b.rating - a.rating || a.title.localeCompare(b.title))
+    .forEach(add);
   if (calFilters.forYou) {
     const byTaste = pool.slice().sort((a, b) =>
       (b.taste || 0) - (a.taste || 0) || b.trend - a.trend || b.rating - a.rating || a.title.localeCompare(b.title));
     const picks = byTaste.filter(item => (item.taste || 0) > 0).slice(0, CAL_PREVIEW);
-    if (picks.length) return picks;
+    // Taste still decides the rest, but a tracked title is never pushed out of
+    // the cell by it.
+    if (picks.length) { picks.forEach(add); return out.slice(0, CAL_PREVIEW); }
   }
-  const out = [];
-  const add = item => { if (item && out.indexOf(item) === -1) out.push(item); };
   const byTrend = pool.slice().sort((a, b) =>
     b.trend - a.trend || b.rating - a.rating || calRank(a) - calRank(b) || a.title.localeCompare(b.title));
   add(byTrend.filter(item => item.media === 'movie')
@@ -4534,13 +4547,22 @@ function calRowHTML(item, date) {
   '</div>';
 }
 function calDrawerRowsHTML(list, date) {
-  let lastTier = -1;
+  // The drawer is read top-down, so the day leads with what is already in the
+  // watchlist: those rows sit under their own heading, and the schedule's own
+  // tiers follow. Inside a tier the taste ranking still decides, as before.
+  const pinned = new Set();
+  list.forEach(item => { if (calInList(item)) pinned.add(item); });
+  const tierOf = item => pinned.has(item) ? -1 : calRank(item);
+  let lastTier = -2;
   const ordered = list.slice().sort((a, b) =>
-    calRank(a) - calRank(b) || (calFilters.forYou ? (b.taste || 0) - (a.taste || 0) : 0));
+    tierOf(a) - tierOf(b) ||
+    (calFilters.forYou ? (b.taste || 0) - (a.taste || 0) : 0) ||
+    calRank(a) - calRank(b) || (b.weight || 0) - (a.weight || 0) || a.title.localeCompare(b.title));
   return ordered.map(item => {
-    const tier = calRank(item);
-    const heading = tier !== lastTier && CAL_TIER_LABELS[tier]
-      ? '<div class="cal-row-head">' + escapeHTML(CAL_TIER_LABELS[tier]) + '</div>' : '';
+    const tier = tierOf(item);
+    const label = tier === -1 ? 'In your list' + (pinned.size > 1 ? ' · ' + pinned.size : '') : CAL_TIER_LABELS[tier];
+    const heading = tier !== lastTier && label
+      ? '<div class="cal-row-head' + (tier === -1 ? ' mine' : '') + '">' + escapeHTML(label) + '</div>' : '';
     lastTier = tier;
     return heading + calRowHTML(item, date);
   }).join('');
