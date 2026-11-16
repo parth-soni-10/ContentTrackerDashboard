@@ -489,6 +489,22 @@ async function loadGoal() {
 // the data actually changed.
 const SNAP_KEY = 'ct-data-snap-v1';
 
+// A write needs more than one cache-busted read. The post-write page reload
+// carries ?fresh=, but that marker is stripped once the fetch starts; the base
+// URL can still be cached in this or another tab for max-age=300 (+ the
+// stale-while-revalidate=300 behind it). A later refresh could then paint that
+// older list over the newer snapshot. This window is shared by every tab, and
+// 11 minutes outlives both cache lifetimes with a margin.
+const DATA_FRESH_KEY = 'ct-data-fresh-until';
+const DATA_FRESH_MS = 11 * 60 * 1000;
+
+function markDataFresh() {
+  try { localStorage.setItem(DATA_FRESH_KEY, String(Date.now() + DATA_FRESH_MS)); } catch (e) {}
+}
+function dataFreshUntil() {
+  try { return parseInt(localStorage.getItem(DATA_FRESH_KEY), 10) || 0; } catch (e) { return 0; }
+}
+
 function mapRows(json) {
   return (json || []).map(r => ({
     name:       smartCaseName(r.Name || r.name || ''),
@@ -599,16 +615,22 @@ async function loadData(skipRerender, bust) {
     // finish rather than aborting early, so the fetch surfaces the
     // function's own timeout error instead of a misleading client-side abort.
     const timeout = setTimeout(() => controller.abort(), 45000);
-    // A one-shot ?fresh= marker (set by reloadFresh after an admin write)
-    // bypasses the CDN cache so the reload shows the write immediately. Reads
-    // that follow a write in the same visit (quick-add, fill-in-zeros) pass
-    // bust for the same reason: the watchlist endpoint caches for five
-    // minutes, and a plain re-read would show the numbers from before.
+    // A write gets more than one cache-busted read. The reload after an admin
+    // write carries ?fresh=, but that marker is stripped once the fetch starts;
+    // this or another tab can still hold the base URL's cached copy. Every read
+    // in the freshness window therefore asks for a new URL and bypasses the
+    // HTTP cache too, so the older list cannot overwrite the newer snapshot.
     const fresh = new URLSearchParams(location.search).get('fresh');
+    const recentlyWritten = dataFreshUntil() > Date.now();
+    if (fresh || bust) markDataFresh();
+    const bypassCache = Boolean(fresh) || Boolean(bust) || recentlyWritten;
     const url = fresh
       ? WATCHLIST_URL + '?fresh=' + encodeURIComponent(fresh)
-      : bust ? WATCHLIST_URL + '?fresh=' + Date.now() : WATCHLIST_URL;
-    const res = await fetch(url, { redirect: 'follow', mode: 'cors', signal: controller.signal, cache: 'default' });
+      : bypassCache ? WATCHLIST_URL + '?fresh=' + Date.now() : WATCHLIST_URL;
+    const res = await fetch(url, {
+      redirect: 'follow', mode: 'cors', signal: controller.signal,
+      cache: bypassCache ? 'no-store' : 'default'
+    });
     clearTimeout(timeout);
     if (fresh) {
       try {
@@ -1156,6 +1178,9 @@ async function requestAdminDelete(rowNumber) {
 // response so it hits the store directly and shows the write immediately.
 // The ?fresh= marker is one-shot: loadData strips it after fetching.
 function reloadFresh() {
+  // Set the window before the page unloads, so any tab opened while the reload
+  // is in flight also reads past the cached copy.
+  markDataFresh();
   try {
     const qs = new URLSearchParams(location.search);
     qs.set('fresh', String(Date.now()));
