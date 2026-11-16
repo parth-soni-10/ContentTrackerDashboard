@@ -391,7 +391,7 @@ test("the 404 page gives a reader a way back", async () => {
 // ── llms.txt, SITEMAP, ROBOTS ─────────────────────────────────────────────
 
 test("llms.txt follows the format and tells an agent when to use the site", async () => {
-  const text = await read("llms.txt");
+  const text = (await read("llms.txt")).replace(/\r\n/g, "\n");
   assert.match(text, /^# Content Tracker\n/);
   assert.match(text, /\n> .+\n/, "a blockquote summary follows the H1");
   assert.match(text, /^## When to use this$/m, "the when-to-use section is an H2");

@@ -9,10 +9,12 @@
   <meta name="description" content="That address does not exist on Content Tracker. The dashboard, About, Contact and Privacy pages are linked here.">
   <link rel="icon" type="image/svg+xml" href="/favicon.svg">
   <link rel="apple-touch-icon" href="/icon-180.png">
-  <!-- No script: the error page has nothing to run. The sheet is same-origin
-       because the deployed CSP is style-src 'self' with no 'unsafe-inline'. -->
+  <!-- Only the theme initializer runs here; it applies the saved light/dark
+       preference before first paint. The sheet is same-origin because the
+       deployed CSP is style-src 'self' with no 'unsafe-inline'. -->
   <link rel="stylesheet" href="/styles.css">
   <link rel="stylesheet" href="/doc-page.css">
+  <script src="/theme-init.js"></script>
 </head>
 <body>
 <a class="skip-link" href="#doc">Skip to content</a>

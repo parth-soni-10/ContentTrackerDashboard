@@ -4651,7 +4651,11 @@ function calCloseDay() {
   paintCalDrawer();
   // The grid is not rebuilt while the drawer is open, so the button that opened
   // it is still in the document and can take focus back.
-  if (opener && document.contains(opener) && typeof opener.focus === 'function') opener.focus();
+  if (opener && document.contains(opener) && typeof opener.focus === 'function') {
+    // The close button that was just clicked is removed with the drawer; wait
+    // for the browser's focus fixup to finish before moving focus back.
+    requestAnimationFrame(() => { if (document.contains(opener)) opener.focus(); });
+  }
 }
 // data-act="calendarAction" entry point, dispatched through ACTIONS so the
 // markup stays free of inline handlers (see the CSP note at the end of app.js).
@@ -4710,6 +4714,11 @@ function calendarAction(event) {
 }
 document.addEventListener('keydown', event => {
   if (event.key === 'Escape' && calState.openDay) calCloseDay();
+});
+document.addEventListener('submit', event => {
+  if (!event.target || event.target.id !== 'suggestion-form') return;
+  event.preventDefault();
+  submitSuggestion();
 });
 
 // The calendar's own markup - filters, month strip and grid - without the page
@@ -4948,6 +4957,9 @@ function showSuggResult(item, animate = true, note = '') {
     setSuggNote('');
     const similar = document.getElementById('sugg-similar');
     if (similar) similar.disabled = true;
+    const tryBtn = document.getElementById('sugg-try');
+    if (tryBtn) tryBtn.disabled = true;
+    suggLastPick = null;
     return;
   }
   ne.className = animate ? 'result-name spinning' : 'result-name';
@@ -5253,8 +5265,8 @@ function renderSubmit() {
     </div>
     <div class="submit-page">
       <div class="submit-left">
-        <div class="submit-form-card">
-          <h2 class="submit-heading">New Suggestion</h2>
+        <form class="submit-form-card" id="suggestion-form" novalidate>
+            <h2 class="submit-heading">New Suggestion</h2>
           <p class="submit-sub">Fill in the details below - all submissions are saved straight to the list.</p>
 
           <div class="sf-field">
@@ -5294,12 +5306,12 @@ function renderSubmit() {
             <div class="sf-chars"><span id="sf-chars">0</span> / 200</div>
           </div>
 
-          <div id="sf-msg"></div>
+          <div id="sf-msg" role="status" aria-live="polite"></div>
 
-          <button class="sf-submit-btn" data-act="submitSuggestion">
+          <button class="sf-submit-btn" type="submit">
             <span>${ic('plus')}</span> Submit Suggestion
           </button>
-        </div>
+        </form>
       </div>
 
       <div class="submit-right">
@@ -5367,6 +5379,8 @@ function renderSubmitSidebar() {
 }
 
 async function submitSuggestion() {
+  const btn   = document.querySelector('.sf-submit-btn');
+  if (!btn || btn.disabled) return;
   const title = document.getElementById('sf-title').value.trim();
   const type  = document.getElementById('sf-type').value;
   const genre = document.getElementById('sf-genre').value;
@@ -5380,7 +5394,6 @@ async function submitSuggestion() {
     return;
   }
 
-  const btn = document.querySelector('.sf-submit-btn');
   btn.disabled = true;
   btn.innerHTML = '<span>⏳</span> Submitting…';
   msg.textContent = '';
