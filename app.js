@@ -4644,6 +4644,30 @@ function calOpenDay(date, opener) {
   calState.opener = opener || null;
   paintCalDrawer();
 }
+function calTrapFocus(event) {
+  const panel = document.querySelector('#cal-drawer .cal-drawer-panel');
+  if (!panel) return;
+  const focusables = [...panel.querySelectorAll('a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])')]
+    .filter(el => el.getClientRects().length > 0);
+  if (!focusables.length) {
+    event.preventDefault();
+    panel.focus();
+    return;
+  }
+  const first = focusables[0];
+  const last = focusables[focusables.length - 1];
+  const active = document.activeElement;
+  const outside = !panel.contains(active);
+  if (event.shiftKey) {
+    if (outside || active === first || active === panel) {
+      event.preventDefault();
+      last.focus();
+    }
+  } else if (outside || active === last || active === panel) {
+    event.preventDefault();
+    first.focus();
+  }
+}
 function calCloseDay() {
   const opener = calState.opener;
   calState.opener = null;
@@ -4652,9 +4676,13 @@ function calCloseDay() {
   // The grid is not rebuilt while the drawer is open, so the button that opened
   // it is still in the document and can take focus back.
   if (opener && document.contains(opener) && typeof opener.focus === 'function') {
-    // The close button that was just clicked is removed with the drawer; wait
-    // for the browser's focus fixup to finish before moving focus back.
-    requestAnimationFrame(() => { if (document.contains(opener)) opener.focus(); });
+    const restore = () => {
+      if (document.contains(opener) && document.activeElement !== opener) opener.focus();
+    };
+    restore();
+    // The clicked close button is removed with the drawer. Run once more after
+    // the browser's focus fixup so the opener wins on every click path.
+    setTimeout(restore, 0);
   }
 }
 // data-act="calendarAction" entry point, dispatched through ACTIONS so the
@@ -4713,7 +4741,9 @@ function calendarAction(event) {
   if (what === 'refresh' || what === 'retry') { loadCalendar('fresh'); return; }
 }
 document.addEventListener('keydown', event => {
-  if (event.key === 'Escape' && calState.openDay) calCloseDay();
+  if (!calState.openDay) return;
+  if (event.key === 'Escape') { calCloseDay(); return; }
+  if (event.key === 'Tab') calTrapFocus(event);
 });
 document.addEventListener('submit', event => {
   if (!event.target || event.target.id !== 'suggestion-form') return;
