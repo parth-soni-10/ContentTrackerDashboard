@@ -28,6 +28,20 @@ const safeEqual = (a, b) => {
 exports.handler = async event => {
   if (event.httpMethod !== 'POST') return json(405, { error: 'Method not allowed' });
 
+  let body;
+  try { body = JSON.parse(event.body || '{}'); } catch { return json(400, { error: 'Invalid request body' }); }
+  if (!body || typeof body !== 'object' || Array.isArray(body)) {
+    return json(400, { error: 'Invalid request body' });
+  }
+
+  // The lock button used to clear only the client flag. A signed cookie kept
+  // working after the page said it was locked, so end the session here too.
+  if (body.logout === true) {
+    return json(200, { ok: true }, {
+      'Set-Cookie': 'ct_admin=; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=0'
+    });
+  }
+
   // The password is the only way in, so guessing has to cost something. This is
   // checked before the comparison, so a blocked caller never reaches the HMAC
   // work either; and every failure also waits FAILURE_DELAY_MS, which slows a
@@ -40,9 +54,6 @@ exports.handler = async event => {
       error: `Too many failed attempts. Try again in ${state.retryAfter} seconds.`
     }, { 'Retry-After': String(state.retryAfter) });
   }
-
-  let body;
-  try { body = JSON.parse(event.body || '{}'); } catch { return json(400, { error: 'Invalid request body' }); }
 
   const configuredPassword = String(process.env.ADMIN_PASSWORD || '').trim();
   if (!configuredPassword || !process.env.ADMIN_SESSION_SECRET || !safeEqual(body.password, configuredPassword)) {

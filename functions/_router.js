@@ -90,8 +90,13 @@ function wireBindings(env) {
 async function toEvent(request, url) {
   const headers = {};
   for (const [name, value] of request.headers) headers[name.toLowerCase()] = value;
-  if (!headers["x-nf-client-connection-ip"] && headers["cf-connecting-ip"]) {
+  // Cloudflare owns CF-Connecting-IP. Copy it over Netlify's header even when
+  // the caller supplied one: otherwise a request can choose its own throttle
+  // bucket by sending X-Nf-Client-Connection-Ip.
+  if (headers["cf-connecting-ip"]) {
     headers["x-nf-client-connection-ip"] = headers["cf-connecting-ip"];
+  } else {
+    delete headers["x-nf-client-connection-ip"];
   }
   const method = request.method;
   const event = {

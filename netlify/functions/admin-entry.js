@@ -40,6 +40,11 @@ async function handleDirect(body, action, id) {
     if (!entry.name || !ENTRY_TYPES.includes(entry.type)) {
       return json(400, { error: 'Name and a valid type are required' });
     }
+    // The page cannot show a row without a usable watch date; accepting one
+    // here used to report a successful add that vanished on the next reload.
+    if (!db.parseDateParts(entry.watchDate)) {
+      return json(400, { error: 'A valid watch date is required' });
+    }
     const isUpdate = action === 'update';
     if (isUpdate && !Number.isInteger(id)) return json(400, { error: 'A valid entry id is required' });
 
@@ -70,6 +75,9 @@ exports.handler = async event => {
 
   let body;
   try { body = JSON.parse(event.body || '{}'); } catch { return json(400, { error: 'Invalid request body' }); }
+  if (!body || typeof body !== 'object' || Array.isArray(body)) {
+    return json(400, { error: 'Invalid request body' });
+  }
 
   // The cleanup card asks for the rows it lists before deleting any of them:
   // every entry the page shows has a usable watch date, so the rows without one
