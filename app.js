@@ -1336,6 +1336,12 @@ function scanDuplicates(rows) {
 function renderDuplicateScan() {
   const container = document.getElementById('admin-dup-results');
   if (!container) return;
+  // If the watchlist hasn't loaded yet, load it now so the scan is accurate.
+  if (!rawData.length) {
+    container.innerHTML = '<div class="dup-clear">Loading watchlist…</div>';
+    loadData(true).then(renderDuplicateScan);
+    return;
+  }
   dupScanGroups = scanDuplicates(rawData);
 
   const renderGroup = (group, index) => {
@@ -1648,6 +1654,13 @@ function paintZeroCount(fresh) {
   const box = document.getElementById('admin-zero-count');
   const button = document.getElementById('admin-zero-fill');
   if (!box || !button) return;
+  // If the watchlist hasn't loaded yet, load it now so the count is accurate.
+  if (!rawData.length) {
+    box.textContent = 'Loading watchlist…';
+    button.disabled = true;
+    loadData(true).then(() => paintZeroCount(fresh));
+    return;
+  }
   const { zeros, eligible, list } = zeroEntries();
   box.textContent = zeros === 0
     ? 'Nothing at 0 screentime - every entry has its numbers.'
