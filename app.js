@@ -858,6 +858,23 @@ function renderAdmin() {
   renderAdminForm();
 }
 
+// The custom genre/platform inputs are shown only while their select says
+// "Other". Starting an edit or cancelling one used to leave a stale visible
+// custom value behind, which the form then ignored.
+function resetAdminCustomFields() {
+  ['genre', 'platform'].forEach(key => {
+    const custom = document.getElementById('admin-' + key + '-custom');
+    if (custom) { custom.value = ''; custom.hidden = true; }
+  });
+}
+
+function syncAdminCustomField(key) {
+  const select = document.getElementById('admin-' + key);
+  const custom = document.getElementById('admin-' + key + '-custom');
+  if (!select || !custom) return;
+  custom.hidden = select.value !== 'Other';
+}
+
 function renderAdminForm() {
   // A fresh form is always create mode: without this, starting an edit,
   // navigating away and coming back would leave adminEditRow set while the
@@ -878,7 +895,7 @@ function renderAdminForm() {
         <div class="sf-row"><div class="sf-field"><label class="sf-lbl" for="admin-type">Type <span class="sf-req">*</span></label><select id="admin-type" name="type" class="sf-input" data-glide data-glide-menu-width="200"><option>Movie</option><option>Series/Show</option></select></div><div class="sf-field"><label class="sf-lbl" for="admin-season">Season</label><input id="admin-season" name="season" class="sf-input" maxlength="20"></div></div>
         <div class="sf-row"><div class="sf-field"><label class="sf-lbl" for="admin-genre">Genre</label><select id="admin-genre" name="genre" class="sf-input" data-glide data-glide-menu-width="240" data-glide-placeholder="Select genre"><option value="">Select genre</option>${genreOpts}<option value="Other">Other</option></select><input id="admin-genre-custom" class="sf-input sf-custom-value" type="text" maxlength="80" placeholder="Enter a genre" aria-label="Custom genre" hidden></div><div class="sf-field"><label class="sf-lbl" for="admin-platform">Platform</label><select id="admin-platform" name="platform" class="sf-input" data-glide data-glide-menu-width="240" data-glide-placeholder="Select platform"><option value="">Select platform</option>${platOpts}<option value="Other">Other</option></select><input id="admin-platform-custom" class="sf-input sf-custom-value" type="text" maxlength="160" placeholder="Enter a platform" aria-label="Custom platform" hidden></div></div>
         <div class="sf-row"><div class="sf-field"><label class="sf-lbl" for="admin-episodes">Episodes</label><input id="admin-episodes" name="episodes" class="sf-input" type="number" min="0" max="9999" inputmode="numeric"></div><div class="sf-field"><label class="sf-lbl" for="admin-screentime">Screentime (mins)</label><input id="admin-screentime" name="screentime" class="sf-input" type="number" min="0" max="100000" inputmode="numeric"></div></div>
-        <div class="sf-field"><label class="sf-lbl" for="admin-date">Watch Date</label><input id="admin-date" name="watchDate" class="sf-input" type="date"></div>
+        <div class="sf-field"><label class="sf-lbl" for="admin-date">Watch Date <span class="sf-req">*</span></label><input id="admin-date" name="watchDate" class="sf-input" type="date" required></div>
         <div id="admin-edit-bar" class="admin-edit-bar" hidden><span>Editing entry <strong id="admin-edit-row"></strong></span><button class="try-btn admin-edit-cancel" id="admin-cancel-edit" type="button">Cancel edit</button></div>
         <div id="admin-entry-msg" aria-live="polite"></div><button class="sf-submit-btn" type="submit" id="admin-submit-btn">Add to Watchlist</button>
       </form>
@@ -912,15 +929,29 @@ function renderAdminForm() {
   document.getElementById('admin-entry-form').addEventListener('submit', submitAdminEntry);
   ['genre', 'platform'].forEach(key => {
     const select = document.getElementById('admin-' + key);
-    const custom = document.getElementById('admin-' + key + '-custom');
     select.addEventListener('change', () => {
-      custom.hidden = select.value !== 'Other';
-      if (select.value === 'Other') custom.focus();
+      syncAdminCustomField(key);
+      if (select.value === 'Other') document.getElementById('admin-' + key + '-custom').focus();
     });
   });
   document.getElementById('admin-check-name').addEventListener('click', checkAdminName);
   document.getElementById('admin-autofill').addEventListener('click', autofillAdminEntry);
-  document.getElementById('admin-lock').addEventListener('click', () => { adminAuthenticated = false; sessionStorage.removeItem('ct_admin_session'); renderAdmin(); });
+  document.getElementById('admin-lock').addEventListener('click', async event => {
+    const button = event.currentTarget;
+    button.disabled = true;
+    button.textContent = 'Locking…';
+    try {
+      await fetch('/.netlify/functions/admin-login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify({ logout: true })
+      });
+    } catch (error) { /* the client gate still locks the page */ }
+    adminAuthenticated = false;
+    try { sessionStorage.removeItem('ct_admin_session'); } catch (e) {}
+    renderAdmin();
+  });
   document.getElementById('admin-edit-search').addEventListener('input', event => renderAdminEditResults(event.target.value));
   document.getElementById('admin-edit-results').addEventListener('click', event => {
     const del = event.target.closest('.admin-del-btn');
@@ -954,6 +985,12 @@ function renderAdminEditResults(query) {
   const q = (query || '').trim().toLowerCase();
   if (!q) {
     container.innerHTML = '<div class="admin-edit-empty">Type to search your tracker…</div>';
+    return;
+  }
+  // If the watchlist hasn't loaded yet, load it now so the search works.
+  if (!rawData.length) {
+    container.innerHTML = '<div class="admin-edit-empty">Loading watchlist…</div>';
+    loadData(true).then(() => renderAdminEditResults(query));
     return;
   }
   const matches = rawData
@@ -1104,6 +1141,7 @@ function startAdminEdit(rowNumber) {
   document.getElementById('admin-episodes').value = item.episodes || 0;
   document.getElementById('admin-screentime').value = item.screentime || 0;
   document.getElementById('admin-date').value = toISOFromDisplay(item.watchDate);
+  resetAdminCustomFields();
 
   document.getElementById('admin-form-heading').textContent = 'Edit Entry';
   document.getElementById('admin-form-sub').textContent = 'Editing entry #' + rowNumber + '. Changes are saved to the watchlist.';
@@ -1117,6 +1155,7 @@ function startAdminEdit(rowNumber) {
 function cancelAdminEdit() {
   adminEditRow = null;
   document.getElementById('admin-entry-form').reset();
+  resetAdminCustomFields();
   document.getElementById('admin-form-heading').textContent = 'New Watchlist Entry';
   document.getElementById('admin-form-sub').textContent = 'Saved through the protected admin service.';
   document.getElementById('admin-edit-bar').hidden = true;
