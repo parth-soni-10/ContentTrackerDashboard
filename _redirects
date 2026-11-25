@@ -1,0 +1,7 @@
+# The retired Netlify address is still in search results. Keep it pointing at
+# the one live host instead of the old "Loading your watchlist..." shell.
+#
+# This file is for the Netlify project only. Cloudflare Pages must not read it:
+# a redirect from contenttrackerdashboard.pages.dev to itself would loop, so
+# .assetsignore keeps it out of the staged Pages upload.
+/*  https://contenttrackerdashboard.pages.dev/:splat  301!

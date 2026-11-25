@@ -28,6 +28,8 @@ README.md
 CLAUDE.md
 LICENSE
 _headers
+# Netlify-only redirect; Cloudflare Pages would loop on a redirect to itself.
+_redirects
 package.json
 package-lock.json
 wrangler.toml
